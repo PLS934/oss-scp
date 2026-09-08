@@ -8,7 +8,21 @@ context: |
   여러 유형의 관리 대상에 대한 취약점 현황을 외부 수집처에서
   가져와 통합 관리한다. GitHub 저장소와 단말기는 예상 대상의
   예시이며, 대상 유형과 수집처는 추가되거나 변경될 수 있다.
-  구체적인 연동 대상과 기술 스택은 아직 확정되지 않았다.
+  구체적인 연동 대상은 후속 설계에서 정한다.
+  서버는 Node.js 24 LTS, TypeScript, NestJS의 Express adapter를 사용한다.
+  pnpm workspace에서 서버는 apps/api에 위치한다.
+  앱 개발은 로컬에서 pnpm dev로 실행하며 Nest CLI watch로 자동 재시작한다.
+  Docker는 배포 및 Node.js·pnpm이 없는 환경의 빌드·실행용으로 제공한다.
+  배포 이미지는 빌드된 JS와 운영 의존성을 포함하고 비루트로 실행한다.
+  앱 개발용 소스 마운트와 watch 컨테이너는 초기 범위에 포함하지 않는다.
+  compose.yaml은 현재 API 서버만 실행하며 외부 DB·계정·자격증명을 요구하지 않는다.
+  GET /api/v1/health는 인증 없이 HTTP 200과 {"status":"ok"}를 반환한다.
+  이 응답은 서버 HTTP 처리 가능 여부이며 DB·수집처 상태나 데이터 최신성을 뜻하지 않는다.
+  타입 검사·린트·Vitest·빌드·개발 재시작·Docker 실행을 GitHub Actions에서 검증한다.
+  정확한 도구 버전·환경변수·실행 명령은 docs/server-development.md를 따른다.
+  실제 검증 범위와 결과는 docs/server-verification.md를 따른다.
+  클라이언트는 TypeScript + React + Vite로 후속 구성하며,
+  DB·인증·수집·업무 API와 공개 릴리스 이미지·Helm은 이번 서버 초기 구성에 포함하지 않는다.
 
   담당자 지정은 플랫폼에서 관리한다.
   조치 상태는 외부 데이터를 활용하는 것을 기본 방향으로 하며,
