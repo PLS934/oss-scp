@@ -12,7 +12,7 @@
 | Docker 빌드·Compose 기동·호스트 API | Docker linux/arm64 | 통과 |
 | 이미지 단독 실행·비루트·볼륨과 개발 파일 제외 | Docker linux/arm64 | 통과 |
 | 무응답 HTTP 서버의 healthcheck timeout·unhealthy 전환 | Docker linux/arm64 | 통과 |
-| 새 작업 복사본에서 문서 명령 재현 | macOS arm64 / Docker linux/arm64 | 진행 중 |
+| 새 작업 복사본에서 문서 명령 재현 | macOS arm64 / Docker linux/arm64 | 통과 |
 | GitHub Actions 로컬 명령 및 Docker 검증 | Ubuntu 24.04 linux/amd64 | 실행 예정 |
 | OpenSpec 엄격 검증 | 로컬 CLI | 통과 |
 
