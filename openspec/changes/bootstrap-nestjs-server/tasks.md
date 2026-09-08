@@ -26,5 +26,5 @@
 
 ## 5. 완료 검증
 
-- [ ] 5.1 문서 작성 이후 새 체크아웃에서 문서만으로 로컬 설치·개발·소스 변경 반영·배포 빌드 실행과 Docker 빌드·기동·API 확인·정리를 재현한다. macOS arm64 및 CI linux/amd64의 실제 검증 결과와 Docker 이미지 아키텍처, 미검증 환경을 기록한다.
-- [ ] 5.2 GitHub Actions 실행 결과와 #8 완료 조건을 대조하고 `openspec validate bootstrap-nestjs-server --strict`를 실행한다. 통과·실패·미실행 항목을 구분해 기록하며 미검증 Docker 실행이나 실패한 CI를 완료로 처리하지 않는다.
+- [x] 5.1 문서 작성 이후 새 체크아웃에서 문서만으로 로컬 설치·개발·소스 변경 반영·배포 빌드 실행과 Docker 빌드·기동·API 확인·정리를 재현한다. macOS arm64 및 CI linux/amd64의 실제 검증 결과와 Docker 이미지 아키텍처, 미검증 환경을 기록한다.
+- [x] 5.2 GitHub Actions 실행 결과와 #8 완료 조건을 대조하고 `openspec validate bootstrap-nestjs-server --strict`를 실행한다. 통과·실패·미실행 항목을 구분해 기록하며 미검증 Docker 실행이나 실패한 CI를 완료로 처리하지 않는다.
