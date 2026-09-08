@@ -1,0 +1,12 @@
+**
+!package.json
+!pnpm-workspace.yaml
+!pnpm-lock.yaml
+!apps/
+!apps/api/
+!apps/api/package.json
+!apps/api/tsconfig.json
+!apps/api/nest-cli.json
+!apps/api/healthcheck.mjs
+!apps/api/src/
+!apps/api/src/**
