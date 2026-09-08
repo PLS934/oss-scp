@@ -118,4 +118,4 @@ pnpm test:docker
 
 ## 검증 범위
 
-실행 결과는 [서버 초기 구성 검증 기록](server-verification.md)에 기록합니다. macOS arm64 로컬 개발, Docker linux/arm64와 GitHub Actions Ubuntu linux/amd64가 검증 목표입니다. 실제 통과한 환경만 완료로 기록하며 Windows와 그 밖의 OS·CPU, 공개 멀티 플랫폼 릴리스 이미지는 검증 범위에 포함하지 않습니다.
+자동 검증 항목은 [서버 CI](../.github/workflows/server-ci.yaml)에서 관리하고, 실행 결과는 GitHub Actions와 PR에서 확인합니다. 로컬에서는 macOS arm64와 Docker linux/arm64를 확인했으며, CI는 Ubuntu linux/amd64에서 실행합니다. Windows·다른 OS/CPU·공개 멀티 플랫폼 릴리스 이미지는 미검증 범위입니다.

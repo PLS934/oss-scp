@@ -1,3 +1,4 @@
+# 검증 환경: Ubuntu 24.04 (linux/amd64). 실행 결과는 Actions와 PR에서 확인합니다.
 name: 서버 검증
 on:
   push:
@@ -25,6 +26,7 @@ jobs:
       - run: pnpm lint
       - run: pnpm test
       - run: pnpm build
+      # 배포 실행·시작 실패·종료 및 임시 복사본의 Nest watch 변경 반영
       - run: pnpm test:process
   docker:
     name: Docker 빌드 및 실행
@@ -32,4 +34,5 @@ jobs:
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v7.0.1
+      # Compose·이미지 단독 실행·비루트·개발 파일 제외·무응답 unhealthy 전환
       - run: bash scripts/test-docker.sh
