@@ -1,0 +1,24 @@
+{
+  "name": "oss-scp",
+  "version": "0.1.0",
+  "private": true,
+  "packageManager": "pnpm@10.34.5",
+  "engines": {
+    "node": ">=24.19.0 <25"
+  },
+  "scripts": {
+    "dev": "pnpm --filter @oss-scp/api dev",
+    "start": "pnpm --filter @oss-scp/api start",
+    "build": "pnpm --filter @oss-scp/api build",
+    "typecheck": "pnpm --filter @oss-scp/api typecheck",
+    "lint": "eslint .",
+    "test": "pnpm --filter @oss-scp/api test",
+    "test:process": "node scripts/test-process.mjs",
+    "test:docker": "bash scripts/test-docker.sh"
+  },
+  "devDependencies": {
+    "@eslint/js": "10.0.1",
+    "eslint": "10.10.0",
+    "typescript-eslint": "8.70.0"
+  }
+}

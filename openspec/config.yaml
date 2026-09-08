@@ -8,7 +8,12 @@ context: |
   여러 유형의 관리 대상에 대한 취약점 현황을 외부 수집처에서
   가져와 통합 관리한다. GitHub 저장소와 단말기는 예상 대상의
   예시이며, 대상 유형과 수집처는 추가되거나 변경될 수 있다.
-  구체적인 연동 대상과 기술 스택은 아직 확정되지 않았다.
+  구체적인 연동 대상은 후속 설계에서 정한다.
+  서버는 Node.js 24 LTS, TypeScript + NestJS, pnpm workspace를 사용한다.
+  클라이언트는 TypeScript + React + Vite로 구성한다.
+  앱 개발은 로컬에서 진행하며 Docker는 배포 및 개발 도구 없는 환경의 실행용이다.
+  서버 실행·도구 버전은 docs/server-development.md를 따른다.
+  자동 검증은 .github/workflows/server-ci.yaml, 결과는 PR·CI에서 확인한다.
 
   담당자 지정은 플랫폼에서 관리한다.
   조치 상태는 외부 데이터를 활용하는 것을 기본 방향으로 하며,
