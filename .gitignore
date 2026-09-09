@@ -6,3 +6,6 @@ coverage/
 !.env.example
 .DS_Store
 *.tsbuildinfo
+test-results/
+playwright-report/
+.pnpm-store/

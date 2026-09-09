@@ -1,0 +1,7 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "outDir": "./node_modules/.cache/nest/dist",
+    "tsBuildInfoFile": "./node_modules/.cache/nest/build.tsbuildinfo"
+  }
+}

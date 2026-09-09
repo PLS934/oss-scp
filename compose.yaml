@@ -10,3 +10,12 @@ services:
       PORT: "3000"
     ports:
       - "127.0.0.1:${API_PORT:-3000}:3000"
+  web:
+    image: oss-scp-web:local
+    build:
+      context: .
+      dockerfile: apps/web/Dockerfile
+    environment:
+      API_UPSTREAM: ${API_UPSTREAM:-api:3000}
+    ports:
+      - "0.0.0.0:${WEB_PORT:-8080}:8080"

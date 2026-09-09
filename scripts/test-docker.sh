@@ -31,7 +31,7 @@ wait_health() {
   return 1
 }
 docker compose -p "$project" config --quiet
-docker compose -p "$project" up --build -d --wait --wait-timeout 90
+docker compose -p "$project" up --build -d --wait --wait-timeout 90 api
 check_response "http://127.0.0.1:${API_PORT}"
 docker run -d --name "$standalone" -p 127.0.0.1::3000 oss-scp-api:local >/dev/null
 wait_health "$standalone" healthy
