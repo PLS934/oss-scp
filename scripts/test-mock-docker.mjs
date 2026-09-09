@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { readFile, writeFile, rm, access } from 'node:fs/promises';
+import { readFile, writeFile, rm, readdir } from 'node:fs/promises';
 import path from 'node:path';
 import { fixture, port, run, waitFor, healthy } from './web-test-helpers.mjs';
 
@@ -223,10 +223,19 @@ async function verifyDevelopment() {
   assert.equal(await compose(['ps', '-q'], true), ids);
   await waitFor(() => healthy(webUrl), '개발 기존 API 유지');
   console.log('Docker 개발 소스·fixture 자동 반영 통과');
-  // Linux bind mount에 root 소유 빌드 파일을 남기지 않아야 한다.
-  await assert.rejects(access(path.join(dir, 'apps/mock-api/dist')), {
-    code: 'ENOENT',
-  });
+  // Docker가 빈 mountpoint는 만들 수 있지만 빌드 파일은 볼륨에만 있어야 한다.
+  const hostBuildFiles = await readdir(path.join(dir, 'apps/mock-api/dist')).catch(
+    (error) => {
+      if (error.code === 'ENOENT') return [];
+      throw error;
+    },
+  );
+  assert.deepEqual(hostBuildFiles, []);
+  const developmentId = (await compose(['ps', '-q', 'mock-api'], true)).trim();
+  const developmentContainer = JSON.parse(await docker(['inspect', developmentId]))[0];
+  assert.ok(developmentContainer.Mounts.some(
+    (mount) => mount.Destination === '/workspace/apps/mock-api/dist' && mount.Type === 'volume',
+  ));
   await compose(['stop', 'mock-api'], true);
   await rm(path.join(dir, 'fixtures/csv/vulnerabilities.csv'));
   await compose(['start', 'mock-api'], true);
