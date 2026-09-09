@@ -28,6 +28,7 @@ jobs:
       - run: pnpm build
       # 배포 실행·시작 실패·종료 및 임시 복사본의 Nest watch 변경 반영
       - run: pnpm test:process
+      - run: pnpm test:process:mock
       - run: pnpm exec playwright install --with-deps chromium
       - run: pnpm test:browser
   docker:
@@ -46,3 +47,4 @@ jobs:
       - run: pnpm test:docker:web
       # Compose·이미지 단독 실행·비루트·개발 파일 제외·무응답 unhealthy 전환
       - run: bash scripts/test-docker.sh
+      - run: pnpm test:docker:mock

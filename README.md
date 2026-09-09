@@ -34,3 +34,7 @@ docker compose down
 ## 원천 데이터 샘플
 
 외부 API·원천 DB·CSV 파일로 제공되는 데이터의 가공·저장·조회 방식을 설계하고 테스트하기 위한 [원천 데이터 샘플](fixtures/README.md)을 제공합니다.
+
+## 원천 Mock API
+
+외부 인증 정보 없이 JSON·CSV 샘플을 HTTP로 제공합니다. [실행 및 테스트 안내](docs/mock-api.md)를 참고하세요. Docker의 `mock` 프로필을 선택할 때만 함께 실행됩니다.
