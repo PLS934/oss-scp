@@ -45,3 +45,9 @@ Windows·다른 브라우저·추가 OS/CPU·공개 레지스트리 배포는 �
 ## CI 이름 정리
 
 워크플로를 `.github/workflows/integration-ci.yaml`, 표시 이름을 `서버·클라이언트 통합 검증`으로 변경했다. 기존 job·검사 명령이 동일함을 비교했고 문서 링크와 이전 경로 잔존 여부, OpenSpec 엄격 검증·변경 형식을 확인했다. 이름 변경에 따른 앱 테스트 재실행과 원격 CI 실행은 수행하지 않았다.
+
+### Linux CI 정리 단계 권한 오류 수정
+
+- 최초 GitHub Actions 실행은 Docker 기능 검증 후 임시 디렉터리 삭제에서 실패했다. 개발 컨테이너의 pnpm 캐시가 소스 마운트에 root 소유로 생성된 것이 원인이다.
+- 개발 이미지의 pnpm store를 `/workspace/node_modules/.pnpm-store`로 고정해 서비스별 의존성 볼륨에 저장한다.
+- Docker 통합 검증에서 두 서비스의 store 경로와 소스 루트에 `.pnpm-store`가 생성되지 않는 것을 확인한다.

@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { readFile, writeFile, rm } from 'node:fs/promises';
+import { readFile, writeFile, rm, access } from 'node:fs/promises';
 import path from 'node:path';
 import { networkInterfaces } from 'node:os';
 import { chromium, expect } from '@playwright/test';
@@ -99,6 +99,12 @@ try {
     await compose(['exec', '-T', 'web', 'test', '-L', '/workspace/apps/web/node_modules/@playwright/test'], true);
     return healthy(url);
   }, '개발 의존성 재설치', 60000);
+
+  await assert.rejects(access(path.join(dir, '.pnpm-store')), { code: 'ENOENT' });
+  for (const service of ['api', 'web']) {
+    const store = (await compose(['exec', '-T', service, 'pnpm', 'store', 'path'], true)).trim();
+    assert.ok(store.startsWith('/workspace/node_modules/.pnpm-store/'), `${service}: ${store}`);
+  }
 
   // localhost 전용 개발 포트는 별도 네트워크 클라이언트에서 열리지 않아야 한다.
   await docker([...probe, `fetch('http://${hostAddress}:${webPort}/', {signal: AbortSignal.timeout(3000)}).then(() => process.exit(1)).catch(() => process.exit(0))`]);
