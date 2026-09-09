@@ -20,7 +20,7 @@
 - `apps/mock-api/Dockerfile`은 기존 API와 같은 Node.js 24·pnpm 버전으로 빌드하고 빌드 산출물·운영 의존성·샘플만 런타임에 포함한다. 비루트 사용자로 실행하고 `/sample1?limit=1`을 검사해 health 상태를 제공한다. .dockerignore의 허용 목록에는 mock 빌드 입력과 세 fixture만 추가한다.
 - compose.yaml에 `mock-api` 서비스와 `profiles: [mock]`를 추가한다. 별도 Compose 파일보다 기존 네트워크·실행 명령을 재사용하기 쉽고, 항상 기동하는 방식과 달리 기본 실행에 원천 샘플을 요구하지 않는다. 내부 주소는 `http://mock-api:3001`, 호스트 주소는 `http://127.0.0.1:3001`이다. 컨테이너의 MOCK_HOST는 0.0.0.0, MOCK_PORT는 3001로 고정하고 호스트 공개 포트만 MOCK_PUBLISHED_PORT로 변경한다.
 - 단독 검증은 `docker compose --profile mock up --build -d mock-api`, 3개 서비스 실행은 `docker compose --profile mock up --build -d`로 제공한다. api·web에 mock-api의 depends_on을 추가하지 않는다. api 컨테이너의 HTTP 호출로 내부 접근을 검증하되 실제 수집 연동을 구현한 것으로 설명하지 않는다.
-- compose.dev.yaml은 기존 Dockerfile.dev를 사용해 mock 소스·fixture 변경을 자동 반영한다. 모든 서비스에서 새 mock 패키지의 node_modules가 호스트나 다른 컨테이너와 섞이지 않도록 서비스별 볼륨을 구성한다. 개발 실행은 `docker compose -f compose.yaml -f compose.dev.yaml --profile mock up --build -d`로 제공한다.
+- compose.dev.yaml은 기존 Dockerfile.dev를 사용해 mock 소스·fixture 변경을 자동 반영한다. mock의 dist는 전용 볼륨에 저장해 Linux 호스트에 root 소유 파일을 남기지 않는다. 모든 서비스에서 새 mock 패키지의 node_modules가 호스트나 다른 컨테이너와 섞이지 않도록 서비스별 볼륨을 구성한다. 개발 실행은 `docker compose -f compose.yaml -f compose.dev.yaml --profile mock up --build -d`로 제공한다.
 - Docker 검증은 이미지 단독 실행·mock 단독 Compose·3개 서비스 동시 실행·컨테이너 간 호출·mock 중단 후 기존 health 경로 유지·개발 변경 반영을 포함한다. 기존 CI의 Docker job에 전용 검사 명령을 추가하고 테스트가 만든 컨테이너와 볼륨을 정리한다.
 
 ## Risks / Trade-offs

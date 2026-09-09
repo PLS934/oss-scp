@@ -66,6 +66,7 @@ services:
       - .:/workspace
       - mock_root_modules:/workspace/node_modules
       - mock_modules:/workspace/apps/mock-api/node_modules
+      - mock_dist:/workspace/apps/mock-api/dist
       - mock_api_modules:/workspace/apps/api/node_modules
       - mock_web_modules:/workspace/apps/web/node_modules
     healthcheck:
@@ -80,6 +81,7 @@ volumes:
   web_mock_modules:
   mock_root_modules:
   mock_modules:
+  mock_dist:
   mock_api_modules:
   mock_web_modules:
   api_root_modules:
