@@ -29,4 +29,4 @@ docker compose down
 
 ## 원천 데이터 샘플
 
-외부 API·원천 DB에서 받은 데이터의 가공·저장·조회 방식을 설계하고 테스트하기 위한 [원천 데이터 샘플](fixtures/README.md)을 제공합니다.
+외부 API·원천 DB·CSV 파일로 제공되는 데이터의 가공·저장·조회 방식을 설계하고 테스트하기 위한 [원천 데이터 샘플](fixtures/README.md)을 제공합니다.
