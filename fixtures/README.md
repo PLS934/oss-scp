@@ -11,8 +11,8 @@
 
 | 파일 | 구조 | 건수 |
 | --- | --- | --- |
-| [sources/sample1.json](sources/sample1.json) | total과 rows로 구성된 평면 데이터 | 10개 |
-| [sources/sample2.json](sources/sample2.json) | items와 최상위 플래그를 포함한 중첩 데이터 | 30개 |
+| [sources/sample1.json](sources/sample1.json) | total과 rows로 구성된 평면 데이터 | 72개 |
+| [sources/sample2.json](sources/sample2.json) | items와 최상위 플래그를 포함한 중첩 데이터 | 153개 |
 | [csv/vulnerabilities.csv](csv/vulnerabilities.csv) | 헤더 1행과 6개 컬럼의 CSV | 데이터 53개 |
 
 JSON과 CSV는 원천 데이터 구조의 예시이며, 특정 수집 방식에 종속되지 않습니다.
