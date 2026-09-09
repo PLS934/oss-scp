@@ -1,6 +1,6 @@
 # 서버 개발·실행 가이드
 
-서버는 `apps/api`의 NestJS 앱입니다. 개발은 로컬에서 하고, Docker는 배포 또는 Node.js·pnpm이 없는 환경에서 실행하는 데 사용합니다. DB·로그인·외부 자격증명 없이 상태 확인 API를 실행할 수 있습니다. 현재는 업무 API나 클라이언트, 초기화할 샘플 데이터가 없습니다. 샘플 데이터는 #5, 클라이언트는 #9에서 추가합니다.
+서버는 `apps/api`의 NestJS 앱입니다. 개발은 로컬 또는 Docker 개발 구성으로 진행하며, 기본 Compose는 빌드된 앱을 실행합니다. DB·로그인·외부 자격증명 없이 상태 확인 API를 실행할 수 있습니다. 클라이언트 시작 화면은 상태 확인 API에 연결합니다. 업무 API와 초기화할 샘플 데이터는 후속 범위입니다. Docker 개발 방법은 [클라이언트 개발·실행 가이드](client-development.md)를 참고하세요.
 
 ## 도구 버전
 
@@ -114,8 +114,8 @@ pnpm test:docker
 
 ## 클라이언트 연동 계약 (#9)
 
-공통 workspace는 `apps/*`, `packages/*`를 포함합니다. 서버는 `apps/api`, 클라이언트 예정 위치는 `apps/web`입니다. Vite와 Nginx의 `/api` 프록시는 경로를 제거하지 않고 `/api/v1/health`를 그대로 서버에 전달해야 합니다. Compose 내부 서버 주소는 `http://api:3000`이며, 로컬 개발은 `http://127.0.0.1:3000`입니다. 브라우저에서는 같은 origin의 `/api/v1/health`를 호출합니다. 성공 계약은 HTTP 200과 `{"status":"ok"}`이며 연결 실패·로딩 처리는 #9에서 구현합니다.
+공통 workspace는 `apps/*`, `packages/*`를 포함합니다. 서버는 `apps/api`, 클라이언트는 `apps/web`입니다. Vite와 Nginx의 `/api` 프록시는 경로를 제거하지 않고 `/api/v1/health`를 그대로 서버에 전달해야 합니다. Compose 내부 서버 주소는 `http://api:3000`이며, 로컬 개발은 `http://127.0.0.1:3000`입니다. 브라우저에서는 같은 origin의 `/api/v1/health`를 호출합니다. 성공 계약은 HTTP 200과 `{"status":"ok"}`이며 클라이언트는 로딩·성공·실패를 구분하고 5초 제한 시간 이후 실패를 표시합니다.
 
 ## 검증 범위
 
-자동 검증 항목은 [서버 CI](../.github/workflows/server-ci.yaml)에서 관리하고, 실행 결과는 GitHub Actions와 PR에서 확인합니다. 로컬에서는 macOS arm64와 Docker linux/arm64를 확인했으며, CI는 Ubuntu linux/amd64에서 실행합니다. Windows·다른 OS/CPU·공개 멀티 플랫폼 릴리스 이미지는 미검증 범위입니다.
+자동 검증 항목은 [서버·클라이언트 통합 CI](../.github/workflows/integration-ci.yaml)에서 관리하고, 실행 결과는 GitHub Actions와 PR에서 확인합니다. 로컬에서는 macOS arm64와 Docker linux/arm64를 확인했으며, CI는 Ubuntu linux/amd64에서 실행합니다. Windows·다른 OS/CPU·공개 멀티 플랫폼 릴리스 이미지는 미검증 범위입니다.

@@ -10,3 +10,11 @@
 !apps/api/healthcheck.mjs
 !apps/api/src/
 !apps/api/src/**
+!apps/web/
+!apps/web/package.json
+!apps/web/tsconfig.json
+!apps/web/vite.config.ts
+!apps/web/index.html
+!apps/web/nginx.conf
+!apps/web/src/
+!apps/web/src/**

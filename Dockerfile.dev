@@ -1,0 +1,9 @@
+FROM node:24.19.0-bookworm-slim
+WORKDIR /workspace
+# Nest CLI의 Linux 프로세스 트리 종료에 ps가 필요합니다.
+RUN apt-get update && apt-get install -y --no-install-recommends procps \
+    && rm -rf /var/lib/apt/lists/*
+RUN npm install --global pnpm@10.34.5
+# 설치는 기동 시 수행하여 마운트된 잠금 파일과 의존성 볼륨을 일치시킨다.
+ENV CI=true
+CMD ["pnpm", "dev"]

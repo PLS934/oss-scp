@@ -9,16 +9,20 @@
   "scripts": {
     "dev": "pnpm --filter @oss-scp/api dev",
     "start": "pnpm --filter @oss-scp/api start",
-    "build": "pnpm --filter @oss-scp/api build",
-    "typecheck": "pnpm --filter @oss-scp/api typecheck",
+    "build": "pnpm -r build",
+    "typecheck": "pnpm -r typecheck",
     "lint": "eslint .",
-    "test": "pnpm --filter @oss-scp/api test",
+    "test": "pnpm -r test",
     "test:process": "node scripts/test-process.mjs",
-    "test:docker": "bash scripts/test-docker.sh"
+    "test:docker": "bash scripts/test-docker.sh",
+    "dev:web": "pnpm --filter @oss-scp/web dev",
+    "test:browser": "node scripts/test-browser.mjs",
+    "test:docker:web": "node scripts/test-web-docker.mjs"
   },
   "devDependencies": {
     "@eslint/js": "10.0.1",
     "eslint": "10.10.0",
-    "typescript-eslint": "8.70.0"
+    "typescript-eslint": "8.70.0",
+    "@playwright/test": "1.63.0"
   }
 }
