@@ -2,6 +2,8 @@
 name: 서버·클라이언트 통합 검증
 on:
   push:
+    branches:
+      - main
   pull_request:
   workflow_dispatch:
 permissions:
