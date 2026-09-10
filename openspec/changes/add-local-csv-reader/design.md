@@ -25,4 +25,4 @@
 
 ## Migration Plan
 
-추가 패키지이므로 기존 앱·schema·DB migration은 없다. pnpm 잠금 파일을 포함해 설치하고 기존 재귀 CI 검사에 포함한다. 패키지 제거로 되돌릴 수 있다.
+추가 패키지이므로 기존 앱·schema·DB migration은 없다. Docker 개발의 api·web·mock-api에는 csv-reader node_modules 전용 named volume을 각각 추가해 호스트 의존성과 분리한다. pnpm 잠금 파일을 포함해 설치하고 기존 재귀 CI 검사에 포함한다. 패키지 제거로 되돌릴 수 있다.

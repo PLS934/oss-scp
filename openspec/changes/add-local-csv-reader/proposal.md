@@ -21,4 +21,4 @@
 
 ## Impact
 
-`packages/csv-reader`, 의존성 잠금 파일, `docs/local-csv-reader.md`, README 링크와 OpenSpec change. 기존 API와 플러그인 schema는 변경하지 않는다. 최신 main 기반 feature/local-csv-reader에서 작업한다.
+`packages/csv-reader`, `compose.dev.yaml`의 서비스별 의존성 볼륨, 의존성 잠금 파일, `docs/local-csv-reader.md`, README 링크와 OpenSpec change. 기존 API와 플러그인 schema는 변경하지 않는다. 최신 main 기반 feature/local-csv-reader에서 작업한다.

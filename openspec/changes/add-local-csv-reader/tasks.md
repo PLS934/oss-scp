@@ -18,3 +18,8 @@
 - 문서 샘플 명령에서 첫 행의 10.0·0.10 문자열과 count 53 확인.
 - openspec validate add-local-csv-reader --strict 및 git diff --check 통과.
 - GitHub Actions 재귀 검사에 포함됨을 확인했다. 원격 CI·Docker 실행은 이번 작업에서 수행하지 않았다.
+
+## CI 수정
+
+- [x] 3.1 Docker 개발용 세 서비스에 csv-reader 전용 node_modules 볼륨을 추가한다. 신규 workspace의 볼륨 누락으로 PR #33 Docker CI가 실패한 원인을 수정한다.
+- 검증: `pnpm test:docker:workspace` 통과 (전체 서비스 볼륨·공유 차단·새 패키지 누락·호스트 오염 회귀 검사). OpenSpec strict와 diff 검사 통과.

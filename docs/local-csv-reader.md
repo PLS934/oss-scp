@@ -61,4 +61,4 @@ UTF-8(선택 BOM), 쉼표, 큰따옴표 인용과 `""` escape, LF·CRLF·CR을 �
 
 Vitest로 샘플 53행·6필드, 1바이트 UTF-8·인용 경계, 파일·파싱 오류, 접근 권한, 변경·교체, 한도, 조기 종료·재읽기를 확인한다. 생성형 10,000행 혼합 입력의 순서·건수와 100,000행 입력의 첫 행 소비 후 제한된 선행 읽기·자원 해제를 검사한다. 시간·RSS의 운영 규모 보장은 포함하지 않는다. root 실행에서는 실제 파일 권한 거부 테스트를 건너뛴다.
 
-기존 GitHub Actions의 `pnpm typecheck`, `pnpm lint`, `pnpm test`, `pnpm build`가 신규 workspace 패키지를 포함한다. 이번 변경은 앱 실행·Docker 구성에 영향을 주지 않는다.
+기존 GitHub Actions의 `pnpm typecheck`, `pnpm lint`, `pnpm test`, `pnpm build`가 신규 workspace 패키지를 포함한다. Docker 개발 환경의 세 서비스에는 신규 패키지 전용 node_modules 볼륨을 각각 구성한다. `pnpm test:docker:workspace`로 누락·공유를 검증한다.
