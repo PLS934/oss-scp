@@ -32,6 +32,7 @@ services:
       - api_mock_modules:/workspace/apps/mock-api/node_modules
       - api_plugin_config_modules:/workspace/packages/plugin-config/node_modules
       - api_platform_db_modules:/workspace/packages/platform-db/node_modules
+      - api_platform_db_dist:/workspace/packages/platform-db/dist
       - api_csv_reader_modules:/workspace/packages/csv-reader/node_modules
       - api_local_csv_source_modules:/workspace/packages/local-csv-source/node_modules
     healthcheck:
@@ -98,6 +99,7 @@ services:
       retries: 12
 
 volumes:
+  api_platform_db_dist:
   api_local_csv_source_modules:
   web_local_csv_source_modules:
   mock_local_csv_source_modules:

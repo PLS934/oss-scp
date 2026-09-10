@@ -1,16 +1,41 @@
 import assert from 'node:assert/strict';
+import { execFileSync } from 'node:child_process';
 import { readFile, writeFile, rm } from 'node:fs/promises';
 import path from 'node:path';
 import { networkInterfaces } from 'node:os';
 import { chromium, expect } from '@playwright/test';
-import { root, fixture, port, start, stop, waitFor, healthy } from './web-test-helpers.mjs';
+import { root, fixture, port, start, stop, waitFor, healthy, delay } from './web-test-helpers.mjs';
 
 const dir = await fixture(true);
 const apiPort = await port();
 const webPort = await port();
 const url = `http://127.0.0.1:${webPort}`;
+const database = `oss-scp-browser-db-${process.pid}`;
+const docker = (...args) => execFileSync('docker', args, { encoding: 'utf8' }).trim();
+docker('run', '-d', '--name', database, '-e', 'POSTGRES_DB=oss_scp', '-e', 'POSTGRES_USER=oss_scp_app',
+  '-e', 'POSTGRES_PASSWORD=browser-password', '-p', '127.0.0.1::5432', 'postgres:17.6-bookworm');
+let ready = false;
+for (let attempt = 0; attempt < 100; attempt++) {
+  try {
+    docker('exec', database, 'pg_isready', '-U', 'oss_scp_app', '-d', 'oss_scp');
+    ready = true;
+    break;
+  } catch { await delay(100); }
+}
+assert.ok(ready, '브라우저 테스트용 PostgreSQL이 준비되지 않았습니다.');
+const databaseAddress = docker('port', database, '5432/tcp');
+const separator = databaseAddress.lastIndexOf(':');
+const databaseEnv = {
+  PLATFORM_DB_TYPE: 'postgres',
+  PLATFORM_DB_HOST: databaseAddress.slice(0, separator),
+  PLATFORM_DB_PORT: databaseAddress.slice(separator + 1),
+  PLATFORM_DB_NAME: 'oss_scp',
+  PLATFORM_DB_USER: 'oss_scp_app',
+  PLATFORM_DB_PASSWORD: 'browser-password',
+  PLATFORM_DB_TLS_MODE: 'disable',
+};
 const api = start(process.execPath, [path.join(root, 'apps/api/dist/main.js')], {
-  env: { ...process.env, PORT: String(apiPort), HOST: '127.0.0.1' },
+  env: { ...process.env, ...databaseEnv, PORT: String(apiPort), HOST: '127.0.0.1' },
 });
 let web;
 let browser;
@@ -65,4 +90,5 @@ try {
   await stop(web);
   await stop(api);
   await rm(dir, { recursive: true, force: true });
+  try { docker('rm', '-f', database); } catch { /* 테스트 DB가 이미 종료됐을 수 있다. */ }
 }
