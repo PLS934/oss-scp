@@ -1,0 +1,7 @@
+{
+  "apiVersion": "oss-scp/plugin-v1",
+  "id": "vulnerabilities-local-csv",
+  "name": "Vulnerabilities Local CSV",
+  "version": "0.1.0",
+  "source": "./source.json"
+}

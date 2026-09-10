@@ -35,28 +35,88 @@ describe('validateRepository', () => {
   test('sample1 설정을 내부 수집 정의로 해석한다', () => {
     const result = validateRepository(repositoryRoot);
 
-    expect(result).toEqual({
-      ok: true,
-      definitions: [
-        {
-          plugin: {
-            id: 'sample1-offset-api',
-            name: 'Sample 1 Offset API',
-            version: '0.1.0',
-          },
-          connection: { id: 'mock-api', baseUrl: 'http://127.0.0.1:3001' },
-          request: { method: 'GET', path: '/sample1', format: 'json' },
-          response: { itemsPath: 'rows', totalPath: 'total' },
-          pagination: {
-            type: 'offset',
-            offsetParam: 'offset',
-            limitParam: 'limit',
-            start: 0,
-            limit: 20,
-          },
-        },
-      ],
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.definitions).toHaveLength(2);
+    expect(result.definitions[0]).toEqual({
+      plugin: {
+        id: 'sample1-offset-api',
+        name: 'Sample 1 Offset API',
+        version: '0.1.0',
+      },
+      connection: { id: 'mock-api', baseUrl: 'http://127.0.0.1:3001' },
+      request: { method: 'GET', path: '/sample1', format: 'json' },
+      response: { itemsPath: 'rows', totalPath: 'total' },
+      pagination: {
+        type: 'offset',
+        offsetParam: 'offset',
+        limitParam: 'limit',
+        start: 0,
+        limit: 20,
+      },
     });
+    expect(result.definitions[1]).toEqual({
+      plugin: {
+        id: 'vulnerabilities-local-csv',
+        name: 'Vulnerabilities Local CSV',
+        version: '0.1.0',
+      },
+      source: {
+        transport: 'file',
+        format: 'csv',
+        path: join(repositoryRoot, 'fixtures/csv/vulnerabilities.csv'),
+      },
+      batching: { size: 20 },
+      limits: {},
+    });
+  });
+
+  test('로컬 CSV source의 옵션과 저장소 내부 경로를 해석한다', () => {
+    const root = temporaryRepository();
+    const source = readJson(root, 'plugins/vulnerabilities-local-csv/source.json');
+    Object.assign(source, { path: 'data/other.csv', batchSize: 17, maxBytes: 99, maxRecordSize: 33 });
+    writeJson(root, 'plugins/vulnerabilities-local-csv/source.json', source);
+
+    const result = validateRepository(root);
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.definitions[1]).toEqual(expect.objectContaining({
+      source: { transport: 'file', format: 'csv', path: join(root, 'data/other.csv') },
+      batching: { size: 17 },
+      limits: { maxBytes: 99, maxRecordSize: 33 },
+    }));
+  });
+
+  test.each([
+    ['Connection 혼용', (source) => (source.connectionRef = 'mock-api'), '/connectionRef'],
+    ['HTTP 속성 혼용', (source) => (source.method = 'GET'), '/method'],
+    ['묶음 크기 초과', (source) => (source.batchSize = 1001), '/batchSize'],
+    ['파일 한도 오류', (source) => (source.maxBytes = 0), '/maxBytes'],
+  ])('로컬 CSV의 %s을 거부한다', (_name, mutate, expectedPath) => {
+    const root = temporaryRepository();
+    const source = readJson(root, 'plugins/vulnerabilities-local-csv/source.json');
+    mutate(source);
+    writeJson(root, 'plugins/vulnerabilities-local-csv/source.json', source);
+
+    const result = validateRepository(root);
+
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.errors.some((error) => error.path === expectedPath)).toBe(true);
+  });
+
+  test.each(['../outside.csv', '/tmp/outside.csv'])('설정 루트 밖 CSV 경로를 거부한다: %s', (path) => {
+    const root = temporaryRepository();
+    const source = readJson(root, 'plugins/vulnerabilities-local-csv/source.json');
+    source.path = path;
+    writeJson(root, 'plugins/vulnerabilities-local-csv/source.json', source);
+
+    const result = validateRepository(root);
+
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.errors).toContainEqual(expect.objectContaining({ path: '/path' }));
   });
 
   test('다른 API 값도 코어 변경 없이 해석한다', () => {

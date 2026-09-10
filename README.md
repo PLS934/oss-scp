@@ -41,6 +41,6 @@ docker compose down
 
 ## 샘플 플러그인
 
-sample1 mock API의 호출 정보를 `plugin.json`, `source.json`, Connection으로 분리한 [샘플 플러그인 작성·검증 안내](docs/plugin-development.md)를 제공합니다. 실제 HTTP 수집은 후속 기능이며 현재는 설정 계약과 참조를 검증합니다.
+sample1 mock API와 로컬 CSV의 입력 정보를 `plugin.json`, `source.json`, Connection으로 분리한 [샘플 플러그인 작성·검증 안내](docs/plugin-development.md)를 제공합니다. 실제 HTTP 수집은 후속 기능이며 현재 JSON source는 설정 계약을 검증하고 로컬 CSV source는 제한된 행 묶음 실행까지 지원합니다.
 
-로컬 CSV 입력의 형식·오류 계약과 샘플 실행 방법은 [로컬 CSV 읽기 가이드](docs/local-csv-reader.md)를 참고하세요.
+공통 파서의 형식·오류 계약은 [로컬 CSV 읽기 가이드](docs/local-csv-reader.md), 플러그인 연결·묶음·완료·취소 계약은 [로컬 CSV source 가이드](docs/local-csv-source.md)를 참고하세요.
