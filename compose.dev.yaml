@@ -26,6 +26,7 @@ services:
       - api_plugin_config_modules:/workspace/packages/plugin-config/node_modules
       - api_platform_db_modules:/workspace/packages/platform-db/node_modules
       - api_csv_reader_modules:/workspace/packages/csv-reader/node_modules
+      - api_local_csv_source_modules:/workspace/packages/local-csv-source/node_modules
     healthcheck:
       test: ["CMD", "node", "apps/api/healthcheck.mjs"]
       interval: 5s
@@ -53,6 +54,7 @@ services:
       - web_plugin_config_modules:/workspace/packages/plugin-config/node_modules
       - web_platform_db_modules:/workspace/packages/platform-db/node_modules
       - web_csv_reader_modules:/workspace/packages/csv-reader/node_modules
+      - web_local_csv_source_modules:/workspace/packages/local-csv-source/node_modules
     healthcheck:
       test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:8080/', {signal: AbortSignal.timeout(3000)}).then(r => process.exit(r.ok ? 0 : 1)).catch(() => process.exit(1))"]
       interval: 5s
@@ -80,6 +82,7 @@ services:
       - mock_plugin_config_modules:/workspace/packages/plugin-config/node_modules
       - mock_platform_db_modules:/workspace/packages/platform-db/node_modules
       - mock_csv_reader_modules:/workspace/packages/csv-reader/node_modules
+      - mock_local_csv_source_modules:/workspace/packages/local-csv-source/node_modules
     healthcheck:
       test: ["CMD", "node", "apps/mock-api/healthcheck.mjs"]
       interval: 5s
@@ -88,6 +91,9 @@ services:
       retries: 12
 
 volumes:
+  api_local_csv_source_modules:
+  web_local_csv_source_modules:
+  mock_local_csv_source_modules:
   api_platform_db_modules:
   web_platform_db_modules:
   mock_platform_db_modules:

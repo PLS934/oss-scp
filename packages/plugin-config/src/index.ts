@@ -10,7 +10,7 @@ export interface PluginConfig {
   source: string;
 }
 
-export interface SourceConfig {
+export interface JsonOffsetSourceConfig {
   apiVersion: 'oss-scp/source-v1';
   connectionRef: string;
   path: string;
@@ -27,6 +27,18 @@ export interface SourceConfig {
   };
 }
 
+export interface LocalCsvSourceConfig {
+  apiVersion: 'oss-scp/source-v1';
+  transport: 'file';
+  format: 'csv';
+  path: string;
+  batchSize: number;
+  maxBytes?: number;
+  maxRecordSize?: number;
+}
+
+export type SourceConfig = JsonOffsetSourceConfig | LocalCsvSourceConfig;
+
 export interface HttpConnectionConfig {
   apiVersion: 'oss-scp/connection-v1';
   id: string;
@@ -34,7 +46,7 @@ export interface HttpConnectionConfig {
   config: { baseUrl: string };
 }
 
-export interface CollectionDefinition {
+export interface HttpCollectionDefinition {
   plugin: { id: string; name: string; version: string };
   connection: { id: string; baseUrl: string };
   request: { method: 'GET'; path: string; format: 'json' };
@@ -47,6 +59,17 @@ export interface CollectionDefinition {
     limit: number;
   };
 }
+
+export interface LocalCsvCollectionDefinition {
+  plugin: { id: string; name: string; version: string };
+  source: { transport: 'file'; format: 'csv'; path: string };
+  batching: { size: number };
+  limits: { maxBytes?: number; maxRecordSize?: number };
+}
+
+export type CollectionDefinition =
+  | HttpCollectionDefinition
+  | LocalCsvCollectionDefinition;
 
 export interface ConfigurationIssue {
   file: string;
@@ -273,6 +296,34 @@ function loadPlugins(
     ) {
       continue;
     }
+    if (sourceValue.format === 'csv') {
+      const csvPath = safeResolve(
+        root,
+        root,
+        sourceValue.path,
+        sourceFile,
+        '/path',
+        errors,
+      );
+      if (!csvPath) continue;
+      definitions.push({
+        plugin: {
+          id: pluginValue.id,
+          name: pluginValue.name,
+          version: pluginValue.version,
+        },
+        source: { transport: 'file', format: 'csv', path: csvPath },
+        batching: { size: sourceValue.batchSize },
+        limits: {
+          ...(sourceValue.maxBytes === undefined ? {} : { maxBytes: sourceValue.maxBytes }),
+          ...(sourceValue.maxRecordSize === undefined
+            ? {}
+            : { maxRecordSize: sourceValue.maxRecordSize }),
+        },
+      });
+      continue;
+    }
+
     const connection = connections.get(sourceValue.connectionRef);
     if (!connection) {
       issue(

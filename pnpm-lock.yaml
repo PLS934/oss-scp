@@ -134,6 +134,25 @@ importers:
         specifier: 4.1.11
         version: 4.1.11(@types/node@24.13.3)(vite@8.2.2(@types/node@24.13.3)(terser@5.51.2))
 
+  packages/local-csv-source:
+    dependencies:
+      '@oss-scp/csv-reader':
+        specifier: workspace:*
+        version: link:../csv-reader
+      '@oss-scp/plugin-config':
+        specifier: workspace:*
+        version: link:../plugin-config
+    devDependencies:
+      '@types/node':
+        specifier: 24.13.3
+        version: 24.13.3
+      typescript:
+        specifier: 5.9.3
+        version: 5.9.3
+      vitest:
+        specifier: 4.1.11
+        version: 4.1.11(@types/node@24.13.3)(vite@8.2.2(@types/node@24.13.3)(terser@5.51.2))
+
   packages/platform-db:
     devDependencies:
       '@types/node':

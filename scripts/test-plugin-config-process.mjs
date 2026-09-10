@@ -19,6 +19,12 @@ const output = JSON.parse(valid.stdout);
 if (output.definitions?.[0]?.plugin?.id !== 'sample1-offset-api') {
   throw new Error('CLI did not return the sample1 definition');
 }
+const csvDefinition = output.definitions?.find(
+  definition => definition.plugin?.id === 'vulnerabilities-local-csv',
+);
+if (csvDefinition?.source?.format !== 'csv' || csvDefinition?.batching?.size !== 20) {
+  throw new Error('CLI did not return the local CSV definition');
+}
 
 const temporaryRoot = mkdtempSync(join(tmpdir(), 'oss-scp-plugin-cli-'));
 try {

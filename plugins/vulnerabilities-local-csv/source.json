@@ -1,0 +1,7 @@
+{
+  "apiVersion": "oss-scp/source-v1",
+  "transport": "file",
+  "format": "csv",
+  "path": "fixtures/csv/vulnerabilities.csv",
+  "batchSize": 20
+}
