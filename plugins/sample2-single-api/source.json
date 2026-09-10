@@ -5,6 +5,7 @@
   "method": "GET",
   "format": "json",
   "itemsPath": "items",
+  "metadataPaths": ["test_field6"],
   "pagination": {
     "type": "single"
   }

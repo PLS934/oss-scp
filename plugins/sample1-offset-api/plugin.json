@@ -3,5 +3,21 @@
   "id": "sample1-offset-api",
   "name": "Sample 1 Offset API",
   "version": "0.1.0",
-  "source": "./source.json"
+  "source": "./source.json",
+  "transform": "./dist/transform.js",
+  "data": {
+    "types": {
+      "asset": {
+        "uniqueKey": "hostname",
+        "fields": {
+          "hostname": { "type": "string", "required": true },
+          "environment": { "type": "string", "required": true },
+          "ip": { "type": "string", "required": true },
+          "integerValue": { "type": "number", "required": true },
+          "decimalValue": { "type": "number", "required": true },
+          "enabled": { "type": "boolean", "required": true }
+        }
+      }
+    }
+  }
 }

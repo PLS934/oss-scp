@@ -14,6 +14,7 @@ export function loadOffsetSource(
     response: {
       itemsPath: source.itemsPath,
       totalPath: source.pagination.totalPath,
+      ...(source.metadataPaths ? { metadataPaths: source.metadataPaths } : {}),
     },
     pagination: {
       type: 'offset',

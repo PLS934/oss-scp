@@ -1,5 +1,5 @@
 import Ajv2020, { type ErrorObject, type ValidateFunction } from 'ajv/dist/2020';
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { isAbsolute, join, relative, resolve, sep } from 'node:path';
 import { loadSourceDefinition } from './source-loader';
 import { loadLocalCsvSource } from './source-loaders/file';
@@ -10,6 +10,7 @@ import type {
   ConfigurationResult,
   HttpConnectionConfig,
   PluginConfig,
+  PluginRuntimeDefinition,
   SourceConfig,
 } from './types';
 
@@ -217,6 +218,42 @@ function loadPlugins(
     }
     pluginIds.add(pluginValue.id);
 
+    const transformPath = safeResolve(root, pluginDirectory, pluginValue.transform, pluginFile, '/transform', errors);
+    if (!transformPath) continue;
+    if (!transformPath.endsWith('.js')) {
+      issue(errors, root, pluginFile, '/transform', 'transform must be a JavaScript file');
+      continue;
+    }
+    if (!existsSync(transformPath)) {
+      issue(errors, root, transformPath, '/', 'transform file cannot be read');
+      continue;
+    }
+    let invalidReference = false;
+    for (const [type, definition] of Object.entries(pluginValue.data.types)) {
+      if (!(definition.uniqueKey in definition.fields)) {
+        issue(errors, root, pluginFile, `/data/types/${type}/uniqueKey`, 'unique key must reference a declared field');
+        invalidReference = true;
+      }
+    }
+    for (const [relation, definition] of Object.entries(pluginValue.data.relations ?? {})) {
+      for (const [end, types] of [['from', definition.from.types], ['to', definition.to.types]] as const) {
+        for (const type of types) {
+          if (!(type in pluginValue.data.types)) {
+            issue(errors, root, pluginFile, `/data/relations/${relation}/${end}/types`, `unknown data type: ${type}`);
+            invalidReference = true;
+          }
+        }
+      }
+    }
+    if (invalidReference) continue;
+    const runtimePlugin: PluginRuntimeDefinition = {
+      id: pluginValue.id,
+      name: pluginValue.name,
+      version: pluginValue.version,
+      transformPath,
+      data: pluginValue.data,
+    };
+
     const sourceFile = safeResolve(
       root,
       pluginDirectory,
@@ -243,7 +280,7 @@ function loadPlugins(
         errors,
       );
       if (!csvPath) continue;
-      definitions.push(loadLocalCsvSource(pluginValue, sourceValue, csvPath));
+      definitions.push(loadLocalCsvSource(runtimePlugin, sourceValue, csvPath));
       continue;
     }
 
@@ -274,11 +311,7 @@ function loadPlugins(
       continue;
     }
     const commonDefinition: CollectionDefinitionBase = {
-      plugin: {
-        id: pluginValue.id,
-        name: pluginValue.name,
-        version: pluginValue.version,
-      },
+      plugin: runtimePlugin,
       connection: {
         id: connection.value.id,
         baseUrl: connection.value.config.baseUrl,

@@ -1,0 +1,1 @@
+{ "compilerOptions": { "module": "commonjs", "moduleResolution": "node", "target": "ES2023", "outDir": "dist", "rootDir": ".", "strict": true }, "include": ["transform.ts"] }

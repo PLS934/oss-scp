@@ -3,5 +3,20 @@
   "id": "vulnerabilities-local-csv",
   "name": "Vulnerabilities Local CSV",
   "version": "0.1.0",
-  "source": "./source.json"
+  "source": "./source.json",
+  "transform": "./dist/transform.js",
+  "data": {
+    "types": {
+      "vulnerability": {
+        "uniqueKey": "cve",
+        "fields": {
+          "cve": { "type": "string", "required": true },
+          "name": { "type": "string", "required": true },
+          "score": { "type": "number", "required": true },
+          "affected": { "type": "boolean", "required": true },
+          "observedAt": { "type": "datetime", "required": true }
+        }
+      }
+    }
+  }
 }

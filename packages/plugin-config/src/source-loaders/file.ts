@@ -1,16 +1,16 @@
 import type {
   LocalCsvCollectionDefinition,
   LocalCsvSourceConfig,
-  PluginConfig,
+  PluginRuntimeDefinition,
 } from '../types';
 
 export function loadLocalCsvSource(
-  plugin: PluginConfig,
+  plugin: PluginRuntimeDefinition,
   source: LocalCsvSourceConfig,
   path: string,
 ): LocalCsvCollectionDefinition {
   return {
-    plugin: { id: plugin.id, name: plugin.name, version: plugin.version },
+    plugin,
     source: { transport: 'file', format: 'csv', path },
     batching: { size: source.batchSize },
     limits: {

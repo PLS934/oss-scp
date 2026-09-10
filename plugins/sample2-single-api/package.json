@@ -1,0 +1,5 @@
+{
+  "name": "@oss-scp/plugin-sample2-single-api", "version": "0.1.0", "private": true,
+  "scripts": { "build": "tsc", "typecheck": "tsc --noEmit", "test": "pnpm build" },
+  "devDependencies": { "@oss-scp/plugin-sdk": "workspace:*", "typescript": "5.9.3" }
+}

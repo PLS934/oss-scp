@@ -8,7 +8,7 @@
   "scripts": {
     "build": "tsc",
     "typecheck": "tsc --noEmit",
-    "test": "pnpm build && vitest run",
+    "test": "pnpm -w build:plugin-transforms && pnpm build && vitest run",
     "validate:sample": "pnpm build && node dist/cli.js --root ../.."
   },
   "dependencies": {
