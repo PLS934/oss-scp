@@ -47,6 +47,7 @@ jobs:
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       - run: pnpm exec playwright install --with-deps chromium
+      - run: pnpm test:docker:workspace
       - run: pnpm test:docker:web
       # Compose·이미지 단독 실행·비루트·개발 파일 제외·무응답 unhealthy 전환
       - run: bash scripts/test-docker.sh

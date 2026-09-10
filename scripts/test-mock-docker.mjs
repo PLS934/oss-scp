@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { readFile, writeFile, rm, readdir } from 'node:fs/promises';
 import path from 'node:path';
 import { fixture, port, run, waitFor, healthy } from './web-test-helpers.mjs';
+import { checkWorkspaceVolumes, assertDependencyMounts, assertCleanDependencyPaths } from './docker-workspace-checks.mjs';
 
 function fetchWithTimeout(url, options = {}) {
   return fetch(url, {
@@ -185,12 +186,15 @@ async function verifyIntegration() {
 }
 
 async function verifyDevelopment() {
+  const targets = await checkWorkspaceVolumes(dir, compose);
   await compose(
     ['up', '--build', '-d', '--wait', '--wait-timeout', '240'],
     true,
   );
   await contract(mockUrl);
   await waitFor(() => healthy(webUrl), '개발 웹 프록시');
+  await assertDependencyMounts(compose, docker, ['api', 'web', 'mock-api'], targets);
+  await assertCleanDependencyPaths(dir);
   const ids = await compose(['ps', '-q'], true);
   const source = path.join(dir, 'apps/mock-api/src/app.ts');
   const original = await readFile(source, 'utf8');
@@ -282,6 +286,7 @@ try {
     ).trim(),
     '',
   );
+  await assertCleanDependencyPaths(dir);
   await rm(dir, { recursive: true, force: true });
 }
 console.log('mock Docker 검증 완료');

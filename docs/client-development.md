@@ -54,6 +54,10 @@ docker compose -f compose.yaml -f compose.dev.yaml up --build
 
 최초 기동 시 컨테이너 내부에서 잠금 파일에 맞춰 의존성을 설치합니다. 두 서비스가 준비되면 `http://localhost:8080`에서 확인합니다. 호스트 소스를 수정하면 화면과 서버에 자동 반영됩니다. 컨테이너의 의존성은 별도 볼륨에 보관하며 호스트 node_modules를 사용하지 않습니다. 서버 개발 빌드는 전용 tsconfig로 의존성 볼륨 안에 출력하여 호스트 배포 산출물을 덮어쓰지 않습니다.
 
+workspace 패키지를 추가할 때는 `compose.dev.yaml`의 `api`, `web`, `mock-api` 각각에 새 패키지의 `/workspace/<패키지 경로>/node_modules` 전용 named volume과 최상위 `volumes` 선언을 추가합니다. 각 서비스는 전체 workspace를 설치하므로 실행 앱 외의 패키지도 모두 격리해야 합니다. 서비스끼리 의존성 볼륨을 공유하지 않으며 pnpm store도 각 서비스의 루트 의존성 볼륨 안에 유지합니다.
+
+`pnpm test:docker:workspace`는 컨테이너를 기동하지 않고 실제 pnpm 패키지 목록과 병합된 Compose 설정을 비교해 누락·공유를 검사합니다. 새 패키지를 추가하고 볼륨을 빠뜨린 경우도 회귀 검사합니다. 명시적 볼륨 목록은 일반 Compose 명령과 HMR을 유지하기 위해 사용하며, 자동 검사를 통해 목록 누락을 차단합니다. `pnpm test:docker:web`과 `pnpm test:docker:mock`은 실제 마운트·store 경로, 호스트 의존성 경로에 파일이 남지 않는지와 종료 후 컨테이너·볼륨·임시 소스 정리를 검사합니다. Docker가 만든 빈 mountpoint 디렉터리는 허용합니다. 같은 검사를 Ubuntu CI에서도 실행해 Linux 권한 처리까지 검증합니다.
+
 패키지 선언·잠금 파일을 바꿨다면 재시작으로 재설치합니다.
 
 ```sh
