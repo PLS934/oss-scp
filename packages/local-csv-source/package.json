@@ -7,7 +7,7 @@
   "files": ["dist"],
   "scripts": {
     "build": "tsc",
-    "typecheck": "tsc --noEmit",
+    "typecheck": "pnpm --filter @oss-scp/csv-reader build && pnpm --filter @oss-scp/plugin-config build && tsc --noEmit",
     "test": "pnpm build && vitest run"
   },
   "dependencies": {
