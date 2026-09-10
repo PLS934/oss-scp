@@ -16,6 +16,7 @@ export interface SourceConfigBase {
 }
 
 export type OffsetSourceConfig = SourceConfigBase & {
+  limits: HttpCollectionLimits;
   pagination: {
     type: 'offset';
     offsetParam: string;
@@ -25,6 +26,12 @@ export type OffsetSourceConfig = SourceConfigBase & {
     totalPath: string;
   };
 };
+
+export interface HttpCollectionLimits {
+  timeoutMs: number;
+  maxResponseBytes: number;
+  maxRecordBytes: number;
+}
 
 export type SingleSourceConfig = SourceConfigBase & {
   pagination: { type: 'single' };
@@ -59,6 +66,7 @@ export interface CollectionDefinitionBase {
 }
 
 export type OffsetCollectionDefinition = CollectionDefinitionBase & {
+  limits: HttpCollectionLimits;
   response: { itemsPath: string; totalPath: string };
   pagination: {
     type: 'offset';
