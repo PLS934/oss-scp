@@ -49,11 +49,11 @@ API는 시작 전에 플랫폼 DB 설정과 최초 연결을 완료해야 한다
 - **THEN** PostgreSQL과 API가 준비 상태가 되고 컨테이너 재생성 후 migration 이력 데이터가 유지된다
 
 ### Requirement: 외부 PostgreSQL 설치
-설치자는 내장 DB 서비스를 시작하지 않고 외부 PostgreSQL 주소·TLS·자격증명을 주입해 동일한 API 및 migration 계약을 사용해야 한다(SHALL). 가이드는 DB와 전용 계정 준비, 연결 권한과 migration에 필요한 스키마 권한, TLS CA 전달 방법을 제공해야 한다.
+설치자는 독립된 외부 DB용 Compose 진입점으로 API와 웹만 시작하고, 이미 실행 중인 PostgreSQL의 주소·TLS·자격증명을 주입해 동일한 API 및 migration 계약을 사용해야 한다(SHALL). 이 경로는 내장 DB 서비스나 볼륨을 정의·시작하지 않아야 하며 oss-scp는 외부 PostgreSQL 인스턴스의 생성·기동·종료·삭제를 수행하지 않아야 한다(SHALL). 가이드는 DB와 전용 계정 준비, 연결 권한과 migration에 필요한 스키마 권한, TLS CA 전달 방법을 제공해야 한다.
 
 #### Scenario: 외부 DB 사용
 - **WHEN** 설치자가 내장 DB 없이 지원 버전의 외부 PostgreSQL 설정을 제공한다
-- **THEN** API와 migration 명령은 외부 DB에만 연결하고 내장 DB 컨테이너나 볼륨을 요구하지 않는다
+- **THEN** `docker compose -f compose.external-db.yaml up`은 API와 웹만 시작하고 API와 migration 명령은 외부 DB에만 연결하며 해당 DB의 실행 상태나 데이터를 소유·변경하지 않는다
 
 ### Requirement: 실제 PostgreSQL 호환성 검증
 지원 PostgreSQL 버전과 드라이버 버전은 실제 DB 통합 테스트를 통과한 조합으로 문서와 잠금 파일에 고정해야 한다(SHALL). 자동 검증은 정상 연결, 인증 실패, 접속 불가, TLS 검증 실패, 정상 종료, migration 최초 실행·재실행·실패를 포함해야 한다.

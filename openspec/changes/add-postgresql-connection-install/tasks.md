@@ -19,11 +19,11 @@
 ## 4. Compose 설치 경로
 
 - [ ] 4.1 기본 `compose.yaml`에 고정 PostgreSQL 서비스·healthcheck·전용 DB/계정·명명된 볼륨·secret 파일을 추가하고 API 준비 순서를 `docker compose config`와 함께 설치 smoke test로 검증한다.
-- [ ] 4.2 PostgreSQL 서비스를 포함하지 않는 독립 `compose.external-db.yaml`을 추가하고 실제 외부 테스트 컨테이너를 대상으로 API·migration이 외부 DB만 사용하는지 검증한다.
+- [ ] 4.2 별도 모드 변수 없이 PostgreSQL 서비스·볼륨을 포함하지 않는 독립 `compose.external-db.yaml`을 추가한다. 실제 외부 테스트 컨테이너를 대상으로 API·migration이 이미 실행 중인 외부 DB에만 연결하고 그 컨테이너를 생성·기동·종료·삭제하지 않는지 검증한다.
 - [ ] 4.3 고유 Compose 프로젝트에서 migration 이력 값을 기록하고 DB 컨테이너만 재생성한 뒤 값이 유지되는지 자동 검증하며 테스트가 생성한 컨테이너·네트워크·볼륨·secret만 정리한다.
 - [ ] 4.4 `compose.dev.yaml`, Docker workspace 볼륨 목록과 기존 Docker/웹/mock 테스트를 PostgreSQL 기본 의존성에 맞게 갱신하고 개발 watch 및 workspace 격리 회귀 검사를 통과시킨다.
 
 ## 5. 문서와 전체 검증
 
-- [ ] 5.1 `.env.example`, 빠른 시작, `docs/platform-db.md`와 서버 가이드에 내장/외부 DB 명령, 직접 비밀번호/secret 파일, TLS, 전용 계정·DB·migration 권한, 명시적 migration 및 검증한 버전을 문서화하고 예시를 자동 설정 검사와 대조한다.
+- [ ] 5.1 `.env.example`, 빠른 시작, `docs/platform-db.md`와 서버 가이드에 기본 `docker compose up` 내장 DB 경로와 `docker compose -f compose.external-db.yaml up` 외부 DB 경로, 외부 DB 생명주기 비관리, 직접 비밀번호/secret 파일, TLS, 전용 계정·DB·migration 권한, 명시적 migration 및 검증한 버전을 문서화하고 예시를 자동 설정 검사와 대조한다.
 - [ ] 5.2 PostgreSQL 통합 검증을 GitHub Actions의 격리된 job에 추가하고 `pnpm typecheck`, `pnpm lint`, `pnpm test`, `pnpm build`, 프로세스·Docker 테스트와 `openspec validate add-postgresql-connection-install --strict`를 실행해 결과를 기록한다.
