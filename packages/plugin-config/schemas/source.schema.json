@@ -18,13 +18,30 @@
         "method": { "const": "GET" },
         "format": { "const": "json" },
         "itemsPath": { "$ref": "#/$defs/jsonPath" },
+        "limits": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["timeoutMs", "maxResponseBytes", "maxRecordBytes"],
+          "properties": {
+            "timeoutMs": { "type": "integer", "minimum": 100, "maximum": 300000 },
+            "maxResponseBytes": { "type": "integer", "minimum": 1024, "maximum": 104857600 },
+            "maxRecordBytes": { "type": "integer", "minimum": 1, "maximum": 104857600 }
+          }
+        },
         "pagination": {
           "oneOf": [
             { "$ref": "https://oss-scp.dev/schemas/source-offset-v1.json" },
             { "$ref": "https://oss-scp.dev/schemas/source-single-v1.json" }
           ]
         }
-      }
+      },
+      "allOf": [
+        {
+          "if": { "properties": { "pagination": { "type": "object", "properties": { "type": { "const": "offset" } }, "required": ["type"] } } },
+          "then": { "properties": { "limits": true }, "required": ["limits"] },
+          "else": { "properties": { "limits": false } }
+        }
+      ]
     },
     "localCsvSource": {
       "type": "object",

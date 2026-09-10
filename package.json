@@ -27,7 +27,8 @@
     "test:process:plugin-config": "pnpm --filter @oss-scp/plugin-config build && node scripts/test-plugin-config-process.mjs",
     "db:migrate": "pnpm --filter @oss-scp/platform-db migrate",
     "test:docker:external-db": "bash scripts/test-external-db.sh",
-    "test:docker:mysql": "bash scripts/test-mysql-docker.sh"
+    "test:docker:mysql": "bash scripts/test-mysql-docker.sh",
+    "test:http-collector": "pnpm --filter @oss-scp/http-collector test"
   },
   "devDependencies": {
     "@eslint/js": "10.0.1",

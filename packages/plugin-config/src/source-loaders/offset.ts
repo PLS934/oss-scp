@@ -10,6 +10,7 @@ export function loadOffsetSource(
 ): OffsetCollectionDefinition {
   return {
     ...base,
+    limits: source.limits,
     response: {
       itemsPath: source.itemsPath,
       totalPath: source.pagination.totalPath,
