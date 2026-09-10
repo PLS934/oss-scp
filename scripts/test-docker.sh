@@ -31,6 +31,7 @@ wait_health() {
   echo "상태 대기 시간 초과: $1 → $2" >&2
   return 1
 }
+node scripts/check-db-compose-config.mjs
 docker compose -p "$project" config --quiet
 docker compose -p "$project" -f compose.external-db.yaml config --format json | node -e '
 let value=""; process.stdin.on("data", chunk => value += chunk); process.stdin.on("end", () => {

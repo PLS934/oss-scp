@@ -26,14 +26,14 @@ export PLATFORM_DB_HOST=db.example.internal
 export PLATFORM_DB_PORT=5432
 export PLATFORM_DB_NAME=oss_scp
 export PLATFORM_DB_USER=oss_scp_app
-export PLATFORM_DB_PASSWORD_FILE=/run/secrets/platform_db_password
+export PLATFORM_DB_PASSWORD_FILE_HOST=/secure/host/path/platform_db_password
 export PLATFORM_DB_TLS_MODE=verify-full
 export PLATFORM_DB_TLS_CA_FILE=/run/secrets/platform_db_ca.pem
-docker compose -f compose.external-db.yaml up --build -d --wait
-docker compose -f compose.external-db.yaml run --rm api node node_modules/@oss-scp/platform-db/dist/migrate-cli.js
+docker compose -f compose.external-db.yaml -f compose.external-db.secret.yaml up --build -d --wait
+docker compose -f compose.external-db.yaml -f compose.external-db.secret.yaml run --rm api node node_modules/@oss-scp/platform-db/dist/migrate-cli.js
 ```
 
-DB 관리자는 DB와 전용 계정을 만들고 해당 DB의 `CONNECT`, 대상 schema의 `USAGE`·`CREATE`, 생성 객체 변경 권한을 부여해야 합니다. 외부 secret/CA 파일은 API 컨테이너가 동일한 절대 경로에서 읽도록 배포 환경에서 마운트합니다.
+DB 관리자는 DB와 전용 계정을 만들고 해당 DB의 `CONNECT`, 대상 schema의 `USAGE`·`CREATE`, 생성 객체 변경 권한을 부여해야 합니다. `compose.external-db.secret.yaml`은 호스트의 비밀번호 파일을 컨테이너의 `/run/secrets/platform_db_password`에 읽기 전용으로 마운트합니다. 직접 값 방식은 override 없이 `PLATFORM_DB_PASSWORD`를 설정합니다. CA 파일은 별도 배포 mount가 필요합니다.
 
 ## 운영자가 작성할 입력
 

@@ -8,8 +8,10 @@
   ],
   "scripts": {
     "dev": "nest start --watch",
+    "prebuild": "pnpm --filter @oss-scp/platform-db build",
     "build": "nest build",
     "start": "node dist/main.js",
+    "pretypecheck": "pnpm --filter @oss-scp/platform-db build",
     "typecheck": "tsc --noEmit",
     "test": "pnpm build && vitest run"
   },
