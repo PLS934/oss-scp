@@ -1,0 +1,23 @@
+{
+  "name": "@oss-scp/csv-reader",
+  "version": "0.1.0",
+  "private": true,
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc",
+    "typecheck": "tsc --noEmit",
+    "test": "pnpm build && vitest run"
+  },
+  "dependencies": {
+    "csv-parse": "7.0.2"
+  },
+  "devDependencies": {
+    "@types/node": "24.13.3",
+    "typescript": "5.9.3",
+    "vitest": "4.1.11"
+  }
+}
