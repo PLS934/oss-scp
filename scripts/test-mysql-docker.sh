@@ -45,7 +45,7 @@ test "$(docker compose -p "$bundled_project" -f compose.mysql.yaml exec -T mysql
 test "$(docker inspect "${bundled_project}-mysql-1" --format '{{json .NetworkSettings.Ports}}')" = '{"3306/tcp":null,"33060/tcp":null}'
 
 docker run -d --name "$external_database" -e MYSQL_DATABASE=oss_scp -e MYSQL_USER=oss_scp_app \
-  -e MYSQL_PASSWORD="$PLATFORM_DB_PASSWORD" -e MYSQL_ROOT_PASSWORD="$MYSQL_ROOT_PASSWORD" -p 127.0.0.1::3306 mysql:8.4.6 >/dev/null
+  -e MYSQL_PASSWORD="$PLATFORM_DB_PASSWORD" -e MYSQL_ROOT_PASSWORD="$MYSQL_ROOT_PASSWORD" -p 0.0.0.0::3306 mysql:8.4.6 >/dev/null
 external_ready=false
 for ((attempt=0; attempt<90; attempt++)); do
   if docker exec "$external_database" mysql -h 127.0.0.1 -uoss_scp_app -p"$PLATFORM_DB_PASSWORD" oss_scp -e 'SELECT 1' >/dev/null 2>&1; then
