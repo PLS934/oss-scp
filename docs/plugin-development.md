@@ -1,6 +1,6 @@
 # 샘플 플러그인 설정과 검증
 
-`sample1-offset-api`와 `sample2-single-api`는 원천 mock API의 두 JSON 반환 방식을 설명하고, `vulnerabilities-local-csv`는 로컬 CSV 파일을 행 묶음으로 읽는 샘플 플러그인입니다. sample1은 offset·limit으로 나눠 받고, sample2는 전체 목록을 한 번에 받습니다. HTTP source는 설정만 검증하며, 로컬 CSV source는 공통 파서를 사용하는 수집 입력 실행까지 제공합니다.
+`sample1-offset-api`와 `sample2-single-api`는 원천 mock API의 두 JSON 반환 방식을 설명하고, `vulnerabilities-local-csv`는 로컬 CSV 파일을 행 묶음으로 읽는 샘플 플러그인입니다. sample1은 offset·limit으로 나눠 받고, sample2는 전체 목록을 한 번에 받습니다. sample1의 실제 HTTP 수집은 [HTTP offset 수집 가이드](http-offset-collection.md)의 독립 수집 패키지로 실행할 수 있고, 로컬 CSV source는 공통 파서를 사용하는 수집 입력 실행까지 제공합니다.
 
 ## 파일 구성
 
@@ -73,6 +73,7 @@ pnpm validate:plugins
 - 요청: `GET /sample1`, JSON
 - 응답: 목록 `rows`, 전체 건수 `total`
 - 반복 호출: `offset`, `limit`, 시작 0, 묶음 20건
+- 실행 한도: 요청 5초, 응답 2MiB, 단일 레코드 256KiB
 - 로컬 CSV: `fixtures/csv/vulnerabilities.csv`, 묶음 20건
 
 sample2 내부 수집 정의에는 다음 값이 포함됩니다.
@@ -103,7 +104,7 @@ pnpm lint
 
 `vulnerabilities.csv` HTTP 다운로드는 아직 유효한 지원값이 아닙니다. 로컬 CSV source의 실행 API와 완료·오류 의미는 [로컬 CSV source 가이드](local-csv-source.md)를 따릅니다.
 
-이 설정을 사용한 실제 offset·single HTTP 호출, 응답 스트리밍·크기 제한, timeout·취소, 처리 완료 대기, 가공, DB 저장과 checkpoint는 후속 수집 작업에서 구현합니다. 로컬과 Docker처럼 실행 환경마다 Connection의 base URL을 선택하는 형식도 실제 HTTP 수집 계약에서 확정합니다.
+이 설정을 사용한 offset HTTP 호출, 응답 스트리밍·크기 제한, timeout·취소와 처리 완료 대기는 구현되어 있습니다. single HTTP 호출, 가공, DB 저장과 영속 checkpoint는 후속 수집 작업에서 구현합니다. 로컬과 Docker처럼 실행 환경마다 Connection의 base URL을 선택하는 형식도 후속 배포 계약에서 확정합니다.
 
 두 mock API를 로컬에서 직접 확인하려면 각각 다른 터미널에서 실행합니다.
 

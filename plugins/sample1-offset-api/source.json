@@ -5,6 +5,11 @@
   "method": "GET",
   "format": "json",
   "itemsPath": "rows",
+  "limits": {
+    "timeoutMs": 5000,
+    "maxResponseBytes": 2097152,
+    "maxRecordBytes": 262144
+  },
   "pagination": {
     "type": "offset",
     "offsetParam": "offset",

@@ -247,6 +247,21 @@ function loadPlugins(
       continue;
     }
 
+    if (
+      sourceValue.pagination.type === 'offset' &&
+      'limits' in sourceValue &&
+      sourceValue.limits.maxRecordBytes > sourceValue.limits.maxResponseBytes
+    ) {
+      issue(
+        errors,
+        root,
+        sourceFile,
+        '/limits/maxRecordBytes',
+        'must be less than or equal to maxResponseBytes',
+      );
+      continue;
+    }
+
     const connection = connections.get(sourceValue.connectionRef);
     if (!connection) {
       issue(

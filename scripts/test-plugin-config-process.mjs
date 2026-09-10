@@ -30,6 +30,9 @@ const sample2Definition = output.definitions?.find(
 );
 if (
   output.definitions?.[0]?.connection?.id !== 'mock-api-sample1' ||
+  output.definitions?.[0]?.limits?.timeoutMs !== 5000 ||
+  output.definitions?.[0]?.limits?.maxResponseBytes !== 2097152 ||
+  output.definitions?.[0]?.limits?.maxRecordBytes !== 262144 ||
   sample2Definition?.connection?.id !== 'mock-api-sample2'
 ) {
   throw new Error('CLI did not return independent sample connections');
