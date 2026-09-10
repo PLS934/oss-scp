@@ -18,3 +18,16 @@
 !apps/web/nginx.conf
 !apps/web/src/
 !apps/web/src/**
+!apps/mock-api/
+!apps/mock-api/package.json
+!apps/mock-api/tsconfig.json
+!apps/mock-api/copy-fixtures.mjs
+!apps/mock-api/healthcheck.mjs
+!apps/mock-api/src/
+!apps/mock-api/src/**
+!fixtures/
+!fixtures/sources/
+!fixtures/sources/sample1.json
+!fixtures/sources/sample2.json
+!fixtures/csv/
+!fixtures/csv/vulnerabilities.csv

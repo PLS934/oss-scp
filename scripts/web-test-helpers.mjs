@@ -61,7 +61,7 @@ export async function fixture(linkModules = false) {
       ['.git', '.pnpm-store', 'node_modules', 'dist', '.env', '.DS_Store', 'test-results', 'playwright-report'].includes(part) || (part.startsWith('.env.') && part !== '.env.example')),
   });
   if (linkModules) {
-    for (const relative of ['node_modules', 'apps/api/node_modules', 'apps/web/node_modules']) {
+    for (const relative of ['node_modules', 'apps/api/node_modules', 'apps/web/node_modules', 'apps/mock-api/node_modules']) {
       await symlink(path.join(root, relative), path.join(dir, relative), 'dir');
     }
   }

@@ -17,7 +17,11 @@
     "test:docker": "bash scripts/test-docker.sh",
     "dev:web": "pnpm --filter @oss-scp/web dev",
     "test:browser": "node scripts/test-browser.mjs",
-    "test:docker:web": "node scripts/test-web-docker.mjs"
+    "test:docker:web": "node scripts/test-web-docker.mjs",
+    "dev:mock": "pnpm --filter @oss-scp/mock-api dev",
+    "start:mock": "pnpm --filter @oss-scp/mock-api start",
+    "test:docker:mock": "node scripts/test-mock-docker.mjs",
+    "test:process:mock": "node scripts/test-mock-process.mjs"
   },
   "devDependencies": {
     "@eslint/js": "10.0.1",

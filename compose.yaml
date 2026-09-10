@@ -19,3 +19,14 @@ services:
       API_UPSTREAM: ${API_UPSTREAM:-api:3000}
     ports:
       - "0.0.0.0:${WEB_PORT:-8080}:8080"
+  mock-api:
+    profiles: [mock]
+    image: oss-scp-mock-api:local
+    build:
+      context: .
+      dockerfile: apps/mock-api/Dockerfile
+    environment:
+      MOCK_HOST: 0.0.0.0
+      MOCK_PORT: "3001"
+    ports:
+      - "127.0.0.1:${MOCK_PUBLISHED_PORT:-3001}:3001"
