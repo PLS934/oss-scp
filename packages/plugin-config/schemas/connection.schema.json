@@ -1,0 +1,29 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://oss-scp.dev/schemas/connection-v1.json",
+  "title": "oss-scp HTTP connection",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["apiVersion", "id", "connector", "config"],
+  "properties": {
+    "apiVersion": { "const": "oss-scp/connection-v1" },
+    "id": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$",
+      "maxLength": 100
+    },
+    "connector": { "const": "http" },
+    "config": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["baseUrl"],
+      "properties": {
+        "baseUrl": {
+          "type": "string",
+          "pattern": "^https?://[^/?#\\s]+(?::[0-9]{1,5})?$",
+          "maxLength": 2048
+        }
+      }
+    }
+  }
+}

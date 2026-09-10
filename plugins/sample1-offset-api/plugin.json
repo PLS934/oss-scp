@@ -1,0 +1,7 @@
+{
+  "apiVersion": "oss-scp/plugin-v1",
+  "id": "sample1-offset-api",
+  "name": "Sample 1 Offset API",
+  "version": "0.1.0",
+  "source": "./source.json"
+}

@@ -21,7 +21,9 @@
     "dev:mock": "pnpm --filter @oss-scp/mock-api dev",
     "start:mock": "pnpm --filter @oss-scp/mock-api start",
     "test:docker:mock": "node scripts/test-mock-docker.mjs",
-    "test:process:mock": "node scripts/test-mock-process.mjs"
+    "test:process:mock": "node scripts/test-mock-process.mjs",
+    "validate:plugins": "pnpm --filter @oss-scp/plugin-config validate:sample",
+    "test:process:plugin-config": "pnpm --filter @oss-scp/plugin-config build && node scripts/test-plugin-config-process.mjs"
   },
   "devDependencies": {
     "@eslint/js": "10.0.1",
