@@ -1,0 +1,7 @@
+{
+  "apiVersion": "oss-scp/plugin-v1",
+  "id": "sample2-single-api",
+  "name": "Sample 2 Single API",
+  "version": "0.1.0",
+  "source": "./source.json"
+}

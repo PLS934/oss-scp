@@ -1,0 +1,28 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://oss-scp.dev/schemas/source-offset-v1.json",
+  "title": "oss-scp JSON offset pagination",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["type", "offsetParam", "limitParam", "start", "limit", "totalPath"],
+  "properties": {
+    "type": { "const": "offset" },
+    "offsetParam": { "$ref": "#/$defs/parameterName" },
+    "limitParam": { "$ref": "#/$defs/parameterName" },
+    "start": { "type": "integer", "minimum": 0 },
+    "limit": { "type": "integer", "minimum": 1, "maximum": 1000 },
+    "totalPath": { "$ref": "#/$defs/jsonPath" }
+  },
+  "$defs": {
+    "jsonPath": {
+      "type": "string",
+      "pattern": "^[A-Za-z_$][A-Za-z0-9_$-]*(?:\\.[A-Za-z_$][A-Za-z0-9_$-]*)*$",
+      "maxLength": 255
+    },
+    "parameterName": {
+      "type": "string",
+      "pattern": "^[A-Za-z][A-Za-z0-9_-]*$",
+      "maxLength": 100
+    }
+  }
+}

@@ -1,0 +1,8 @@
+{
+  "apiVersion": "oss-scp/connection-v1",
+  "id": "mock-api-sample1",
+  "connector": "http",
+  "config": {
+    "baseUrl": "http://127.0.0.1:3001"
+  }
+}

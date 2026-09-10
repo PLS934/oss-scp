@@ -1,0 +1,11 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://oss-scp.dev/schemas/source-single-v1.json",
+  "title": "oss-scp JSON single pagination",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["type"],
+  "properties": {
+    "type": { "const": "single" }
+  }
+}

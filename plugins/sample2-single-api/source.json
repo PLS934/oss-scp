@@ -1,0 +1,11 @@
+{
+  "apiVersion": "oss-scp/source-v1",
+  "connectionRef": "mock-api-sample2",
+  "path": "/sample2",
+  "method": "GET",
+  "format": "json",
+  "itemsPath": "items",
+  "pagination": {
+    "type": "single"
+  }
+}

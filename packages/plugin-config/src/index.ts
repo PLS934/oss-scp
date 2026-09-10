@@ -1,85 +1,19 @@
 import Ajv2020, { type ErrorObject, type ValidateFunction } from 'ajv/dist/2020';
 import { readFileSync } from 'node:fs';
 import { isAbsolute, join, relative, resolve, sep } from 'node:path';
+import { loadSourceDefinition } from './source-loader';
+import { loadLocalCsvSource } from './source-loaders/file';
+import type {
+  CollectionDefinition,
+  CollectionDefinitionBase,
+  ConfigurationIssue,
+  ConfigurationResult,
+  HttpConnectionConfig,
+  PluginConfig,
+  SourceConfig,
+} from './types';
 
-export interface PluginConfig {
-  apiVersion: 'oss-scp/plugin-v1';
-  id: string;
-  name: string;
-  version: string;
-  source: string;
-}
-
-export interface JsonOffsetSourceConfig {
-  apiVersion: 'oss-scp/source-v1';
-  connectionRef: string;
-  path: string;
-  method: 'GET';
-  format: 'json';
-  itemsPath: string;
-  pagination: {
-    type: 'offset';
-    offsetParam: string;
-    limitParam: string;
-    start: number;
-    limit: number;
-    totalPath: string;
-  };
-}
-
-export interface LocalCsvSourceConfig {
-  apiVersion: 'oss-scp/source-v1';
-  transport: 'file';
-  format: 'csv';
-  path: string;
-  batchSize: number;
-  maxBytes?: number;
-  maxRecordSize?: number;
-}
-
-export type SourceConfig = JsonOffsetSourceConfig | LocalCsvSourceConfig;
-
-export interface HttpConnectionConfig {
-  apiVersion: 'oss-scp/connection-v1';
-  id: string;
-  connector: 'http';
-  config: { baseUrl: string };
-}
-
-export interface HttpCollectionDefinition {
-  plugin: { id: string; name: string; version: string };
-  connection: { id: string; baseUrl: string };
-  request: { method: 'GET'; path: string; format: 'json' };
-  response: { itemsPath: string; totalPath: string };
-  pagination: {
-    type: 'offset';
-    offsetParam: string;
-    limitParam: string;
-    start: number;
-    limit: number;
-  };
-}
-
-export interface LocalCsvCollectionDefinition {
-  plugin: { id: string; name: string; version: string };
-  source: { transport: 'file'; format: 'csv'; path: string };
-  batching: { size: number };
-  limits: { maxBytes?: number; maxRecordSize?: number };
-}
-
-export type CollectionDefinition =
-  | HttpCollectionDefinition
-  | LocalCsvCollectionDefinition;
-
-export interface ConfigurationIssue {
-  file: string;
-  path: string;
-  message: string;
-}
-
-export type ConfigurationResult =
-  | { ok: true; definitions: CollectionDefinition[] }
-  | { ok: false; errors: ConfigurationIssue[] };
+export type * from './types';
 
 interface Registry {
   plugins?: string[];
@@ -97,6 +31,9 @@ const ajv = new Ajv2020({ allErrors: true, strict: true });
 function schema(name: string): object {
   return JSON.parse(readFileSync(join(schemaRoot, name), 'utf8')) as object;
 }
+
+ajv.addSchema(schema('source-offset.schema.json'));
+ajv.addSchema(schema('source-single.schema.json'));
 
 const validatePlugin = ajv.compile<PluginConfig>(schema('plugin.schema.json'));
 const validateSource = ajv.compile<SourceConfig>(schema('source.schema.json'));
@@ -306,21 +243,7 @@ function loadPlugins(
         errors,
       );
       if (!csvPath) continue;
-      definitions.push({
-        plugin: {
-          id: pluginValue.id,
-          name: pluginValue.name,
-          version: pluginValue.version,
-        },
-        source: { transport: 'file', format: 'csv', path: csvPath },
-        batching: { size: sourceValue.batchSize },
-        limits: {
-          ...(sourceValue.maxBytes === undefined ? {} : { maxBytes: sourceValue.maxBytes }),
-          ...(sourceValue.maxRecordSize === undefined
-            ? {}
-            : { maxRecordSize: sourceValue.maxRecordSize }),
-        },
-      });
+      definitions.push(loadLocalCsvSource(pluginValue, sourceValue, csvPath));
       continue;
     }
 
@@ -335,7 +258,7 @@ function loadPlugins(
       );
       continue;
     }
-    definitions.push({
+    const commonDefinition: CollectionDefinitionBase = {
       plugin: {
         id: pluginValue.id,
         name: pluginValue.name,
@@ -350,18 +273,8 @@ function loadPlugins(
         path: sourceValue.path,
         format: sourceValue.format,
       },
-      response: {
-        itemsPath: sourceValue.itemsPath,
-        totalPath: sourceValue.pagination.totalPath,
-      },
-      pagination: {
-        type: sourceValue.pagination.type,
-        offsetParam: sourceValue.pagination.offsetParam,
-        limitParam: sourceValue.pagination.limitParam,
-        start: sourceValue.pagination.start,
-        limit: sourceValue.pagination.limit,
-      },
-    });
+    };
+    definitions.push(loadSourceDefinition(commonDefinition, sourceValue));
   }
   return definitions;
 }
