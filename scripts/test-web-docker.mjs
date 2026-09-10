@@ -1,9 +1,10 @@
 import assert from 'node:assert/strict';
-import { readFile, writeFile, rm, access } from 'node:fs/promises';
+import { readFile, writeFile, rm } from 'node:fs/promises';
 import path from 'node:path';
 import { networkInterfaces } from 'node:os';
 import { chromium, expect } from '@playwright/test';
 import { fixture, port, run, waitFor, healthy } from './web-test-helpers.mjs';
+import { checkWorkspaceVolumes, assertDependencyMounts, assertCleanDependencyPaths } from './docker-workspace-checks.mjs';
 
 const dir = await fixture();
 const project = `oss-scp-web-check-${process.pid}`;
@@ -21,6 +22,8 @@ const hostAddress = process.env.TEST_HOST_ADDRESS || Object.values(networkInterf
 assert.ok(hostAddress, '외부 인터페이스가 없으면 TEST_HOST_ADDRESS로 테스트 호스트 주소를 지정하세요.');
 let browser;
 try {
+  // mock profile도 포함하여 workspace install을 수행하는 모든 서비스를 검사한다.
+  const targets = await checkWorkspaceVolumes(dir, args => docker([...dev, '--profile', 'mock', ...args]));
   const prodConfig = JSON.parse(await compose(['config', '--format', 'json']));
   const devConfig = JSON.parse(await compose(['config', '--format', 'json'], true));
   assert.equal(prodConfig.services.web.ports[0].host_ip, '0.0.0.0');
@@ -100,11 +103,8 @@ try {
     return healthy(url);
   }, '개발 의존성 재설치', 60000);
 
-  await assert.rejects(access(path.join(dir, '.pnpm-store')), { code: 'ENOENT' });
-  for (const service of ['api', 'web']) {
-    const store = (await compose(['exec', '-T', service, 'pnpm', 'store', 'path'], true)).trim();
-    assert.ok(store.startsWith('/workspace/node_modules/.pnpm-store/'), `${service}: ${store}`);
-  }
+  await assertDependencyMounts(compose, docker, ['api', 'web'], targets);
+  await assertCleanDependencyPaths(dir);
 
   // localhost 전용 개발 포트는 별도 네트워크 클라이언트에서 열리지 않아야 한다.
   await docker([...probe, `fetch('http://${hostAddress}:${webPort}/', {signal: AbortSignal.timeout(3000)}).then(() => process.exit(1)).catch(() => process.exit(0))`]);
@@ -115,6 +115,10 @@ try {
 } finally {
   await browser?.close();
   await docker(['rm', '-f', standalone, alternate]).catch(() => {});
-  await compose(['down', '-v', '--remove-orphans'], true).catch(() => {});
+  await compose(['down', '-v', '--remove-orphans'], true);
+  for (const resource of [['ps', '-aq'], ['volume', 'ls', '-q']]) {
+    assert.equal((await docker([...resource, '--filter', `label=com.docker.compose.project=${project}`])).trim(), '');
+  }
+  await assertCleanDependencyPaths(dir);
   await rm(dir, { recursive: true, force: true });
 }

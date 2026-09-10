@@ -15,6 +15,7 @@
     "test": "pnpm -r test",
     "test:process": "node scripts/test-process.mjs",
     "test:docker": "bash scripts/test-docker.sh",
+    "test:docker:workspace": "node scripts/test-docker-workspace.mjs",
     "dev:web": "pnpm --filter @oss-scp/web dev",
     "test:browser": "node scripts/test-browser.mjs",
     "test:docker:web": "node scripts/test-web-docker.mjs",

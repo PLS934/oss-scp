@@ -1,4 +1,6 @@
 # Compose 2.24.4 이상: !override로 배포용 공개 포트를 완전히 교체합니다.
+# workspace 추가 시 세 서비스 각각에 전용 node_modules 볼륨을 추가합니다.
+# pnpm test:docker:workspace가 pnpm의 실제 패키지 목록으로 누락·공유를 검사합니다.
 x-dev-build: &dev-build
   context: .
   dockerfile: Dockerfile.dev
