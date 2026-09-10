@@ -7,5 +7,7 @@
 
 ## 2. 검증
 
-- [ ] 2.1 workspace 회귀 검사·lint와 웹·서버·mock Docker 검사를 실행한다.
-- [ ] 2.2 Ubuntu CI에서 실제 Docker 실행과 임시 fixture 정리 통과를 확인한다.
+- [x] 2.1 workspace 회귀 검사·lint와 웹·서버·mock Docker 검사를 실행한다.
+- [x] 2.2 Ubuntu CI에서 실제 Docker 실행과 임시 fixture 정리 통과를 확인한다.
+
+검증: macOS 로컬의 모든 대상 검사와 [Ubuntu CI 실행](https://github.com/PLS934/oss-scp/actions/runs/34440210703)이 통과했다. CI는 workspace 회귀 검사·웹·서버·mock Docker 실행 및 정리와 전체 로컬 개발·배포 빌드 검사를 포함한다.
