@@ -28,7 +28,7 @@
 - [advisory lock 대기 무제한] → 연결 timeout과 별도의 제한된 lock 획득을 사용하고 실패 시 migration을 시작하지 않는다.
 - [Compose 파일 분리 방식이 기존 개발 override에 영향] → `docker compose config`와 기존 workspace 격리 검사를 함께 실행해 서비스·볼륨·마운트 구성을 회귀 검증한다.
 - [두 Compose 진입점의 공통 API·웹 설정이 어긋날 수 있음] → 두 렌더링 결과의 공통 필드를 자동 비교하고 외부 구성에 DB 서비스·볼륨이 없음을 회귀 검사한다.
-- [호스트의 secret 파일 경로는 컨테이너에서 직접 읽을 수 없음] → 외부 DB용 secret override가 호스트 파일을 고정된 컨테이너 경로에 읽기 전용으로 마운트하고 직접 값 방식과 동시에 전달하지 않는다.
+- [호스트의 secret 파일 경로·권한은 비루트 컨테이너와 다를 수 있음] → 외부 DB용 override가 Compose secret으로 고정된 컨테이너 경로에 읽기 전용 제공하고 직접 값 방식과 동시에 전달하지 않는다.
 - [Testcontainers와 TLS fixture로 CI 시간이 증가] → 실제 DB 검증을 별도 CI job으로 격리하고 고정 image를 사용한다.
 
 ## Migration Plan

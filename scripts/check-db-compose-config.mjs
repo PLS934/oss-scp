@@ -24,5 +24,6 @@ const secret = config(['compose.external-db.yaml', 'compose.external-db.secret.y
 });
 assert.equal(secret.services.api.environment.PLATFORM_DB_PASSWORD, undefined);
 assert.equal(secret.services.api.environment.PLATFORM_DB_PASSWORD_FILE, '/run/secrets/platform_db_password');
-assert.ok(secret.services.api.volumes.some(volume => volume.target === '/run/secrets/platform_db_password' && volume.read_only));
+assert.ok(secret.services.api.secrets.some(value => value.source === 'platform_db_password' && value.target === '/run/secrets/platform_db_password'));
+assert.equal(secret.secrets.platform_db_password.file, '/tmp/compose-config-secret');
 console.log('내장·외부 Compose 공통 설정과 secret 마운트 계약 통과');
