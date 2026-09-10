@@ -22,14 +22,17 @@ cleanup() {
 }
 trap cleanup EXIT
 docker run -d --name "$database" -e POSTGRES_DB=oss_scp -e POSTGRES_USER=oss_scp_app \
-  -e POSTGRES_PASSWORD="$database_password" -p 127.0.0.1::5432 postgres:17.6-bookworm >/dev/null
+  -e POSTGRES_PASSWORD="$database_password" -p 5432 postgres:17.6-bookworm >/dev/null
 for ((attempt=0; attempt<60; attempt++)); do
   if docker exec "$database" pg_isready -U oss_scp_app -d oss_scp >/dev/null 2>&1; then break; fi
   sleep 1
 done
 address=$(docker port "$database" 5432/tcp)
 export PLATFORM_DB_PORT="${address##*:}"
-docker compose -p "$project" -f compose.external-db.yaml -f compose.external-db.secret.yaml up --build -d --wait --wait-timeout 90 api
+if ! docker compose -p "$project" -f compose.external-db.yaml -f compose.external-db.secret.yaml up --build -d --wait --wait-timeout 90 api; then
+  docker compose -p "$project" -f compose.external-db.yaml -f compose.external-db.secret.yaml logs api
+  exit 1
+fi
 test "$(curl --fail --silent --show-error --max-time 5 "http://127.0.0.1:${API_PORT}/api/v1/ready")" = '{"status":"ready"}'
 docker compose -p "$project" -f compose.external-db.yaml -f compose.external-db.secret.yaml run --rm api node node_modules/@oss-scp/platform-db/dist/migrate-cli.js | grep -q '1개 적용'
 docker compose -p "$project" -f compose.external-db.yaml -f compose.external-db.secret.yaml down --remove-orphans

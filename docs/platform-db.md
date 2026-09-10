@@ -35,6 +35,8 @@ docker compose -f compose.external-db.yaml -f compose.external-db.secret.yaml ru
 
 DB 관리자는 DB와 전용 계정을 만들고 해당 DB의 `CONNECT`, 대상 schema의 `USAGE`·`CREATE`, 생성 객체 변경 권한을 부여해야 합니다. `compose.external-db.secret.yaml`은 호스트의 비밀번호 파일을 Compose secret으로 만들어 컨테이너의 `/run/secrets/platform_db_password`에 읽기 전용으로 제공합니다. 로컬 Docker Compose는 source 파일 권한을 유지하므로 API 컨테이너 사용자(UID 1000)가 읽을 수 있도록 소유권·권한을 설정해야 합니다(예: UID 1000 소유, mode 0400). 직접 값 방식은 override 없이 `PLATFORM_DB_PASSWORD`를 설정합니다. CA 파일은 별도 배포 mount가 필요합니다.
 
+호스트에서 실행 중인 DB에는 `PLATFORM_DB_HOST=host.docker.internal`을 사용할 수 있습니다. 외부 서버의 DB에는 실제 DNS 이름이나 IP를 지정합니다.
+
 ## 운영자가 작성할 입력
 
 로컬 PostgreSQL용 형식 예시입니다. 주소·계정·비밀번호를 자신의 환경에 맞춰 제공하며 비밀번호 예시를 그대로 운영에 사용하지 않습니다.
