@@ -12,7 +12,7 @@ const standalone = `${project}-standalone`;
 const alternate = `${project}-alternate`;
 const webPort = await port();
 const apiPort = await port();
-const env = { ...process.env, WEB_PORT: String(webPort), API_PORT: String(apiPort) };
+const env = { ...process.env, WEB_PORT: String(webPort), API_PORT: String(apiPort), PLATFORM_DB_PASSWORD: 'web-docker-test-password' };
 const base = ['compose', '-p', project, '-f', 'compose.yaml'];
 const dev = [...base, '-f', 'compose.dev.yaml'];
 const docker = args => run('docker', args, { cwd: dir, env });

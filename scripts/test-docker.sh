@@ -6,6 +6,7 @@ project="oss-scp-check-$$"
 standalone="${project}-standalone"
 unresponsive="${project}-unresponsive"
 export API_PORT="${API_PORT:-18300}"
+export PLATFORM_DB_PASSWORD="${PLATFORM_DB_PASSWORD:-docker-test-password}"
 cleanup() {
   result=$?
   if [ "$result" -ne 0 ]; then
@@ -14,7 +15,7 @@ cleanup() {
     docker inspect "$unresponsive" 2>/dev/null || true
   fi
   docker rm -f "$standalone" "$unresponsive" >/dev/null 2>&1 || true
-  docker compose -p "$project" down --remove-orphans >/dev/null 2>&1 || true
+  docker compose -p "$project" down -v --remove-orphans >/dev/null 2>&1 || true
   exit "$result"
 }
 trap cleanup EXIT
@@ -31,9 +32,24 @@ wait_health() {
   return 1
 }
 docker compose -p "$project" config --quiet
+docker compose -p "$project" -f compose.external-db.yaml config --format json | node -e '
+let value=""; process.stdin.on("data", chunk => value += chunk); process.stdin.on("end", () => {
+  const config=JSON.parse(value); const services=Object.keys(config.services).sort();
+  if (JSON.stringify(services) !== JSON.stringify(["api","web"]) || config.volumes) process.exit(1);
+});'
 docker compose -p "$project" up --build -d --wait --wait-timeout 90 api
 check_response "http://127.0.0.1:${API_PORT}"
-docker run -d --name "$standalone" -p 127.0.0.1::3000 oss-scp-api:local >/dev/null
+docker compose -p "$project" run --rm api node node_modules/@oss-scp/platform-db/dist/migrate-cli.js | grep -q '1개 적용'
+docker compose -p "$project" run --rm api node node_modules/@oss-scp/platform-db/dist/migrate-cli.js | grep -q '0개 적용'
+docker compose -p "$project" stop postgres
+docker compose -p "$project" rm -f postgres
+docker compose -p "$project" up -d --wait --wait-timeout 90 postgres api
+test "$(docker compose -p "$project" exec -T postgres psql -U oss_scp_app -d oss_scp -Atc 'select count(*) from oss_scp_schema_migrations')" = 1
+test "$(docker inspect "${project}-postgres-1" --format '{{json .NetworkSettings.Ports}}')" = '{"5432/tcp":null}'
+docker run -d --name "$standalone" --network "${project}_default" -p 127.0.0.1::3000 \
+  -e PLATFORM_DB_TYPE=postgres -e PLATFORM_DB_HOST=postgres -e PLATFORM_DB_PORT=5432 \
+  -e PLATFORM_DB_NAME=oss_scp -e PLATFORM_DB_USER=oss_scp_app -e PLATFORM_DB_PASSWORD="$PLATFORM_DB_PASSWORD" \
+  -e PLATFORM_DB_TLS_MODE=disable oss-scp-api:local >/dev/null
 wait_health "$standalone" healthy
 address=$(docker port "$standalone" 3000/tcp)
 check_response "http://${address}"
@@ -46,7 +62,8 @@ for (const p of ["src", ".env", ".git", "node_modules/typescript", "node_modules
 }
 '
 # HTTP 연결은 받지만 응답을 끝내지 않는 서버로 healthcheck timeout을 검증합니다.
-docker run -d --name "$unresponsive" oss-scp-api:local \
+docker run -d --name "$unresponsive" \
+  --health-cmd="node healthcheck.mjs" --health-interval=1s --health-timeout=1s --health-retries=2 oss-scp-api:local \
   node -e 'require("node:http").createServer(() => {}).listen(3000, "0.0.0.0")' >/dev/null
 wait_health "$unresponsive" unhealthy
 echo 'Compose·이미지 단독 실행·포트·비루트·볼륨/개발 의존성 제외·무응답 unhealthy: 통과'

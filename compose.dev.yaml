@@ -16,7 +16,14 @@ services:
       HOST: 0.0.0.0
       PORT: "3000"
       TSC_WATCHFILE: ${TSC_WATCHFILE:-UseFsEvents}
-    command: ["sh", "-c", "pnpm install --frozen-lockfile && exec pnpm --filter @oss-scp/api exec nest start --watch --path tsconfig.dev.json"]
+      PLATFORM_DB_TYPE: postgres
+      PLATFORM_DB_HOST: postgres
+      PLATFORM_DB_PORT: "5432"
+      PLATFORM_DB_NAME: ${PLATFORM_DB_NAME:-oss_scp}
+      PLATFORM_DB_USER: ${PLATFORM_DB_USER:-oss_scp_app}
+      PLATFORM_DB_PASSWORD: ${PLATFORM_DB_PASSWORD:?PLATFORM_DB_PASSWORD must be set}
+      PLATFORM_DB_TLS_MODE: disable
+    command: ["sh", "-c", "pnpm install --frozen-lockfile && pnpm --filter @oss-scp/platform-db build && exec pnpm --filter @oss-scp/api exec nest start --watch --path tsconfig.dev.json"]
     volumes:
       - .:/workspace
       - api_root_modules:/workspace/node_modules
@@ -94,15 +101,14 @@ volumes:
   api_local_csv_source_modules:
   web_local_csv_source_modules:
   mock_local_csv_source_modules:
-  api_platform_db_modules:
-  web_platform_db_modules:
-  mock_platform_db_modules:
   api_mock_modules:
   api_csv_reader_modules:
   api_plugin_config_modules:
+  api_platform_db_modules:
   web_mock_modules:
   web_csv_reader_modules:
   web_plugin_config_modules:
+  web_platform_db_modules:
   mock_root_modules:
   mock_modules:
   mock_dist:
@@ -110,6 +116,7 @@ volumes:
   mock_web_modules:
   mock_csv_reader_modules:
   mock_plugin_config_modules:
+  mock_platform_db_modules:
   api_root_modules:
   api_modules:
   api_web_modules:

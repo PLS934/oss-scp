@@ -18,13 +18,15 @@ pnpm dev:web
 Docker와 Compose가 설치되어 있다면 Node.js·pnpm 없이 실행할 수 있습니다.
 
 ```sh
+export PLATFORM_DB_PASSWORD='무작위로-생성한-로컬-비밀번호'
 docker compose up --build -d --wait
+docker compose run --rm api node node_modules/@oss-scp/platform-db/dist/migrate-cli.js
 # 브라우저: http://localhost:8080
 curl http://127.0.0.1:3000/api/v1/health
 docker compose down
 ```
 
-상태 확인 API는 `{"status":"ok"}`를 반환합니다. 시작 화면에서 서버 연결 상태를 확인할 수 있으며 업무 API·DB·샘플 데이터는 후속 구현입니다. Docker 개발과 배포의 차이, 외부 접속 및 클라이언트 검증은 [클라이언트 개발·실행 가이드](docs/client-development.md)를 참고해주세요. 서버 환경변수, 검증 및 실행 방법은 [서버 개발·실행 가이드](docs/server-development.md)를 참고해주세요.
+상태 확인 API는 `{"status":"ok"}`, DB 준비 API는 `{"status":"ready"}`를 반환합니다. 기본 Compose는 호스트에 DB 포트를 공개하지 않는 전용 PostgreSQL을 함께 실행합니다. 이미 실행 중인 외부 PostgreSQL을 사용하는 방법은 [플랫폼 DB 가이드](docs/platform-db.md)를 참고하세요.
 
 ## 기여 방법
 

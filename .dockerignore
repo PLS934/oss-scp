@@ -31,3 +31,11 @@
 !fixtures/sources/sample2.json
 !fixtures/csv/
 !fixtures/csv/vulnerabilities.csv
+!packages/
+!packages/platform-db/
+!packages/platform-db/package.json
+!packages/platform-db/tsconfig.json
+!packages/platform-db/src/
+!packages/platform-db/src/**
+!packages/platform-db/migrations/
+!packages/platform-db/migrations/**

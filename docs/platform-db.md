@@ -1,8 +1,39 @@
-# 플랫폼 DB 접속 설정
+# 플랫폼 DB 접속과 PostgreSQL 설치
 
 `@oss-scp/platform-db`는 운영자가 입력한 DB 주소·포트·계정·비밀번호를 읽고 검사하는 공통 패키지입니다. 정상 입력은 연결 코드가 사용할 설정으로 반환하고, 잘못된 입력은 수정할 항목을 알리는 `PlatformDbConfigError`를 반환합니다.
 
-현재는 설정 검사 함수와 연결 코드의 인터페이스를 제공합니다. API 시작 과정에서 아직 호출하지 않으므로 `.env`를 작성해도 DB 접속을 시작하지 않습니다. PostgreSQL 실제 연결·설치는 #27, MySQL은 #28, 업무 테이블·저장·조회는 #29~#31에서 추가합니다. 별도의 설정 화면이나 검사 CLI는 제공하지 않습니다.
+PostgreSQL 어댑터는 API 시작 시 이 설정으로 연결하며 `/api/v1/ready`에서 DB 준비 상태를 확인합니다. MySQL은 #28, 업무 테이블·저장·조회는 #29~#31에서 추가합니다. 별도의 웹 설정 화면은 제공하지 않습니다.
+
+## 내장 PostgreSQL로 빠르게 시작
+
+기본 Compose는 PostgreSQL 17.6을 API·웹과 함께 실행합니다. DB 포트는 호스트에 공개하지 않으며 oss-scp API와 migration만 내부 네트워크에서 접근합니다.
+
+```sh
+export PLATFORM_DB_PASSWORD='무작위로-생성한-로컬-비밀번호'
+docker compose up --build -d --wait
+docker compose run --rm api node node_modules/@oss-scp/platform-db/dist/migrate-cli.js
+curl http://127.0.0.1:3000/api/v1/ready
+```
+
+`docker compose down`은 컨테이너를 종료하지만 명명된 DB 볼륨은 유지합니다. 데이터를 지우는 `down -v`는 일반 종료에 사용하지 않습니다.
+
+## 이미 실행 중인 외부 PostgreSQL 사용
+
+외부 구성은 API와 웹만 시작합니다. PostgreSQL 인스턴스·서비스·볼륨을 생성하거나 시작·종료·삭제하지 않습니다.
+
+```sh
+export PLATFORM_DB_HOST=db.example.internal
+export PLATFORM_DB_PORT=5432
+export PLATFORM_DB_NAME=oss_scp
+export PLATFORM_DB_USER=oss_scp_app
+export PLATFORM_DB_PASSWORD_FILE=/run/secrets/platform_db_password
+export PLATFORM_DB_TLS_MODE=verify-full
+export PLATFORM_DB_TLS_CA_FILE=/run/secrets/platform_db_ca.pem
+docker compose -f compose.external-db.yaml up --build -d --wait
+docker compose -f compose.external-db.yaml run --rm api node node_modules/@oss-scp/platform-db/dist/migrate-cli.js
+```
+
+DB 관리자는 DB와 전용 계정을 만들고 해당 DB의 `CONNECT`, 대상 schema의 `USAGE`·`CREATE`, 생성 객체 변경 권한을 부여해야 합니다. 외부 secret/CA 파일은 API 컨테이너가 동일한 절대 경로에서 읽도록 배포 환경에서 마운트합니다.
 
 ## 운영자가 작성할 입력
 
@@ -46,7 +77,7 @@ PLATFORM_DB_PASSWORD_FILE=/run/secrets/platform_db_password
 | PLATFORM_DB_TLS_MODE | 기본 verify-full. disable 또는 verify-full |
 | PLATFORM_DB_TLS_CA_FILE | 선택. UTF-8 PEM 인증서 파일의 절대 경로, 최대 1 MiB |
 
-DB 종류·주소·이름·계정은 비어 있거나 앞뒤 공백·제어문자를 포함하면 거부합니다. 숫자는 부호·소수·지수·공백을 허용하지 않습니다. 초기 제품 ID는 `postgres`, `mysql`이며 기본 포트 5432, 3306은 해당 어댑터가 등록할 값입니다. 현재 패키지에 실제 어댑터가 내장되어 있지는 않습니다.
+DB 종류·주소·이름·계정은 비어 있거나 앞뒤 공백·제어문자를 포함하면 거부합니다. 숫자는 부호·소수·지수·공백을 허용하지 않습니다. 초기 제품 ID는 `postgres`, `mysql`이며 기본 포트는 각각 5432, 3306입니다. 현재 실제 등록 어댑터는 `postgres`입니다.
 
 ## 암호화 연결 설정
 
@@ -57,7 +88,7 @@ PLATFORM_DB_TLS_MODE=verify-full
 PLATFORM_DB_TLS_CA_FILE=/run/secrets/platform_db_ca.pem
 ```
 
-로컬 평문 DB에서는 `disable`을 명시하고 CA 파일 항목을 생략합니다. `disable`과 CA 파일을 함께 지정하면 오류입니다. 이번 함수는 설정과 PEM 형식을 검사하며 실제 서버의 인증서 검증은 후속 DB 어댑터에서 수행합니다. 검증 실패 시 평문 연결로 자동 전환하는 동작은 허용하지 않습니다.
+로컬 평문 DB에서는 `disable`을 명시하고 CA 파일 항목을 생략합니다. `disable`과 CA 파일을 함께 지정하면 오류입니다. PostgreSQL 어댑터는 실제 연결에서도 인증서 체인과 호스트명을 검증하며 실패 시 평문으로 자동 전환하지 않습니다.
 
 ## 정상·오류 결과
 
@@ -75,7 +106,7 @@ PLATFORM_DB_TLS_CA_FILE=/run/secrets/platform_db_ca.pem
 
 오류는 `code`, `setting`, 고정된 `message`로 처리합니다. 입력 비밀번호·파일 경로·원본 파일 시스템 오류를 포함하지 않습니다. 정상 반환 설정에는 비밀번호가 있으므로 설정 객체 전체를 로그나 HTTP 응답에 출력하지 않습니다.
 
-설정 검사 성공은 DB 접속 성공을 뜻하지 않습니다. 비밀번호가 실제 DB와 일치하는지, 호스트가 응답하는지는 후속 연결 단계에서 확인합니다.
+설정 검사 성공은 DB 접속 성공을 뜻하지 않습니다. API와 migration CLI가 실제 연결로 인증·응답·TLS를 확인합니다.
 
 ## 서버·수집 CLI에서 사용할 공통 API
 
@@ -100,7 +131,7 @@ function readSettings(adapters: readonly PlatformDbAdapterFactory[]) {
 
 `connect`가 반환하는 연결은 `checkReady(): Promise<boolean>`와 `close(): Promise<void>`를 제공합니다. 어댑터는 대기 시간·연결 풀·TLS 검증을 집행하고, 준비 상태 검사는 `connectTimeoutMs` 안에 반환하며 DB 장애는 false로 표현합니다. 종료는 반복 호출 가능해야 합니다. 연결 도중 실패한 자원은 연결 코드가 정리하고, 외부로 공개하는 연결 오류에도 비밀정보를 포함하지 않아야 합니다.
 
-후속 서버 연결에서는 설정/최초 연결 실패를 시작 실패로 처리합니다. 실행 중 DB 장애는 준비 상태(readiness) 실패이며, 서버 생존(liveness)과 구분합니다. 현재 `/api/v1/health`는 HTTP 처리 가능 여부만 반환하고 DB 상태를 의미하지 않습니다.
+설정/최초 연결 실패는 API 시작 실패입니다. 실행 중 DB 장애는 `/api/v1/ready`의 HTTP 503이며 `/api/v1/health` liveness는 성공을 유지합니다. migration은 앱 시작 시 자동 실행하지 않고 `pnpm db:migrate` 또는 위 Compose 명령으로 명시적으로 실행합니다.
 
 ## 개발·검증
 
@@ -115,4 +146,4 @@ pnpm test
 pnpm build
 ```
 
-패키지 테스트는 임시 파일과 테스트 어댑터로 실행되며 외부 DB·자격증명·Docker가 필요하지 않습니다. 기존 GitHub Actions의 `pnpm test`, 타입 검사·린트·빌드에 자동으로 포함됩니다. 실제 DB·Docker 연결 검증은 #27·#28의 범위입니다. DB 데이터나 스키마를 변경하지 않아 이번 패키지 추가에는 migration 실행이 필요하지 않습니다.
+패키지 테스트는 Docker의 `postgres:17.6-bookworm` 실제 DB를 사용합니다. PostgreSQL 17.6과 `pg` 8.23.0 조합에서 정상 연결, 인증·접속·TLS 실패, 종료 및 migration 재실행·rollback을 검증합니다. 검증하지 않은 버전의 호환성을 주장하지 않습니다.
