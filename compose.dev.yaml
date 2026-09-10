@@ -21,6 +21,7 @@ services:
       - api_modules:/workspace/apps/api/node_modules
       - api_web_modules:/workspace/apps/web/node_modules
       - api_mock_modules:/workspace/apps/mock-api/node_modules
+      - api_plugin_config_modules:/workspace/packages/plugin-config/node_modules
     healthcheck:
       test: ["CMD", "node", "apps/api/healthcheck.mjs"]
       interval: 5s
@@ -45,6 +46,7 @@ services:
       - web_api_modules:/workspace/apps/api/node_modules
       - web_modules:/workspace/apps/web/node_modules
       - web_mock_modules:/workspace/apps/mock-api/node_modules
+      - web_plugin_config_modules:/workspace/packages/plugin-config/node_modules
     healthcheck:
       test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:8080/', {signal: AbortSignal.timeout(3000)}).then(r => process.exit(r.ok ? 0 : 1)).catch(() => process.exit(1))"]
       interval: 5s
@@ -69,6 +71,7 @@ services:
       - mock_dist:/workspace/apps/mock-api/dist
       - mock_api_modules:/workspace/apps/api/node_modules
       - mock_web_modules:/workspace/apps/web/node_modules
+      - mock_plugin_config_modules:/workspace/packages/plugin-config/node_modules
     healthcheck:
       test: ["CMD", "node", "apps/mock-api/healthcheck.mjs"]
       interval: 5s
@@ -78,12 +81,15 @@ services:
 
 volumes:
   api_mock_modules:
+  api_plugin_config_modules:
   web_mock_modules:
+  web_plugin_config_modules:
   mock_root_modules:
   mock_modules:
   mock_dist:
   mock_api_modules:
   mock_web_modules:
+  mock_plugin_config_modules:
   api_root_modules:
   api_modules:
   api_web_modules:
