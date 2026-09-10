@@ -1,0 +1,16 @@
+{
+  "apiVersion": "oss-scp/source-v1",
+  "connectionRef": "mock-api",
+  "path": "/sample1",
+  "method": "GET",
+  "format": "json",
+  "itemsPath": "rows",
+  "pagination": {
+    "type": "offset",
+    "offsetParam": "offset",
+    "limitParam": "limit",
+    "start": 0,
+    "limit": 20,
+    "totalPath": "total"
+  }
+}

@@ -1,0 +1,26 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://oss-scp.dev/schemas/plugin-v1.json",
+  "title": "oss-scp minimal plugin",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["apiVersion", "id", "name", "version", "source"],
+  "properties": {
+    "apiVersion": { "const": "oss-scp/plugin-v1" },
+    "id": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$",
+      "maxLength": 100
+    },
+    "name": { "type": "string", "minLength": 1, "maxLength": 100 },
+    "version": {
+      "type": "string",
+      "pattern": "^(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)$"
+    },
+    "source": {
+      "type": "string",
+      "pattern": "^\\./[^\\u0000]+\\.json$",
+      "maxLength": 255
+    }
+  }
+}
