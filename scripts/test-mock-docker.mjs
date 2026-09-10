@@ -17,6 +17,7 @@ const standalone = `${project}-standalone`;
 const mockPort = await port();
 const webPort = await port();
 const env = {
+  PLATFORM_DB_PASSWORD: 'mock-docker-test-password',
   ...process.env,
   MOCK_PUBLISHED_PORT: String(mockPort),
   WEB_PORT: String(webPort),
@@ -104,7 +105,7 @@ async function verifyStandalone() {
       .trim()
       .split('\n')
       .sort(),
-    ['api', 'web'],
+    ['api', 'postgres', 'web'],
   );
   const config = JSON.parse(await compose(['config', '--format', 'json']));
   assert.equal(config.services['mock-api'].ports[0].host_ip, '127.0.0.1');
@@ -158,7 +159,7 @@ async function verifyIntegration() {
       .trim()
       .split('\n')
       .sort(),
-    ['api', 'mock-api', 'web'],
+    ['api', 'mock-api', 'postgres', 'web'],
   );
   await waitFor(() => healthy(webUrl), '웹 프록시');
   await compose([
@@ -178,11 +179,11 @@ async function verifyIntegration() {
       .trim()
       .split('\n')
       .sort(),
-    ['api', 'web'],
+    ['api', 'postgres', 'web'],
   );
   await waitFor(() => healthy(webUrl), 'mock 없는 기본 실행');
   await compose(['down', '--volumes', '--remove-orphans']);
-  console.log('3개 서비스·내부 통신·mock 선택 해제 통과');
+  console.log('4개 서비스·내부 통신·mock 선택 해제 통과');
 }
 
 async function verifyDevelopment() {

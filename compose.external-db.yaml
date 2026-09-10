@@ -1,0 +1,34 @@
+services:
+  api:
+    image: oss-scp-api:local
+    build:
+      context: .
+      dockerfile: apps/api/Dockerfile
+    environment:
+      - NODE_ENV=production
+      - HOST=0.0.0.0
+      - PORT=3000
+      - PLATFORM_DB_TYPE=postgres
+      - PLATFORM_DB_HOST
+      - PLATFORM_DB_PORT
+      - PLATFORM_DB_NAME
+      - PLATFORM_DB_USER
+      - PLATFORM_DB_PASSWORD
+      - PLATFORM_DB_PASSWORD_FILE
+      - PLATFORM_DB_TLS_MODE
+      - PLATFORM_DB_TLS_CA_FILE
+      - PLATFORM_DB_POOL_MAX
+      - PLATFORM_DB_CONNECT_TIMEOUT_MS
+    ports:
+      - "127.0.0.1:${API_PORT:-3000}:3000"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+  web:
+    image: oss-scp-web:local
+    build:
+      context: .
+      dockerfile: apps/web/Dockerfile
+    environment:
+      API_UPSTREAM: ${API_UPSTREAM:-api:3000}
+    ports:
+      - "0.0.0.0:${WEB_PORT:-8080}:8080"

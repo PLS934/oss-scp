@@ -24,7 +24,9 @@
     "test:docker:mock": "node scripts/test-mock-docker.mjs",
     "test:process:mock": "node scripts/test-mock-process.mjs",
     "validate:plugins": "pnpm --filter @oss-scp/plugin-config validate:sample",
-    "test:process:plugin-config": "pnpm --filter @oss-scp/plugin-config build && node scripts/test-plugin-config-process.mjs"
+    "test:process:plugin-config": "pnpm --filter @oss-scp/plugin-config build && node scripts/test-plugin-config-process.mjs",
+    "db:migrate": "pnpm --filter @oss-scp/platform-db migrate",
+    "test:docker:external-db": "bash scripts/test-external-db.sh"
   },
   "devDependencies": {
     "@eslint/js": "10.0.1",

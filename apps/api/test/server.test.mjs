@@ -8,7 +8,8 @@ describe('HTTP 계약과 Nest 의존성 주입', () => {
   let app;
   let url;
   beforeAll(async () => {
-    const module = await Test.createTestingModule({ imports: [AppModule] }).compile();
+    const connection = { checkReady: async () => true, close: async () => undefined };
+    const module = await Test.createTestingModule({ imports: [AppModule.register(connection)] }).compile();
     app = module.createNestApplication();
     await app.listen(0, '127.0.0.1');
     url = await app.getUrl();
@@ -22,6 +23,26 @@ describe('HTTP 계약과 Nest 의존성 주입', () => {
   });
   it('정의되지 않은 경로는 404를 반환한다', async () => {
     expect((await fetch(`${url}/api/v1/missing`)).status).toBe(404);
+  });
+  it('DB 준비 상태를 별도 경로로 반환한다', async () => {
+    const response = await fetch(`${url}/api/v1/ready`);
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({ status: 'ready' });
+  });
+});
+
+describe('준비되지 않은 DB', () => {
+  it('liveness는 유지하고 readiness만 503으로 반환한다', async () => {
+    const connection = { checkReady: async () => false, close: async () => undefined };
+    const module = await Test.createTestingModule({ imports: [AppModule.register(connection)] }).compile();
+    const app = module.createNestApplication(); await app.listen(0, '127.0.0.1');
+    try {
+      const url = await app.getUrl();
+      expect((await fetch(`${url}/api/v1/health`)).status).toBe(200);
+      const ready = await fetch(`${url}/api/v1/ready`);
+      expect(ready.status).toBe(503);
+      expect(await ready.json()).toEqual({ status: 'not_ready' });
+    } finally { await app.close(); }
   });
 });
 

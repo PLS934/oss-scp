@@ -3,9 +3,12 @@ WORKDIR /workspace
 RUN npm install --global pnpm@10.34.5
 COPY package.json pnpm-workspace.yaml pnpm-lock.yaml ./
 COPY apps/api/package.json ./apps/api/package.json
+COPY packages/platform-db/package.json ./packages/platform-db/package.json
 RUN pnpm install --frozen-lockfile
 COPY apps/api ./apps/api
-RUN pnpm --filter @oss-scp/api build \
+COPY packages/platform-db ./packages/platform-db
+RUN pnpm --filter @oss-scp/platform-db build \
+    && pnpm --filter @oss-scp/api build \
     && pnpm --filter @oss-scp/api deploy --prod /out
 
 FROM node:24.19.0-bookworm-slim AS runtime

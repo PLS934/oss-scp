@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { spawn } from 'node:child_process';
+import { spawn, execFileSync } from 'node:child_process';
 import { once } from 'node:events';
 import { cp, mkdtemp, readFile, rm, symlink, writeFile } from 'node:fs/promises';
 import { createServer } from 'node:net';
@@ -10,6 +10,17 @@ import { setTimeout as delay } from 'node:timers/promises';
 const root = resolve(import.meta.dirname, '..');
 const temporary = await mkdtemp(join(tmpdir(), 'oss-scp-process-'));
 const children = new Set();
+const dbContainer = `oss-scp-process-db-${process.pid}`;
+let dbEnv;
+function docker(...args) { return execFileSync('docker', args, { encoding: 'utf8' }).trim(); }
+async function startDatabase() {
+  docker('run', '-d', '--name', dbContainer, '-e', 'POSTGRES_DB=oss_scp', '-e', 'POSTGRES_USER=oss_scp_app', '-e', 'POSTGRES_PASSWORD=process-password', '-p', '127.0.0.1::5432', 'postgres:17.6-bookworm');
+  for (let i = 0; i < 100; i++) {
+    try { docker('exec', dbContainer, 'pg_isready', '-U', 'oss_scp_app', '-d', 'oss_scp'); break; } catch { await delay(100); }
+  }
+  const address = docker('port', dbContainer, '5432/tcp');
+  dbEnv = { PLATFORM_DB_TYPE: 'postgres', PLATFORM_DB_HOST: address.slice(0, address.lastIndexOf(':')), PLATFORM_DB_PORT: address.slice(address.lastIndexOf(':') + 1), PLATFORM_DB_NAME: 'oss_scp', PLATFORM_DB_USER: 'oss_scp_app', PLATFORM_DB_PASSWORD: 'process-password', PLATFORM_DB_TLS_MODE: 'disable' };
+}
 async function freePort() {
   const server = createServer();
   server.listen(0, '127.0.0.1');
@@ -20,7 +31,7 @@ async function freePort() {
 }
 function start(command, args, cwd, env = {}) {
   const child = spawn(command, args, {
-    cwd, env: { ...process.env, HOST: '127.0.0.1', ...env },
+    cwd, env: { ...process.env, HOST: '127.0.0.1', ...dbEnv, ...env },
     detached: true, stdio: ['ignore', 'pipe', 'pipe'],
   });
   child.output = '';
@@ -53,8 +64,8 @@ async function response(child, port, status = 'ok') {
   }
   throw new Error(`응답 대기 시간 초과: ${status}\n${child.output}`);
 }
-async function failedStart(port, pattern) {
-  const child = start(process.execPath, ['apps/api/dist/main.js'], root, { PORT: String(port) });
+async function failedStart(port, pattern, env = {}) {
+  const child = start(process.execPath, ['apps/api/dist/main.js'], root, { PORT: String(port), ...env });
   for (let i = 0; i < 100 && child.exitCode === null; i++) await delay(100);
   assert.notEqual(child.exitCode, null, child.output);
   assert.notEqual(child.exitCode, 0, child.output);
@@ -62,11 +73,13 @@ async function failedStart(port, pattern) {
   await stop(child);
 }
 try {
+  await startDatabase();
   const port = await freePort();
   const built = start('pnpm', ['start'], root, { PORT: String(port) });
   await response(built, port);
   await failedStart(port, /EADDRINUSE/);
   await failedStart('invalid', /PORT/);
+  await failedStart(await freePort(), /플랫폼 DB에 연결할 수 없습니다/, { PLATFORM_DB_PASSWORD: 'sensitive-wrong-password' });
   await stop(built);
   console.log('배포 실행·사용자 포트·잘못된 포트·포트 충돌·종료: 통과');
 
@@ -75,10 +88,13 @@ try {
   await cp(join(root, 'apps/api'), join(temporary, 'apps/api'), {
     recursive: true, filter: (path) => !path.includes('/node_modules') && !path.includes('/dist'),
   });
+  await cp(join(root, 'packages/platform-db'), join(temporary, 'packages/platform-db'), {
+    recursive: true, filter: (path) => !path.includes('/node_modules'),
+  });
   await symlink(join(root, 'node_modules'), join(temporary, 'node_modules'), 'dir');
   await symlink(join(root, 'apps/api/node_modules'), join(temporary, 'apps/api/node_modules'), 'dir');
   const watchPort = await freePort();
-  await writeFile(join(temporary, '.env'), `HOST=127.0.0.1\nPORT=${watchPort}\n`);
+  await writeFile(join(temporary, '.env'), `HOST=127.0.0.1\nPORT=${watchPort}\nPLATFORM_DB_TYPE=postgres\nPLATFORM_DB_HOST=${dbEnv.PLATFORM_DB_HOST}\nPLATFORM_DB_PORT=${dbEnv.PLATFORM_DB_PORT}\nPLATFORM_DB_NAME=oss_scp\nPLATFORM_DB_USER=oss_scp_app\nPLATFORM_DB_PASSWORD=process-password\nPLATFORM_DB_TLS_MODE=disable\n`);
   const watch = start('pnpm', ['dev'], temporary, { PORT: undefined, HOST: undefined });
   await response(watch, watchPort);
   const source = join(temporary, 'apps/api/src/health.service.ts');
@@ -89,4 +105,5 @@ try {
 } finally {
   for (const child of children) await stop(child);
   await rm(temporary, { recursive: true, force: true });
+  try { docker('rm', '-f', dbContainer); } catch { /* 테스트 DB가 시작되지 않았을 수 있다. */ }
 }

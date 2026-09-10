@@ -1,0 +1,69 @@
+import { Pool, type PoolClient, type PoolConfig } from 'pg';
+import type { PlatformDbAdapterFactory, PlatformDbConfig, PlatformDbConnection } from './types';
+
+export class PlatformDbConnectionError extends Error {
+  constructor(readonly code: 'CONNECT_FAILED' | 'CONNECTION_CLOSED') {
+    super(code === 'CONNECT_FAILED' ? '플랫폼 DB에 연결할 수 없습니다.' : '플랫폼 DB 연결이 종료되었습니다.');
+    this.name = 'PlatformDbConnectionError';
+  }
+}
+
+export interface PostgresPlatformDbConnection extends PlatformDbConnection {
+  withClient<T>(work: (client: PoolClient) => Promise<T>): Promise<T>;
+}
+
+export function postgresPoolConfig(config: PlatformDbConfig): PoolConfig {
+  return {
+    host: config.host,
+    port: config.port,
+    database: config.database,
+    user: config.user,
+    password: config.password,
+    max: config.poolMax,
+    connectionTimeoutMillis: config.connectTimeoutMs,
+    query_timeout: config.connectTimeoutMs,
+    ssl: config.tls.mode === 'disable' ? false : {
+      rejectUnauthorized: true,
+      ...(config.tls.ca === undefined ? {} : { ca: config.tls.ca }),
+    },
+  };
+}
+
+async function quietlyEnd(pool: Pool): Promise<void> {
+  try { await pool.end(); } catch { /* 공개 오류에 드라이버 상세를 섞지 않는다. */ }
+}
+
+export const postgresAdapter: PlatformDbAdapterFactory = {
+  id: 'postgres',
+  contractVersion: 1,
+  defaultPort: 5432,
+  async connect(config): Promise<PostgresPlatformDbConnection> {
+    const pool = new Pool(postgresPoolConfig(config));
+    let closed = false;
+    let closing: Promise<void> | undefined;
+    try {
+      await pool.query('SELECT 1');
+    } catch {
+      await quietlyEnd(pool);
+      throw new PlatformDbConnectionError('CONNECT_FAILED');
+    }
+    return {
+      async checkReady() {
+        if (closed) return false;
+        try { await pool.query('SELECT 1'); return true; } catch { return false; }
+      },
+      async withClient<T>(work: (client: PoolClient) => Promise<T>): Promise<T> {
+        if (closed) throw new PlatformDbConnectionError('CONNECTION_CLOSED');
+        const client = await pool.connect();
+        try { return await work(client); } finally { client.release(); }
+      },
+      close() {
+        if (!closing) {
+          closed = true;
+          closing = quietlyEnd(pool);
+        }
+        return closing;
+      },
+    };
+  },
+};
