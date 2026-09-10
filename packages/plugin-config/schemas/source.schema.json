@@ -3,11 +3,11 @@
   "$id": "https://oss-scp.dev/schemas/source-v1.json",
   "title": "oss-scp source",
   "oneOf": [
-    { "$ref": "#/$defs/jsonOffsetSource" },
+    { "$ref": "#/$defs/jsonSource" },
     { "$ref": "#/$defs/localCsvSource" }
   ],
   "$defs": {
-    "jsonOffsetSource": {
+    "jsonSource": {
       "type": "object",
       "additionalProperties": false,
       "required": ["apiVersion", "connectionRef", "path", "method", "format", "itemsPath", "pagination"],
@@ -19,17 +19,10 @@
         "format": { "const": "json" },
         "itemsPath": { "$ref": "#/$defs/jsonPath" },
         "pagination": {
-          "type": "object",
-          "additionalProperties": false,
-          "required": ["type", "offsetParam", "limitParam", "start", "limit", "totalPath"],
-          "properties": {
-            "type": { "const": "offset" },
-            "offsetParam": { "$ref": "#/$defs/parameterName" },
-            "limitParam": { "$ref": "#/$defs/parameterName" },
-            "start": { "type": "integer", "minimum": 0 },
-            "limit": { "type": "integer", "minimum": 1, "maximum": 1000 },
-            "totalPath": { "$ref": "#/$defs/jsonPath" }
-          }
+          "oneOf": [
+            { "$ref": "https://oss-scp.dev/schemas/source-offset-v1.json" },
+            { "$ref": "https://oss-scp.dev/schemas/source-single-v1.json" }
+          ]
         }
       }
     },
@@ -51,11 +44,6 @@
       "type": "string",
       "pattern": "^[A-Za-z_$][A-Za-z0-9_$-]*(?:\\.[A-Za-z_$][A-Za-z0-9_$-]*)*$",
       "maxLength": 255
-    },
-    "parameterName": {
-      "type": "string",
-      "pattern": "^[A-Za-z][A-Za-z0-9_-]*$",
-      "maxLength": 100
     }
   }
 }

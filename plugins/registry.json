@@ -1,3 +1,7 @@
 {
-  "plugins": ["./sample1-offset-api", "./vulnerabilities-local-csv"]
+  "plugins": [
+    "./sample1-offset-api",
+    "./vulnerabilities-local-csv",
+    "./sample2-single-api"
+  ]
 }

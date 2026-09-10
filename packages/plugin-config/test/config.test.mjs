@@ -32,19 +32,19 @@ afterEach(() => {
 });
 
 describe('validateRepository', () => {
-  test('sample1 설정을 내부 수집 정의로 해석한다', () => {
+  test('sample1과 sample2 설정을 내부 수집 정의로 해석한다', () => {
     const result = validateRepository(repositoryRoot);
 
     expect(result.ok).toBe(true);
     if (!result.ok) return;
-    expect(result.definitions).toHaveLength(2);
+    expect(result.definitions).toHaveLength(3);
     expect(result.definitions[0]).toEqual({
       plugin: {
         id: 'sample1-offset-api',
         name: 'Sample 1 Offset API',
         version: '0.1.0',
       },
-      connection: { id: 'mock-api', baseUrl: 'http://127.0.0.1:3001' },
+      connection: { id: 'mock-api-sample1', baseUrl: 'http://127.0.0.1:3001' },
       request: { method: 'GET', path: '/sample1', format: 'json' },
       response: { itemsPath: 'rows', totalPath: 'total' },
       pagination: {
@@ -68,6 +68,17 @@ describe('validateRepository', () => {
       },
       batching: { size: 20 },
       limits: {},
+    });
+    expect(result.definitions[2]).toEqual({
+      plugin: {
+        id: 'sample2-single-api',
+        name: 'Sample 2 Single API',
+        version: '0.1.0',
+      },
+      connection: { id: 'mock-api-sample2', baseUrl: 'http://127.0.0.1:3002' },
+      request: { method: 'GET', path: '/sample2', format: 'json' },
+      response: { itemsPath: 'items' },
+      pagination: { type: 'single' },
     });
   });
 
@@ -140,11 +151,18 @@ describe('validateRepository', () => {
       },
     });
     writeJson(root, 'plugins/sample1-offset-api/source.json', source);
-    writeJson(root, 'connections/mock-api.json', {
+    writeJson(root, 'connections/other-source.json', {
       apiVersion: 'oss-scp/connection-v1',
       id: 'other-source',
       connector: 'http',
       config: { baseUrl: 'https://inventory.example.test' },
+    });
+    writeJson(root, 'connections/registry.json', {
+      connections: [
+        './mock-api-sample1.json',
+        './mock-api-sample2.json',
+        './other-source.json',
+      ],
     });
 
     const result = validateRepository(root);
@@ -166,7 +184,7 @@ describe('validateRepository', () => {
   test.each([
     ['필수값 누락', (source) => delete source.itemsPath, '/itemsPath'],
     ['추가 속성', (source) => (source.baseUrl = 'https://wrong.example'), '/baseUrl'],
-    ['지원하지 않는 방식', (source) => (source.pagination.type = 'single'), '/pagination/type'],
+    ['지원하지 않는 방식', (source) => (source.pagination.type = 'cursor'), '/pagination/type'],
     ['지원하지 않는 버전', (source) => (source.apiVersion = 'oss-scp/source-v2'), '/apiVersion'],
   ])('%s을 거부한다', (_name, mutate, expectedPath) => {
     const root = temporaryRepository();
@@ -179,6 +197,88 @@ describe('validateRepository', () => {
     expect(result.ok).toBe(false);
     if (result.ok) return;
     expect(result.errors.some((error) => error.path === expectedPath)).toBe(true);
+  });
+
+  test.each([
+    ['필수값 누락', (source) => delete source.itemsPath, '/itemsPath'],
+    ['offset 전용 속성', (source) => (source.pagination.limit = 100), '/pagination/limit'],
+    ['잘못된 타입', (source) => (source.pagination.type = 1), '/pagination/type'],
+    ['지원하지 않는 버전', (source) => (source.apiVersion = 'oss-scp/source-v2'), '/apiVersion'],
+    ['잘못된 경로', (source) => (source.path = 'sample2'), '/path'],
+  ])('single source의 %s을 거부한다', (_name, mutate, expectedPath) => {
+    const root = temporaryRepository();
+    const source = readJson(root, 'plugins/sample2-single-api/source.json');
+    mutate(source);
+    writeJson(root, 'plugins/sample2-single-api/source.json', source);
+
+    const result = validateRepository(root);
+
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.errors.some((error) => error.path === expectedPath)).toBe(true);
+  });
+
+  test('다른 single API 값도 코어 변경 없이 해석한다', () => {
+    const root = temporaryRepository();
+    const plugin = readJson(root, 'plugins/sample2-single-api/plugin.json');
+    plugin.id = 'other-single-api';
+    plugin.name = 'Other Single API';
+    writeJson(root, 'plugins/sample2-single-api/plugin.json', plugin);
+    const source = readJson(root, 'plugins/sample2-single-api/source.json');
+    Object.assign(source, {
+      connectionRef: 'other-source',
+      path: '/inventory/all-hosts',
+      itemsPath: 'payload.records',
+    });
+    writeJson(root, 'plugins/sample2-single-api/source.json', source);
+    writeJson(root, 'connections/other-source.json', {
+      apiVersion: 'oss-scp/connection-v1',
+      id: 'other-source',
+      connector: 'http',
+      config: { baseUrl: 'https://inventory.example.test' },
+    });
+    writeJson(root, 'connections/registry.json', {
+      connections: [
+        './mock-api-sample1.json',
+        './mock-api-sample2.json',
+        './other-source.json',
+      ],
+    });
+
+    const result = validateRepository(root);
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.definitions[2]).toEqual({
+      plugin: { id: 'other-single-api', name: 'Other Single API', version: '0.1.0' },
+      connection: { id: 'other-source', baseUrl: 'https://inventory.example.test' },
+      request: { method: 'GET', path: '/inventory/all-hosts', format: 'json' },
+      response: { itemsPath: 'payload.records' },
+      pagination: { type: 'single' },
+    });
+    expect(JSON.stringify(result.definitions[2])).not.toMatch(
+      /153|test_field2|test_field3|test_field6/,
+    );
+  });
+
+  test('sample2 Connection 변경은 sample1 정의에 영향을 주지 않는다', () => {
+    const root = temporaryRepository();
+    const connection = readJson(root, 'connections/mock-api-sample2.json');
+    connection.config.baseUrl = 'http://127.0.0.1:4302';
+    writeJson(root, 'connections/mock-api-sample2.json', connection);
+
+    const result = validateRepository(root);
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.definitions[0].connection).toEqual({
+      id: 'mock-api-sample1',
+      baseUrl: 'http://127.0.0.1:3001',
+    });
+    expect(result.definitions[2].connection).toEqual({
+      id: 'mock-api-sample2',
+      baseUrl: 'http://127.0.0.1:4302',
+    });
   });
 
   test('플러그인 디렉터리 밖 source 참조를 거부한다', () => {
@@ -230,17 +330,21 @@ describe('validateRepository', () => {
 
   test('중복 ID와 여러 파일의 오류를 함께 보고하며 설정값을 노출하지 않는다', () => {
     const root = temporaryRepository();
-    const connection = readJson(root, 'connections/mock-api.json');
+    const connection = readJson(root, 'connections/mock-api-sample1.json');
     connection.password = 'DO_NOT_PRINT_THIS_SECRET';
-    writeJson(root, 'connections/mock-api.json', connection);
+    writeJson(root, 'connections/mock-api-sample1.json', connection);
     writeJson(root, 'connections/duplicate.json', {
       apiVersion: 'oss-scp/connection-v1',
-      id: 'mock-api',
+      id: 'mock-api-sample1',
       connector: 'http',
       config: { baseUrl: 'https://duplicate.example.test' },
     });
     writeJson(root, 'connections/registry.json', {
-      connections: ['./mock-api.json', './duplicate.json'],
+      connections: [
+        './mock-api-sample1.json',
+        './mock-api-sample2.json',
+        './duplicate.json',
+      ],
     });
     const source = readJson(root, 'plugins/sample1-offset-api/source.json');
     source.unknown = 'ANOTHER_PRIVATE_VALUE';
@@ -260,12 +364,16 @@ describe('validateRepository', () => {
     const root = temporaryRepository();
     writeJson(root, 'connections/duplicate.json', {
       apiVersion: 'oss-scp/connection-v1',
-      id: 'mock-api',
+      id: 'mock-api-sample1',
       connector: 'http',
       config: { baseUrl: 'https://duplicate.example.test' },
     });
     writeJson(root, 'connections/registry.json', {
-      connections: ['./mock-api.json', './duplicate.json'],
+      connections: [
+        './mock-api-sample1.json',
+        './mock-api-sample2.json',
+        './duplicate.json',
+      ],
     });
 
     const result = validateRepository(root);
@@ -276,7 +384,7 @@ describe('validateRepository', () => {
       expect.objectContaining({
         file: 'connections/duplicate.json',
         path: '/id',
-        message: 'duplicate connection id: mock-api',
+        message: 'duplicate connection id: mock-api-sample1',
       }),
     );
   });

@@ -1,6 +1,6 @@
 {
   "apiVersion": "oss-scp/source-v1",
-  "connectionRef": "mock-api",
+  "connectionRef": "mock-api-sample1",
   "path": "/sample1",
   "method": "GET",
   "format": "json",

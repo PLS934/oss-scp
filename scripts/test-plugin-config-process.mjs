@@ -25,6 +25,15 @@ const csvDefinition = output.definitions?.find(
 if (csvDefinition?.source?.format !== 'csv' || csvDefinition?.batching?.size !== 20) {
   throw new Error('CLI did not return the local CSV definition');
 }
+const sample2Definition = output.definitions?.find(
+  definition => definition.plugin?.id === 'sample2-single-api',
+);
+if (
+  output.definitions?.[0]?.connection?.id !== 'mock-api-sample1' ||
+  sample2Definition?.connection?.id !== 'mock-api-sample2'
+) {
+  throw new Error('CLI did not return independent sample connections');
+}
 
 const temporaryRoot = mkdtempSync(join(tmpdir(), 'oss-scp-plugin-cli-'));
 try {
