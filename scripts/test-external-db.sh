@@ -10,6 +10,8 @@ export PLATFORM_DB_USER=oss_scp_app
 database_password=external-test-password
 export PLATFORM_DB_PASSWORD_FILE_HOST="$(mktemp /tmp/oss-scp-external-secret.XXXXXX)"
 printf '%s' "$database_password" > "$PLATFORM_DB_PASSWORD_FILE_HOST"
+# 로컬 Compose secret은 source 파일 권한을 유지하므로 비루트 API(UID 1000)가 읽을 수 있어야 한다.
+chmod 0444 "$PLATFORM_DB_PASSWORD_FILE_HOST"
 export PLATFORM_DB_TLS_MODE=disable
 cleanup() {
   result=$?
