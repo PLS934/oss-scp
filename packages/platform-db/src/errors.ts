@@ -30,3 +30,11 @@ export class PlatformDbConfigError extends Error {
     this.name = 'PlatformDbConfigError';
   }
 }
+
+/** DB 제품과 무관하게 비밀정보·드라이버 cause를 보관하지 않는 연결 오류. */
+export class PlatformDbConnectionError extends Error {
+  constructor(readonly code: 'CONNECT_FAILED' | 'CONNECTION_CLOSED') {
+    super(code === 'CONNECT_FAILED' ? '플랫폼 DB에 연결할 수 없습니다.' : '플랫폼 DB 연결이 종료되었습니다.');
+    this.name = 'PlatformDbConnectionError';
+  }
+}

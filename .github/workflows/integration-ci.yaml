@@ -12,6 +12,19 @@ concurrency:
   group: integration-ci-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 jobs:
+  mysql:
+    name: MySQL 8.4.6 연결 및 migration
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7.0.1
+      - uses: pnpm/action-setup@v6.1.0
+      - uses: actions/setup-node@v7.0.0
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm --filter @oss-scp/platform-db test
   postgres:
     name: PostgreSQL 17.6 연결 및 migration
     runs-on: ubuntu-24.04
@@ -65,4 +78,5 @@ jobs:
       # Compose·이미지 단독 실행·비루트·개발 파일 제외·무응답 unhealthy 전환
       - run: bash scripts/test-docker.sh
       - run: pnpm test:docker:external-db
+      - run: pnpm test:docker:mysql
       - run: pnpm test:docker:mock

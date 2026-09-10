@@ -1,6 +1,6 @@
 # 서버 개발·실행 가이드
 
-서버는 `apps/api`의 NestJS 앱입니다. 개발은 로컬 또는 Docker 개발 구성으로 진행하며, 기본 Compose는 빌드된 앱과 PostgreSQL을 실행합니다. API 시작에는 플랫폼 DB 설정과 연결 가능한 PostgreSQL이 필요합니다. 클라이언트 시작 화면은 상태 확인 API에 연결합니다. 업무 API와 초기화할 샘플 데이터는 후속 범위입니다. Docker 개발 방법은 [클라이언트 개발·실행 가이드](client-development.md)를 참고하세요.
+서버는 `apps/api`의 NestJS 앱입니다. 개발은 로컬 또는 Docker 개발 구성으로 진행하며, 기본 Compose는 빌드된 앱과 PostgreSQL을 실행합니다. MySQL은 `compose.mysql.yaml`로 선택합니다. API 시작에는 플랫폼 DB 설정과 선택한 DB 연결이 필요합니다. 클라이언트 시작 화면은 상태 확인 API에 연결합니다. 업무 API와 초기화할 샘플 데이터는 후속 범위입니다. Docker 개발 방법은 [클라이언트 개발·실행 가이드](client-development.md)를 참고하세요.
 
 ## 도구 버전
 
@@ -54,7 +54,7 @@ curl http://127.0.0.1:3100/api/v1/health
 
 포트가 잘못되었거나 사용 중이면 실패 로그와 0이 아닌 종료 코드가 발생합니다. 포트를 바꾸거나 해당 포트를 사용하는 본인의 프로세스를 종료한 후 다시 실행합니다. `.env` 변경은 명령을 종료하고 다시 실행해 적용합니다.
 
-플랫폼 DB 입력, 내장·외부 PostgreSQL과 migration은 [플랫폼 DB 접속과 설치](platform-db.md)를 참고하세요.
+플랫폼 DB 입력, 내장·외부 PostgreSQL/MySQL과 migration은 [플랫폼 DB 접속과 설치](platform-db.md)를 참고하세요.
 
 ## 빌드와 검증
 

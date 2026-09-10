@@ -26,7 +26,8 @@
     "validate:plugins": "pnpm --filter @oss-scp/plugin-config validate:sample",
     "test:process:plugin-config": "pnpm --filter @oss-scp/plugin-config build && node scripts/test-plugin-config-process.mjs",
     "db:migrate": "pnpm --filter @oss-scp/platform-db migrate",
-    "test:docker:external-db": "bash scripts/test-external-db.sh"
+    "test:docker:external-db": "bash scripts/test-external-db.sh",
+    "test:docker:mysql": "bash scripts/test-mysql-docker.sh"
   },
   "devDependencies": {
     "@eslint/js": "10.0.1",
