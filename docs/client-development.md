@@ -104,6 +104,35 @@ docker stop oss-scp-web-demo
 
 단독 실행은 API가 없어도 화면을 제공하며 연결 실패를 표시합니다. 실제 API와 연결하려면 같은 Docker 네트워크에서 실행하고 `-e API_UPSTREAM=<API 호스트>:<포트>`를 지정합니다. 서버 주소 변경에 웹 이미지 재빌드는 필요하지 않습니다. 아직 공개 레지스트리의 릴리스 이미지는 제공하지 않습니다.
 
+## 저장 레코드 API 계층
+
+`apps/web/src/records.ts`의 `listRecords`와 `getRecord`는 [저장 레코드 조회 API](record-query-api.md)를 화면에서 재사용하기 위한 타입 안전 경계입니다. 브라우저는 원천 API·DB·Connection에 직접 접근하지 않고 Vite 또는 Nginx가 전달하는 동일 출처 `/api/v1/records`만 요청합니다.
+
+```ts
+const first = await listRecords({
+  pluginId: 'sample1',
+  sourceId: 'sample-api',
+  dataType: 'asset',
+  limit: 20,
+}, { signal: controller.signal });
+
+if (first.ok && first.data.pageInfo.nextCursor) {
+  const next = await listRecords({
+    pluginId: 'sample1',
+    sourceId: 'sample-api',
+    dataType: 'asset',
+    limit: 20,
+    cursor: first.data.pageInfo.nextCursor,
+  });
+}
+```
+
+목록 함수는 `items`, `pageInfo.nextCursor`, `pageInfo.hasNextPage`, 최신 원천 단위 `collection` 상태와 `lastStoredAt`을 검증합니다. 첫 요청은 cursor를 생략하고 후속 요청은 서버가 반환한 불투명 `nextCursor`를 해석하거나 수정하지 않고 같은 범위와 묶음 크기로 전달합니다. 묶음 크기는 생략 시 서버 기본값 20을 사용하며 명시할 때는 20·50·100·200만 허용합니다. 빈 items와 `never_collected`는 정상 결과입니다.
+
+두 함수는 예외 대신 `{ ok: true, data }` 또는 `{ ok: false, error }`를 반환합니다. 오류 `kind`는 입력 오류 `INVALID_INPUT`, cursor 오류 `INVALID_CURSOR`, 상세 없음 `NOT_FOUND`, DB 조회 불가 `NOT_READY`, 계약에 맞지 않는 응답 `INVALID_RESPONSE`, 네트워크 오류 `NETWORK_ERROR`, 취소 `ABORTED`, 나머지 API 실패 `API_ERROR`입니다. 오류에는 서버 응답 원문이나 내부 접속 정보가 포함되지 않습니다. 화면 전환이나 재요청 시 `AbortController`를 취소하고 `ABORTED` 결과로 화면 상태를 갱신하지 않아야 합니다.
+
+현재 계층은 목록·상세 UI와 상태 관리, 캐시·자동 재시도·timeout을 제공하지 않습니다. 정확한 전체 건수, 임의 페이지 및 이전 cursor 이동, 검색·필터·사용자 지정 정렬도 현재 서버 계약과 클라이언트 함수의 범위가 아닙니다.
+
 ## 환경변수
 
 루트 `.env.example`을 참고합니다. 설정 없이 기본 실행이 가능하며 필요하면 `cp .env.example .env`로 복사합니다.
