@@ -53,6 +53,18 @@ async function run(command, args, options = {}, expectedCode = 0) {
   assert.equal(code, expectedCode, `${command} ${args.join(' ')} exited ${code}\n${process.stdout()}${process.stderr()}`);
   return process.stdout().trim();
 }
+async function runWhenReady(command, args, options, description, timeout = 30_000) {
+  const deadline = Date.now() + timeout;
+  let output = '';
+  while (Date.now() < deadline) {
+    const attempt = processRun(command, args, options);
+    const code = await attempt.done;
+    output = `${attempt.stdout()}${attempt.stderr()}`;
+    if (code === 0) return attempt.stdout().trim();
+    await delay(200);
+  }
+  throw new Error(`Timed out waiting for ${description}\n${output}`);
+}
 async function waitFor(check, description, timeout = 30_000) {
   const deadline = Date.now() + timeout;
   while (Date.now() < deadline) {
@@ -121,7 +133,7 @@ try {
     PLATFORM_DB_NAME: 'oss_scp', PLATFORM_DB_USER: 'oss_scp_app', PLATFORM_DB_PASSWORD: password,
     PLATFORM_DB_TLS_MODE: 'disable',
   };
-  await run(process.execPath, [path.join(root, 'packages/platform-db/dist/migrate-cli.js')], { env });
+  await runWhenReady(process.execPath, [path.join(root, 'packages/platform-db/dist/migrate-cli.js')], { env }, 'PostgreSQL migration connection');
   await restartMock(mockPort);
 
   const first = await collect(env);
