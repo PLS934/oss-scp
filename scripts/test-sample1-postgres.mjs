@@ -129,6 +129,7 @@ try {
   await waitFor(() => canConnect(databasePort), 'PostgreSQL host port');
   const env = {
     ...process.env,
+    OSS_SCP_CONFIG_ROOT: temporaryRoot,
     PLATFORM_DB_TYPE: 'postgres', PLATFORM_DB_HOST: '127.0.0.1', PLATFORM_DB_PORT: databasePort,
     PLATFORM_DB_NAME: 'oss_scp', PLATFORM_DB_USER: 'oss_scp_app', PLATFORM_DB_PASSWORD: password,
     PLATFORM_DB_TLS_MODE: 'disable',

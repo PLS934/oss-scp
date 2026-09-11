@@ -5,7 +5,7 @@ import { fixture, run } from './web-test-helpers.mjs';
 import { assertWorkspaceVolumes, checkWorkspaceVolumes, assertCleanDependencyPaths } from './docker-workspace-checks.mjs';
 
 const dir = await fixture();
-const compose = args => run('docker', ['compose', '-f', 'compose.yaml', '-f', 'compose.dev.yaml', '--profile', 'mock', ...args], { cwd: dir, env: { ...process.env, PLATFORM_DB_PASSWORD: 'workspace-test-password' } });
+const compose = args => run('docker', ['compose', '-f', 'compose.yaml', '-f', 'compose.dev.yaml', '--profile', 'mock', ...args], { cwd: dir, env: { ...process.env, PLATFORM_DB_PASSWORD: 'workspace-test-password', OSS_SCP_CONFIG_PATH: dir } });
 try {
   const targets = await checkWorkspaceVolumes(dir, compose);
   const config = JSON.parse(await compose(['config', '--format', 'json']));
