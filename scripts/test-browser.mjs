@@ -18,7 +18,8 @@ docker('run', '-d', '--name', database, '-e', 'POSTGRES_DB=oss_scp', '-e', 'POST
 let ready = false;
 for (let attempt = 0; attempt < 100; attempt++) {
   try {
-    docker('exec', database, 'pg_isready', '-U', 'oss_scp_app', '-d', 'oss_scp');
+    docker('exec', '-e', 'PGPASSWORD=browser-password', database,
+      'psql', '-h', '127.0.0.1', '-U', 'oss_scp_app', '-d', 'oss_scp', '-Atc', 'SELECT 1');
     ready = true;
     break;
   } catch { await delay(100); }
