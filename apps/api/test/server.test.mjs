@@ -60,7 +60,7 @@ describe('실행 설정', () => {
 describe('저장 레코드 조회 API', () => {
   const id = '00000000-0000-4000-8000-000000000001';
   const record = { id, pluginId: 'sample', sourceId: 'source', dataType: 'asset', externalKey: 'server-1', sourceValues: { hostname: 'server-1' }, firstSeenAt: '2026-09-11T01:00:00.000Z', lastSeenAt: '2026-09-11T01:01:00.000Z' };
-  const list = { records: [{ ...record, omittedFields: [] }], collection: { scope: 'source', status: 'success', runId: id, startedAt: '2026-09-11T01:00:00.000Z', finishedAt: '2026-09-11T01:02:00.000Z' }, lastStoredAt: record.lastSeenAt };
+  const list = { items: [{ ...record, omittedFields: [] }], pageInfo: { nextCursor: 'next-page', hasNextPage: true }, collection: { scope: 'source', status: 'success', runId: id, startedAt: '2026-09-11T01:00:00.000Z', finishedAt: '2026-09-11T01:02:00.000Z' }, lastStoredAt: record.lastSeenAt };
   const start = async query => {
     const connection = { checkReady: async () => true, close: async () => undefined };
     const module = await Test.createTestingModule({ imports: [AppModule.register(connection, query)] }).compile();
@@ -70,12 +70,12 @@ describe('저장 레코드 조회 API', () => {
 
   it('인증 없이 목록·상세와 빈 목록을 반환하고 입력을 전달한다', async () => {
     const calls = [];
-    const query = { listRecords: async input => { calls.push(input); return input.dataType === 'empty' ? { ...list, records: [], lastStoredAt: null } : list; }, getRecord: async value => value === id ? record : null };
+    const query = { listRecords: async input => { calls.push(input); return input.dataType === 'empty' ? { ...list, items: [], pageInfo: { nextCursor: null, hasNextPage: false }, lastStoredAt: null } : list; }, getRecord: async value => value === id ? record : null };
     const { app, url } = await start(query);
     try {
-      const response = await fetch(`${url}/api/v1/records?pluginId=sample&sourceId=source&dataType=asset&limit=20`);
+      const response = await fetch(`${url}/api/v1/records?pluginId=sample&sourceId=source&dataType=asset&limit=20&cursor=next-page`);
       expect(response.status).toBe(200); expect(await response.json()).toEqual(list);
-      expect(calls).toEqual([{ pluginId: 'sample', sourceId: 'source', dataType: 'asset', limit: 20 }]);
+      expect(calls).toEqual([{ pluginId: 'sample', sourceId: 'source', dataType: 'asset', limit: 20, cursor: 'next-page' }]);
       expect((await fetch(`${url}/api/v1/records?pluginId=sample&sourceId=source&dataType=empty`)).status).toBe(200);
       const detail = await fetch(`${url}/api/v1/records/${id}`); expect(detail.status).toBe(200); expect(await detail.json()).toEqual(record);
     } finally { await app.close(); }
@@ -83,12 +83,13 @@ describe('저장 레코드 조회 API', () => {
 
   it('잘못된 입력·없는 레코드·저장소 장애를 고정 오류로 변환한다', async () => {
     const { QueryError } = await import('@oss-scp/platform-db');
-    const query = { listRecords: async input => { if (!input.pluginId || Number.isNaN(input.limit)) throw new QueryError('INVALID_QUERY'); throw new Error('sensitive SQL password'); }, getRecord: async value => { if (value === id) return null; throw new QueryError('INVALID_QUERY'); } };
+    const query = { listRecords: async input => { if (input.cursor === 'bad') throw new QueryError('INVALID_CURSOR'); if (!input.pluginId || Number.isNaN(input.limit)) throw new QueryError('INVALID_QUERY'); throw new Error('sensitive SQL password'); }, getRecord: async value => { if (value === id) return null; throw new QueryError('INVALID_QUERY'); } };
     const { app, url } = await start(query);
     try {
       for (const path of ['/api/v1/records?sourceId=s&dataType=asset', '/api/v1/records?pluginId=p&sourceId=s&dataType=asset&limit=1.5', '/api/v1/records/not-a-uuid']) {
         const response = await fetch(`${url}${path}`); expect(response.status).toBe(400); expect(await response.json()).toMatchObject({ code: 'INVALID_QUERY', message: '조회 입력을 확인하세요.' });
       }
+      const invalidCursor = await fetch(`${url}/api/v1/records?pluginId=p&sourceId=s&dataType=asset&cursor=bad`); expect(invalidCursor.status).toBe(400); expect(await invalidCursor.json()).toMatchObject({ code: 'INVALID_CURSOR' });
       const missing = await fetch(`${url}/api/v1/records/${id}`); expect(missing.status).toBe(404); expect(await missing.json()).toMatchObject({ code: 'RECORD_NOT_FOUND' });
       const failed = await fetch(`${url}/api/v1/records?pluginId=p&sourceId=s&dataType=asset`); expect(failed.status).toBe(503); expect(JSON.stringify(await failed.json())).not.toContain('sensitive');
     } finally { await app.close(); }
