@@ -284,11 +284,7 @@ function loadPlugins(
       continue;
     }
 
-    if (
-      sourceValue.pagination.type === 'offset' &&
-      'limits' in sourceValue &&
-      sourceValue.limits.maxRecordBytes > sourceValue.limits.maxResponseBytes
-    ) {
+    if (sourceValue.limits.maxRecordBytes > sourceValue.limits.maxResponseBytes) {
       issue(
         errors,
         root,

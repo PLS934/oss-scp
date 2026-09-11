@@ -10,6 +10,7 @@ export function loadSingleSource(
 ): SingleCollectionDefinition {
   return {
     ...base,
+    limits: source.limits,
     response: { itemsPath: source.itemsPath, ...(source.metadataPaths ? { metadataPaths: source.metadataPaths } : {}) },
     pagination: { type: 'single' },
   };

@@ -10,7 +10,7 @@
     "jsonSource": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["apiVersion", "connectionRef", "path", "method", "format", "itemsPath", "pagination"],
+      "required": ["apiVersion", "connectionRef", "path", "method", "format", "itemsPath", "limits", "pagination"],
       "properties": {
         "apiVersion": { "const": "oss-scp/source-v1" },
         "connectionRef": { "type": "string", "pattern": "^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$", "maxLength": 100 },
@@ -35,14 +35,7 @@
             { "$ref": "https://oss-scp.dev/schemas/source-single-v1.json" }
           ]
         }
-      },
-      "allOf": [
-        {
-          "if": { "properties": { "pagination": { "type": "object", "properties": { "type": { "const": "offset" } }, "required": ["type"] } } },
-          "then": { "properties": { "limits": true }, "required": ["limits"] },
-          "else": { "properties": { "limits": false } }
-        }
-      ]
+      }
     },
     "localCsvSource": {
       "type": "object",

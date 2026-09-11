@@ -6,6 +6,11 @@
   "format": "json",
   "itemsPath": "items",
   "metadataPaths": ["test_field6"],
+  "limits": {
+    "timeoutMs": 5000,
+    "maxResponseBytes": 2097152,
+    "maxRecordBytes": 262144
+  },
   "pagination": {
     "type": "single"
   }

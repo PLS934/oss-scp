@@ -1,4 +1,8 @@
-import type { OffsetCollectionDefinition } from '@oss-scp/plugin-config';
+import type {
+  HttpCollectionLimits,
+  OffsetCollectionDefinition,
+  SingleCollectionDefinition,
+} from '@oss-scp/plugin-config';
 
 export type HttpCollectorErrorCode =
   | 'http_status'
@@ -41,14 +45,30 @@ export interface CollectionSummary {
 
 export type BatchHandler = (batch: CollectionBatch) => void | Promise<void>;
 
-function location(url: URL, offset: number): string {
-  return `${url.origin}${url.pathname} at offset ${offset}`;
+export interface SingleCollectionBatch {
+  items: unknown[];
+  responseMetadata?: Readonly<Record<string, unknown>>;
+  signal: AbortSignal;
+}
+
+export interface SingleCollectionSummary {
+  requests: 1;
+  records: number;
+}
+
+export type SingleBatchHandler = (
+  batch: SingleCollectionBatch,
+) => void | Promise<void>;
+
+function location(url: URL, offset?: number): string {
+  const requestLocation = `${url.origin}${url.pathname}`;
+  return offset === undefined ? requestLocation : `${requestLocation} at offset ${offset}`;
 }
 
 function collectorError(
   code: HttpCollectorErrorCode,
   url: URL,
-  offset: number,
+  offset?: number,
   cause?: unknown,
 ): HttpCollectorError {
   const labels: Record<HttpCollectorErrorCode, string> = {
@@ -87,7 +107,7 @@ async function readLimitedBody(
   response: Response,
   maximum: number,
   url: URL,
-  offset: number,
+  offset?: number,
 ): Promise<Uint8Array> {
   if (!response.body) {
     throw collectorError('invalid_response', url, offset);
@@ -118,20 +138,21 @@ async function readLimitedBody(
   return body;
 }
 
-async function fetchPage(
-  definition: OffsetCollectionDefinition,
+async function fetchJson(
+  limits: HttpCollectionLimits,
+  method: 'GET',
   requestUrl: URL,
-  offset: number,
   callerSignal?: AbortSignal,
+  offset?: number,
 ): Promise<unknown> {
   const timeoutController = new AbortController();
-  const timer = setTimeout(() => timeoutController.abort(), definition.limits.timeoutMs);
+  const timer = setTimeout(() => timeoutController.abort(), limits.timeoutMs);
   const signal = callerSignal
     ? AbortSignal.any([callerSignal, timeoutController.signal])
     : timeoutController.signal;
   try {
     const response = await fetch(requestUrl, {
-      method: definition.request.method,
+      method,
       signal,
       redirect: 'error',
     });
@@ -144,7 +165,7 @@ async function fetchPage(
     }
     const body = await readLimitedBody(
       response,
-      definition.limits.maxResponseBytes,
+      limits.maxResponseBytes,
       requestUrl,
       offset,
     );
@@ -162,6 +183,28 @@ async function fetchPage(
     throw collectorError('invalid_response', requestUrl, offset, error);
   } finally {
     clearTimeout(timer);
+  }
+}
+
+function validateRecords(
+  items: unknown[],
+  maximum: number,
+  url: URL,
+  offset?: number,
+): void {
+  for (const item of items) {
+    let serialized: string | undefined;
+    try {
+      serialized = JSON.stringify(item);
+    } catch (error) {
+      throw collectorError('invalid_response', url, offset, error);
+    }
+    if (serialized === undefined) {
+      throw collectorError('invalid_response', url, offset);
+    }
+    if (Buffer.byteLength(serialized, 'utf8') > maximum) {
+      throw collectorError('record_too_large', url, offset);
+    }
   }
 }
 
@@ -186,7 +229,13 @@ export async function collectHttpOffset(
       definition.pagination.limitParam,
       String(definition.pagination.limit),
     );
-    const payload = await fetchPage(definition, requestUrl, offset, options.signal);
+    const payload = await fetchJson(
+      definition.limits,
+      definition.request.method,
+      requestUrl,
+      options.signal,
+      offset,
+    );
     const items = valueAtPath(payload, definition.response.itemsPath);
     const total = valueAtPath(payload, definition.response.totalPath);
     if (!Array.isArray(items) || !Number.isSafeInteger(total) || (total as number) < 0) {
@@ -203,20 +252,7 @@ export async function collectHttpOffset(
     if (items.length !== expected) {
       throw collectorError('count_mismatch', requestUrl, offset);
     }
-    for (const item of items) {
-      let serialized: string | undefined;
-      try {
-        serialized = JSON.stringify(item);
-      } catch (error) {
-        throw collectorError('invalid_response', requestUrl, offset, error);
-      }
-      if (serialized === undefined) {
-        throw collectorError('invalid_response', requestUrl, offset);
-      }
-      if (Buffer.byteLength(serialized, 'utf8') > definition.limits.maxRecordBytes) {
-        throw collectorError('record_too_large', requestUrl, offset);
-      }
-    }
+    validateRecords(items, definition.limits.maxRecordBytes, requestUrl, offset);
     if (offset === initialTotal) {
       return { pages, records, total: initialTotal };
     }
@@ -238,4 +274,61 @@ export async function collectHttpOffset(
   }
 }
 
-export type { OffsetCollectionDefinition } from '@oss-scp/plugin-config';
+export async function collectHttpSingle(
+  definition: SingleCollectionDefinition,
+  onBatch: SingleBatchHandler,
+  options: { signal?: AbortSignal } = {},
+): Promise<SingleCollectionSummary> {
+  const requestUrl = new URL(definition.request.path, definition.connection.baseUrl);
+  if (options.signal?.aborted) {
+    throw collectorError('cancelled', requestUrl, undefined, options.signal.reason);
+  }
+
+  const payload = await fetchJson(
+    definition.limits,
+    definition.request.method,
+    requestUrl,
+    options.signal,
+  );
+  const items = valueAtPath(payload, definition.response.itemsPath);
+  if (!Array.isArray(items)) {
+    throw collectorError('invalid_response', requestUrl);
+  }
+  validateRecords(items, definition.limits.maxRecordBytes, requestUrl);
+
+  let responseMetadata: Record<string, unknown> | undefined;
+  if (definition.response.metadataPaths) {
+    responseMetadata = {};
+    for (const path of definition.response.metadataPaths) {
+      const value = valueAtPath(payload, path);
+      if (value === undefined) {
+        throw collectorError('invalid_response', requestUrl);
+      }
+      responseMetadata[path] = value;
+    }
+  }
+
+  if (items.length === 0) return { requests: 1, records: 0 };
+
+  try {
+    await onBatch({
+      items,
+      ...(responseMetadata ? { responseMetadata: Object.freeze(responseMetadata) } : {}),
+      signal: options.signal ?? new AbortController().signal,
+    });
+  } catch (error) {
+    if (options.signal?.aborted) {
+      throw collectorError('cancelled', requestUrl, undefined, error);
+    }
+    throw collectorError('processing', requestUrl, undefined, error);
+  }
+  if (options.signal?.aborted) {
+    throw collectorError('cancelled', requestUrl, undefined, options.signal.reason);
+  }
+  return { requests: 1, records: items.length };
+}
+
+export type {
+  OffsetCollectionDefinition,
+  SingleCollectionDefinition,
+} from '@oss-scp/plugin-config';
