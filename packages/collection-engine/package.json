@@ -7,12 +7,12 @@
   "types": "dist/index.d.ts",
   "files": ["dist"],
   "scripts": {
-    "prebuild": "pnpm --filter @oss-scp/plugin-config build && pnpm --filter @oss-scp/plugin-sdk build",
+    "prebuild": "pnpm --filter @oss-scp/plugin-config build && pnpm --filter @oss-scp/plugin-sdk build && pnpm --filter @oss-scp/platform-db build",
     "build": "tsc",
-    "pretypecheck": "pnpm --filter @oss-scp/plugin-config build && pnpm --filter @oss-scp/plugin-sdk build",
+    "pretypecheck": "pnpm --filter @oss-scp/plugin-config build && pnpm --filter @oss-scp/plugin-sdk build && pnpm --filter @oss-scp/platform-db build",
     "typecheck": "tsc --noEmit",
     "test": "pnpm build && vitest run"
   },
-  "dependencies": { "@oss-scp/plugin-config": "workspace:*", "@oss-scp/plugin-sdk": "workspace:*" },
+  "dependencies": { "@oss-scp/platform-db": "workspace:*", "@oss-scp/plugin-config": "workspace:*", "@oss-scp/plugin-sdk": "workspace:*" },
   "devDependencies": { "@oss-scp/csv-reader": "workspace:*", "@types/node": "24.13.3", "typescript": "5.9.3", "vitest": "4.1.11" }
 }

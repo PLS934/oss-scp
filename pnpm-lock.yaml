@@ -123,6 +123,9 @@ importers:
 
   packages/collection-engine:
     dependencies:
+      '@oss-scp/platform-db':
+        specifier: workspace:*
+        version: link:../platform-db
       '@oss-scp/plugin-config':
         specifier: workspace:*
         version: link:../plugin-config
