@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { cp, readFile, writeFile, rm } from 'node:fs/promises';
+import { chmod, cp, readFile, writeFile, rm } from 'node:fs/promises';
 import path from 'node:path';
 import { networkInterfaces } from 'node:os';
 import { chromium, expect } from '@playwright/test';
@@ -8,6 +8,7 @@ import { checkWorkspaceVolumes, assertDependencyMounts, assertCleanDependencyPat
 
 await run('pnpm', ['build:plugin-transforms'], { cwd: process.cwd(), env: process.env });
 const dir = await fixture();
+await chmod(dir, 0o755);
 for (const plugin of ['sample1-offset-api', 'sample2-single-api', 'vulnerabilities-local-csv']) {
   await cp(path.join(process.cwd(), 'plugins', plugin, 'dist'), path.join(dir, 'plugins', plugin, 'dist'), { recursive: true });
 }
