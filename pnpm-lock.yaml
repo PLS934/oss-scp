@@ -212,6 +212,28 @@ importers:
         specifier: 4.1.11
         version: 4.1.11(@types/node@24.13.3)(vite@8.2.2(@types/node@24.13.3)(terser@5.51.2)(yaml@2.9.0))
 
+  packages/http-csv-source:
+    dependencies:
+      '@oss-scp/csv-reader':
+        specifier: workspace:*
+        version: link:../csv-reader
+      '@oss-scp/plugin-config':
+        specifier: workspace:*
+        version: link:../plugin-config
+    devDependencies:
+      '@oss-scp/local-csv-source':
+        specifier: workspace:*
+        version: link:../local-csv-source
+      '@types/node':
+        specifier: 24.13.3
+        version: 24.13.3
+      typescript:
+        specifier: 5.9.3
+        version: 5.9.3
+      vitest:
+        specifier: 4.1.11
+        version: 4.1.11(@types/node@24.13.3)(vite@8.2.2(@types/node@24.13.3)(terser@5.51.2)(yaml@2.9.0))
+
   packages/local-csv-source:
     dependencies:
       '@oss-scp/csv-reader':
@@ -288,6 +310,15 @@ importers:
         version: 5.9.3
 
   plugins/sample2-single-api:
+    devDependencies:
+      '@oss-scp/plugin-sdk':
+        specifier: workspace:*
+        version: link:../../packages/plugin-sdk
+      typescript:
+        specifier: 5.9.3
+        version: 5.9.3
+
+  plugins/vulnerabilities-http-csv:
     devDependencies:
       '@oss-scp/plugin-sdk':
         specifier: workspace:*

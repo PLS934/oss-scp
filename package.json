@@ -10,7 +10,7 @@
     "dev": "pnpm --filter @oss-scp/api dev",
     "start": "pnpm --filter @oss-scp/api start",
     "build": "pnpm -r build",
-    "build:plugin-transforms": "pnpm --filter @oss-scp/plugin-sdk build && pnpm --filter @oss-scp/plugin-sample1-offset-api build && pnpm --filter @oss-scp/plugin-sample2-single-api build && pnpm --filter @oss-scp/plugin-vulnerabilities-local-csv build",
+    "build:plugin-transforms": "pnpm --filter @oss-scp/plugin-sdk build && pnpm --filter @oss-scp/plugin-sample1-offset-api build && pnpm --filter @oss-scp/plugin-sample2-single-api build && pnpm --filter @oss-scp/plugin-vulnerabilities-local-csv build && pnpm --filter @oss-scp/plugin-vulnerabilities-http-csv build",
     "generate:web-menu": "pnpm build:plugin-transforms && pnpm --filter @oss-scp/plugin-config build && node scripts/generate-plugin-menu.mjs",
     "check:web-menu": "pnpm build:plugin-transforms && pnpm --filter @oss-scp/plugin-config build && node scripts/generate-plugin-menu.mjs --check",
     "typecheck": "pnpm -r typecheck",
@@ -32,6 +32,7 @@
     "test:docker:external-db": "bash scripts/test-external-db.sh",
     "test:docker:mysql": "bash scripts/test-mysql-docker.sh",
     "test:http-collector": "pnpm --filter @oss-scp/http-collector test",
+    "test:http-csv-source": "pnpm --filter @oss-scp/http-csv-source test",
     "test:integration:sample1": "pnpm build:plugin-transforms && pnpm --filter @oss-scp/mock-api build && pnpm --filter @oss-scp/collector-cli build && pnpm --filter @oss-scp/api build && node scripts/test-sample1-postgres.mjs",
     "test:integration:sample1:mysql": "pnpm build:plugin-transforms && pnpm --filter @oss-scp/mock-api build && pnpm --filter @oss-scp/collector-cli build && pnpm --filter @oss-scp/api build && SAMPLE1_DB_TYPE=mysql node scripts/test-sample1-postgres.mjs",
     "collect": "pnpm --filter @oss-scp/collector-cli start"

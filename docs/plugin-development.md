@@ -1,6 +1,6 @@
 # 샘플 플러그인 설정과 검증
 
-`sample1-offset-api`와 `sample2-single-api`는 원천 mock API의 두 JSON 반환 방식을 설명하고, `vulnerabilities-local-csv`는 로컬 CSV 파일을 행 묶음으로 읽는 샘플 플러그인입니다. sample1은 offset·limit으로 나눠 받고, sample2는 전체 목록을 한 번에 받습니다. 두 JSON 방식의 실제 HTTP 수집은 [HTTP JSON 수집 가이드](http-offset-collection.md)의 독립 수집 패키지로 실행할 수 있고, 로컬 CSV source는 공통 파서를 사용하는 수집 입력 실행까지 제공합니다.
+`sample1-offset-api`와 `sample2-single-api`는 원천 mock API의 두 JSON 반환 방식을 설명합니다. `vulnerabilities-local-csv`와 `vulnerabilities-http-csv`는 같은 CSV를 각각 로컬 파일과 HTTP 다운로드로 획득해 공통 파서로 처리합니다. JSON 수집은 [HTTP JSON 수집 가이드](http-offset-collection.md), 다운로드 CSV는 [HTTP CSV source 가이드](http-csv-source.md)를 따릅니다.
 
 ## 파일 구성
 
@@ -17,6 +17,11 @@ plugins/
 │   ├── source.json
 │   ├── transform.ts
 │   └── dist/transform.js
+├── vulnerabilities-http-csv/
+│   ├── plugin.json
+│   ├── source.json
+│   ├── transform.ts
+│   └── dist/transform.js
 └── sample2-single-api/
     ├── plugin.json
     ├── source.json
@@ -25,6 +30,7 @@ plugins/
 connections/
 ├── registry.json
 ├── mock-api-sample1.json
+├── mock-api-vulnerabilities-csv.json
 └── mock-api-sample2.json
 packages/plugin-config/
 ├── schemas/
@@ -90,7 +96,7 @@ export const transform: Transform = ({ record, context }) => ({
 
 한 원천 레코드 출력은 레코드 100개, 관계 200개, 중첩 깊이 8, 배열 요소 1,000개와 JSON 1 MiB로 제한됩니다. 저장 입력 묶음은 레코드 100개 또는 JSON 1 MiB 중 먼저 도달하는 기준으로 전달하며 소비 완료를 기다립니다. Git PR로 승인된 플러그인을 같은 Node.js 프로세스에서 실행하므로 비신뢰 코드 sandbox와 동기 무한 루프 강제 종료는 지원하지 않습니다.
 
-CSV source는 설정 루트 기준 상대 파일 경로와 묶음 크기를 정의하며 Connection을 사용하지 않습니다.
+로컬 CSV source는 설정 루트 기준 상대 파일 경로와 묶음 크기를 정의하며 Connection을 사용하지 않습니다. HTTP CSV source는 환경별 base URL의 Connection을 참조하고 상대 요청 경로, 묶음과 전송·파싱 한도를 정의합니다.
 
 두 플러그인은 서로 다른 원천 API 연결을 검증합니다. `mock-api-sample1`은 `http://127.0.0.1:3001`, `mock-api-sample2`는 `http://127.0.0.1:3002`를 제공합니다. 직접 호출할 때는 같은 mock 서버 프로그램을 서로 다른 포트의 독립 프로세스로 실행할 수 있지만, 플러그인 설정에서는 별도 Connection으로 취급합니다.
 
@@ -129,6 +135,7 @@ pnpm validate:plugins
 - 반복 호출: `offset`, `limit`, 시작 0, 묶음 20건
 - 실행 한도: 요청 5초, 응답 2MiB, 단일 레코드 256KiB
 - 로컬 CSV: `fixtures/csv/vulnerabilities.csv`, 묶음 20건
+- HTTP CSV: `mock-api-vulnerabilities-csv`, `GET /vulnerabilities.csv`, 묶음 20건, wire/해제 후/레코드 한도
 
 sample2 내부 수집 정의에는 다음 값이 포함됩니다.
 
@@ -146,6 +153,7 @@ sample2 내부 수집 정의에는 다음 값이 포함됩니다.
 pnpm --filter @oss-scp/plugin-config test
 pnpm --filter @oss-scp/collection-engine test
 pnpm --filter @oss-scp/local-csv-source test
+pnpm test:http-csv-source
 pnpm test:process:plugin-config
 pnpm typecheck
 pnpm lint
@@ -153,13 +161,13 @@ pnpm lint
 
 ## 지원 범위
 
-현재 유효한 source 계약은 `json + offset HTTP`, `json + single HTTP`, `csv + file`입니다. source 설정 파일은 플러그인 폴더 안의 상대 JSON 파일이어야 합니다. HTTP 메서드는 GET이고 offset의 묶음 크기는 1~1000입니다. 로컬 CSV의 데이터 파일은 저장소 설정 루트 안의 상대 `.csv` 경로만 허용하고 묶음 크기는 1~1000입니다.
+현재 유효한 source 계약은 `json + offset HTTP`, `json + single HTTP`, `csv + file`, `csv + HTTP`입니다. source 설정 파일은 플러그인 폴더 안의 상대 JSON 파일이어야 합니다. HTTP 메서드는 GET이고 모든 묶음 크기는 1~1000입니다. 로컬 CSV의 데이터 파일은 저장소 설정 루트 안의 상대 `.csv` 경로만 허용합니다.
 
 설정·가공 코어는 `itemsPath`가 가리키는 목록의 업무 필드나 응답 건수를 고정하지 않습니다. sample2 HTTP 통합 검증은 `test_field2` 배열과 `test_field3` 객체를 보존하고 목록 밖 최상위 `test_field6`만 제한된 metadata로 전달합니다.
 
-`vulnerabilities.csv` HTTP 다운로드는 아직 유효한 지원값이 아닙니다. 로컬 CSV source의 실행 API와 완료·오류 의미는 [로컬 CSV source 가이드](local-csv-source.md)를 따릅니다.
+로컬 CSV source의 완료·오류 의미는 [로컬 CSV source 가이드](local-csv-source.md), `vulnerabilities.csv` HTTP 다운로드의 실행·한도·오류 의미는 [HTTP CSV source 가이드](http-csv-source.md)를 따릅니다.
 
-이 설정을 사용한 offset·single HTTP 호출, 응답 수신·크기 제한, timeout·취소와 처리 완료 대기 및 가공 실행·검증은 구현되어 있습니다. HTTP CSV 다운로드, DB 저장과 영속 checkpoint는 후속 수집·저장 작업에서 구현합니다. 가공 실행·검증은 fixture와 로컬 CSV로 외부 자격증명 없이 확인합니다. 로컬과 Docker처럼 실행 환경마다 Connection의 base URL을 선택하는 형식도 후속 배포 계약에서 확정합니다.
+이 설정을 사용한 JSON offset·single과 CSV HTTP 호출, 응답 수신·크기 제한, timeout·취소와 처리 완료 대기가 구현되어 있습니다. HTTP CSV의 가공 실행, DB 저장과 영속 checkpoint 연결은 후속 수집·저장 작업에서 구현합니다.
 
 10,000건을 100건씩 반복 처리하는 기준에서는 실행기가 완료된 출력 전체를 보관하지 않고 소비자 완료 후 다음 묶음으로 진행해야 합니다. 자동화 테스트는 250건 입력에서 소비 묶음이 `100, 100, 50`으로 제한되는지 확인하며, 실제 메모리 수치는 Node.js·OS에 따라 달라져 절대 RSS 값 대신 묶음 상한과 전체 결과 비누적을 회귀 기준으로 사용합니다.
 
