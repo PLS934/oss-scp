@@ -5,7 +5,7 @@ import {
   connectPostgresStorage,
   configRevision,
   executeManualCollection,
-  findRepositoryRoot,
+  configRoot,
   idempotentClose,
   parsePluginId,
   publicEvent,
@@ -32,8 +32,9 @@ describe('CLI 선택과 revision', () => {
     }
   });
 
-  it('workspace package 디렉터리에서 repository root를 찾는다', () => {
-    expect(findRepositoryRoot(new URL('../', import.meta.url).pathname)).toBe(new URL('../../../', import.meta.url).pathname.replace(/\/$/, ''));
+  it('명시적 외부 설정 루트만 사용한다', () => {
+    expect(configRoot({ OSS_SCP_CONFIG_ROOT: '/config' })).toBe('/config');
+    expect(() => configRoot({})).toThrowError(expect.objectContaining({ code: 'repository_config' }));
   });
 
   it('전체 검증 성공 결과에서 정확히 하나만 선택한다', () => {

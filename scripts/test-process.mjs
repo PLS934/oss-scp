@@ -47,7 +47,7 @@ async function freePort() {
 }
 function start(command, args, cwd, env = {}) {
   const child = spawn(command, args, {
-    cwd, env: { ...process.env, HOST: '127.0.0.1', ...dbEnv, ...env },
+    cwd, env: { ...process.env, HOST: '127.0.0.1', OSS_SCP_CONFIG_ROOT: root, ...dbEnv, ...env },
     detached: true, stdio: ['ignore', 'pipe', 'pipe'],
   });
   child.output = '';
@@ -81,7 +81,7 @@ async function response(child, port, status = 'ok') {
   throw new Error(`응답 대기 시간 초과: ${status}\n${child.output}`);
 }
 async function failedStart(port, pattern, env = {}) {
-  const child = start(process.execPath, ['apps/api/dist/main.js'], root, { PORT: String(port), ...env });
+  const child = start(process.execPath, ['apps/api/dist/main.js'], root, { OSS_SCP_CONFIG_ROOT: root, PORT: String(port), ...env });
   for (let i = 0; i < 100 && child.exitCode === null; i++) await delay(100);
   assert.notEqual(child.exitCode, null, child.output);
   assert.notEqual(child.exitCode, 0, child.output);

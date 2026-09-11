@@ -1,5 +1,5 @@
 import { spawn } from 'node:child_process';
-import { cp, mkdtemp, symlink } from 'node:fs/promises';
+import { chmod, cp, mkdtemp, symlink } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -55,10 +55,17 @@ export async function healthy(url) {
 }
 export async function fixture(linkModules = false) {
   const dir = await mkdtemp(path.join(tmpdir(), 'oss-scp-web-'));
+  await chmod(dir, 0o755);
   await cp(root, dir, {
     recursive: true,
-    filter: source => !path.relative(root, source).split(path.sep).some(part =>
-      ['.git', '.pnpm-store', 'node_modules', 'dist', '.env', '.DS_Store', 'test-results', 'playwright-report'].includes(part) || (part.startsWith('.env.') && part !== '.env.example')),
+    filter: source => {
+      const parts = path.relative(root, source).split(path.sep);
+      const pluginBuild = parts[0] === 'plugins' && parts.includes('dist');
+      return !parts.some(part =>
+        ['.git', '.pnpm-store', 'node_modules', '.env', '.DS_Store', 'test-results', 'playwright-report'].includes(part)
+        || (part === 'dist' && !pluginBuild)
+        || (part.startsWith('.env.') && part !== '.env.example'));
+    },
   });
   if (linkModules) {
     for (const relative of [

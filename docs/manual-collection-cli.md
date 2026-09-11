@@ -4,7 +4,7 @@
 
 ## 실행 전 준비
 
-CLI는 현재 디렉터리의 `plugins/registry.json`과 `connections/registry.json` 전체를 검증한다. 실행 인자에는 registry에 등록된 plugin ID 하나만 허용하며 URL, Connection ID, 임의 설정 경로는 받을 수 없다. 선택하지 않은 설정도 잘못되어 있으면 배포 설정 전체가 유효하지 않으므로 실행하지 않는다.
+CLI는 `OSS_SCP_CONFIG_ROOT`에 있는 `plugins/registry.json`과 `connections/registry.json` 전체를 검증한다. 실행 인자에는 registry에 등록된 plugin ID 하나만 허용하며 URL, Connection ID, 개별 plugin 경로는 받을 수 없다. 선택하지 않은 설정도 잘못되어 있으면 배포 설정 전체가 유효하지 않으므로 실행하지 않는다.
 
 플랫폼 DB 설정은 API와 같은 환경변수를 사용한다.
 
@@ -25,7 +25,7 @@ CLI는 현재 디렉터리의 `plugins/registry.json`과 `connections/registry.j
 ```sh
 pnpm db:migrate
 pnpm build:plugin-transforms
-pnpm collect -- sample1-offset-api
+OSS_SCP_CONFIG_ROOT="$PWD" pnpm collect -- sample1-offset-api
 ```
 
 실제 PostgreSQL과 sample1 mock API를 연결한 전체 프로세스 검증은 Docker가 실행 중인 개발 환경에서 다음 명령으로 수행한다. 이 검사는 72건 offset 수집, 동일 원천 재실행, 저장 실패 후 checkpoint 재개, 가공 오류 격리와 원천 종료 후 저장 데이터 조회를 확인한다.
@@ -36,7 +36,7 @@ pnpm test:integration:sample1
 
 완료된 `full` 실행을 다시 시작하면 원천의 처음부터 새 전체 수집을 수행한다. 실행이 실패하면 마지막으로 원자 저장된 checkpoint에서 재개하므로, 실패한 묶음은 다시 처리되지만 이미 확정된 묶음은 건너뛴다.
 
-배포 API 이미지에도 같은 CLI와 승인된 registry·transform이 포함된다. Compose 서비스 설정과 secret을 그대로 사용해 별도 일회성 프로세스로 실행한다.
+배포 API 이미지에는 같은 CLI가 포함되지만 운영자 registry·transform은 포함되지 않는다. Compose가 `/config:ro`로 주입한 외부 설정 revision을 사용해 별도 일회성 프로세스로 실행한다.
 
 ```sh
 docker compose run --rm api node node_modules/@oss-scp/collector-cli/dist/process.js sample1-offset-api
@@ -57,3 +57,13 @@ CLI는 stdout에 최종 JSON 한 줄만 출력한다. 성공·부분 성공에�
 | 130 | `cancelled` | SIGINT 또는 SIGTERM을 받아 안전하게 중단했다. |
 
 SIGINT·SIGTERM을 받으면 새 묶음을 시작하지 않고 진행 중 경계를 마친 뒤 DB 연결을 닫는다. 같은 cleanup이 반복 호출되어도 실제 자원 종료는 한 번만 수행된다.
+
+## 외부 설정 루트
+
+수동 수집은 현재 디렉터리를 탐색하지 않습니다. plugin ID와 함께 검증할 외부 설정 루트를 명시합니다.
+
+```bash
+OSS_SCP_CONFIG_ROOT="$PWD" pnpm collect -- sample1-offset-api
+```
+
+배포 이미지에서도 `/config:ro`로 주입한 동일 revision과 `OSS_SCP_CONFIG_ROOT=/config`를 사용합니다. 개별 plugin 경로나 원천 URL을 인자로 지정해 registry를 우회할 수 없습니다.

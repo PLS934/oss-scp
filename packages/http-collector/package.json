@@ -10,7 +10,7 @@
     "build": "tsc",
     "pretypecheck": "pnpm --filter @oss-scp/plugin-config build",
     "typecheck": "tsc --noEmit",
-    "test": "pnpm build && vitest run"
+    "test": "pnpm build && vitest run --maxWorkers=1"
   },
   "dependencies": {
     "@oss-scp/plugin-config": "workspace:*"

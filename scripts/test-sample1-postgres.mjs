@@ -141,6 +141,7 @@ try {
   await waitFor(() => canConnect(mappedDatabasePort), `${databaseType} host port`);
   const env = {
     ...process.env,
+    OSS_SCP_CONFIG_ROOT: temporaryRoot,
     PLATFORM_DB_TYPE: databaseType, PLATFORM_DB_HOST: '127.0.0.1', PLATFORM_DB_PORT: mappedDatabasePort,
     PLATFORM_DB_NAME: 'oss_scp', PLATFORM_DB_USER: 'oss_scp_app', PLATFORM_DB_PASSWORD: password,
     PLATFORM_DB_TLS_MODE: 'disable',
@@ -195,7 +196,7 @@ try {
   await mock.close();
   mock = undefined;
   const apiPort = await freePort();
-  api = processRun(process.execPath, [path.join(root, 'apps/api/dist/main.js')], { env: { ...env, HOST: '127.0.0.1', PORT: String(apiPort) } });
+  api = processRun(process.execPath, [path.join(root, 'apps/api/dist/main.js')], { env: { ...env, OSS_SCP_CONFIG_ROOT: root, HOST: '127.0.0.1', PORT: String(apiPort) } });
   await waitFor(async () => (await fetch(`http://127.0.0.1:${apiPort}/api/v1/ready`)).ok, 'record API');
   const list = await (await fetch(`http://127.0.0.1:${apiPort}/api/v1/records?pluginId=sample1-offset-api&sourceId=mock-api-sample1&dataType=asset&limit=20`)).json();
   assert.equal(list.items.length, 20);

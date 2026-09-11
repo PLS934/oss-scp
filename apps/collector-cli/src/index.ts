@@ -1,6 +1,5 @@
 import { createHash } from 'node:crypto';
-import { existsSync } from 'node:fs';
-import { dirname, join, relative } from 'node:path';
+import { relative, resolve } from 'node:path';
 import { runCollection, CollectionRunnerError, type CollectionCollector, type CollectionRunResult, type RunCollectionOptions } from '@oss-scp/collection-engine';
 import { collectHttpOffset, collectHttpSingle } from '@oss-scp/http-collector';
 import { collectLocalCsv } from '@oss-scp/local-csv-source';
@@ -13,7 +12,7 @@ import {
   type CollectionScope,
   type RecordStorage,
 } from '@oss-scp/platform-db';
-import { validateRepository, type CollectionDefinition, type ConfigurationResult, type OffsetCollectionDefinition, type SingleCollectionDefinition } from '@oss-scp/plugin-config';
+import { preflightConfiguration, type CollectionDefinition, type ConfigurationResult, type OffsetCollectionDefinition, type SingleCollectionDefinition } from '@oss-scp/plugin-config';
 
 export type CliErrorCode =
   | 'usage'
@@ -53,7 +52,7 @@ export interface Closeable { close(): Promise<void> }
 export type Runner = (options: RunCollectionOptions) => Promise<CollectionRunResult>;
 
 export interface ManualCollectionDependencies {
-  validate(root: string): ConfigurationResult;
+  validate(root: string): ConfigurationResult | Promise<ConfigurationResult>;
   connectStorage(env: Readonly<Record<string, string | undefined>>): Promise<{ storage: RecordStorage; resource: Closeable }>;
   run: Runner;
   now(): string;
@@ -82,14 +81,10 @@ export function parsePluginId(args: readonly string[]): string {
   return normalized[0]!;
 }
 
-export function findRepositoryRoot(start: string): string {
-  let current = start;
-  while (true) {
-    if (existsSync(join(current, 'plugins', 'registry.json')) && existsSync(join(current, 'connections', 'registry.json'))) return current;
-    const parent = dirname(current);
-    if (parent === current) throw new ManualCollectionError('repository_config', 'config');
-    current = parent;
-  }
+export function configRoot(env: Readonly<Record<string, string | undefined>>): string {
+  const value = env.OSS_SCP_CONFIG_ROOT;
+  if (!value || !value.trim()) throw new ManualCollectionError('repository_config', 'config');
+  return resolve(value);
 }
 
 export function selectDefinition(result: ConfigurationResult, pluginId: string): CollectionDefinition {
@@ -183,7 +178,7 @@ export async function connectPlatformStorage(env: Readonly<Record<string, string
 export const connectPostgresStorage = connectPlatformStorage;
 
 export const defaultDependencies: ManualCollectionDependencies = {
-  validate: validateRepository,
+  validate: preflightConfiguration,
   connectStorage: connectPlatformStorage,
   run: runCollection,
   now: () => new Date().toISOString(),
@@ -201,7 +196,7 @@ export async function executeManualCollection(options: {
   let resource: Closeable | undefined;
   try {
     pluginId = parsePluginId(options.args);
-    const definition = selectDefinition(dependencies.validate(options.root), pluginId);
+    const definition = selectDefinition(await dependencies.validate(options.root), pluginId);
     const collector = collectorFor(definition, dependencies.now);
     const connected = await dependencies.connectStorage(options.env);
     resource = idempotentClose(connected.resource);

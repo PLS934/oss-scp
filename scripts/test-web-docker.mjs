@@ -1,18 +1,23 @@
 import assert from 'node:assert/strict';
-import { readFile, writeFile, rm } from 'node:fs/promises';
+import { chmod, cp, readFile, writeFile, rm } from 'node:fs/promises';
 import path from 'node:path';
 import { networkInterfaces } from 'node:os';
 import { chromium, expect } from '@playwright/test';
 import { fixture, port, run, waitFor, healthy } from './web-test-helpers.mjs';
 import { checkWorkspaceVolumes, assertDependencyMounts, assertCleanDependencyPaths } from './docker-workspace-checks.mjs';
 
+await run('pnpm', ['build:plugin-transforms'], { cwd: process.cwd(), env: process.env });
 const dir = await fixture();
+await chmod(dir, 0o755);
+for (const plugin of ['sample1-offset-api', 'sample2-single-api', 'vulnerabilities-local-csv', 'vulnerabilities-http-csv']) {
+  await cp(path.join(process.cwd(), 'plugins', plugin, 'dist'), path.join(dir, 'plugins', plugin, 'dist'), { recursive: true });
+}
 const project = `oss-scp-web-check-${process.pid}`;
 const standalone = `${project}-standalone`;
 const alternate = `${project}-alternate`;
 const webPort = await port();
 const apiPort = await port();
-const env = { ...process.env, WEB_PORT: String(webPort), API_PORT: String(apiPort), PLATFORM_DB_PASSWORD: 'web-docker-test-password' };
+const env = { ...process.env, WEB_PORT: String(webPort), API_PORT: String(apiPort), PLATFORM_DB_PASSWORD: 'web-docker-test-password', OSS_SCP_CONFIG_PATH: dir };
 const base = ['compose', '-p', project, '-f', 'compose.yaml'];
 const dev = [...base, '-f', 'compose.dev.yaml'];
 const docker = args => run('docker', args, { cwd: dir, env });

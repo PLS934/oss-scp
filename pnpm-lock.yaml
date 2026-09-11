@@ -39,6 +39,9 @@ importers:
       '@oss-scp/platform-db':
         specifier: workspace:*
         version: link:../../packages/platform-db
+      '@oss-scp/plugin-config':
+        specifier: workspace:*
+        version: link:../../packages/plugin-config
       reflect-metadata:
         specifier: 0.2.2
         version: 0.2.2

@@ -19,6 +19,7 @@ const webPort = await port();
 const env = {
   PLATFORM_DB_PASSWORD: 'mock-docker-test-password',
   ...process.env,
+  OSS_SCP_CONFIG_PATH: dir,
   MOCK_PUBLISHED_PORT: String(mockPort),
   WEB_PORT: String(webPort),
   API_PORT: String(await port()),

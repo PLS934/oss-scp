@@ -9,6 +9,7 @@ export API_PORT="${API_PORT:-18530}"
 export PLATFORM_DB_NAME=oss_scp
 export PLATFORM_DB_USER=oss_scp_app
 export PLATFORM_DB_PASSWORD=mysql-test-password
+export OSS_SCP_CONFIG_PATH="$PWD"
 export MYSQL_ROOT_PASSWORD=mysql-root-test-password
 secret_file="$(mktemp /tmp/oss-scp-mysql-secret.XXXXXX)"
 printf '%s' "$PLATFORM_DB_PASSWORD" > "$secret_file"
