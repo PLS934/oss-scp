@@ -1,0 +1,22 @@
+CREATE TABLE collection_runs (
+  id char(36) CHARACTER SET ascii COLLATE ascii_bin PRIMARY KEY,
+  scope_hash binary(32) NOT NULL,
+  plugin_id varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_bin NOT NULL,
+  source_id varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_bin NOT NULL,
+  scope_type varchar(16) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
+  scope_key varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_bin NOT NULL,
+  config_revision varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_bin NOT NULL,
+  status varchar(16) CHARACTER SET ascii COLLATE ascii_bin NOT NULL DEFAULT 'running',
+  processed_count bigint unsigned NOT NULL DEFAULT 0,
+  accepted_count bigint unsigned NOT NULL DEFAULT 0,
+  isolated_count bigint unsigned NOT NULL DEFAULT 0,
+  started_at datetime(3) NOT NULL,
+  finished_at datetime(3),
+  created_at datetime(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+  CONSTRAINT collection_runs_scope_type_check CHECK (scope_type IN ('full', 'asset')),
+  CONSTRAINT collection_runs_status_check CHECK (status IN ('running', 'success', 'partial', 'failed')),
+  CONSTRAINT collection_runs_scope_key_check CHECK ((scope_type = 'full' AND scope_key = '') OR (scope_type = 'asset' AND scope_key <> '')),
+  CONSTRAINT collection_runs_count_check CHECK (accepted_count <= processed_count),
+  CONSTRAINT collection_runs_finish_check CHECK ((status = 'running' AND finished_at IS NULL) OR (status <> 'running' AND finished_at IS NOT NULL)),
+  INDEX collection_runs_scope_started_index (scope_hash, started_at DESC, id DESC)
+) ENGINE=InnoDB;

@@ -10,6 +10,7 @@ import {
   discoverMigrations, MigrationError,
   postgresAdapter, postgresPoolConfig, runMigrations,
 } from '../dist/index.js';
+import { verifyRecordContract } from './record-contract.mjs';
 
 const password = 'integration-password';
 let container;
@@ -122,6 +123,10 @@ describe('PostgreSQL 공통 레코드 저장 계약', () => {
     nextCheckpoint: { offset: 1 }, processedCount: 1, acceptedCount: 1,
     records: [{ type: 'asset', key: 'server-1', values: { hostname: 'old' } }],
     relations: [], issues: [], ...patch,
+  });
+
+  it('제품 중립 공통 fixture를 통과한다', async () => {
+    await verifyRecordContract(storage, query, testScope('shared-contract'));
   });
 
   it('migration을 재실행하고 실행 상태를 기록한다', async () => {
