@@ -1,0 +1,48 @@
+services:
+  mysql:
+    image: mysql:8.4.6
+    environment:
+      MYSQL_DATABASE: ${PLATFORM_DB_NAME:-oss_scp}
+      MYSQL_USER: ${PLATFORM_DB_USER:-oss_scp_app}
+      MYSQL_PASSWORD: ${PLATFORM_DB_PASSWORD:?PLATFORM_DB_PASSWORD must be set}
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:?MYSQL_ROOT_PASSWORD must be set}
+    volumes:
+      - platform_mysql_data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD-SHELL", "mysqladmin ping -h 127.0.0.1 -u $$MYSQL_USER -p$$MYSQL_PASSWORD --silent"]
+      interval: 5s
+      timeout: 5s
+      retries: 24
+  api:
+    image: oss-scp-api:local
+    build:
+      context: .
+      dockerfile: apps/api/Dockerfile
+    environment:
+      NODE_ENV: production
+      HOST: 0.0.0.0
+      PORT: "3000"
+      PLATFORM_DB_TYPE: mysql
+      PLATFORM_DB_HOST: mysql
+      PLATFORM_DB_PORT: "3306"
+      PLATFORM_DB_NAME: ${PLATFORM_DB_NAME:-oss_scp}
+      PLATFORM_DB_USER: ${PLATFORM_DB_USER:-oss_scp_app}
+      PLATFORM_DB_PASSWORD: ${PLATFORM_DB_PASSWORD:?PLATFORM_DB_PASSWORD must be set}
+      PLATFORM_DB_TLS_MODE: disable
+    depends_on:
+      mysql:
+        condition: service_healthy
+    ports:
+      - "127.0.0.1:${API_PORT:-3000}:3000"
+  web:
+    image: oss-scp-web:local
+    build:
+      context: .
+      dockerfile: apps/web/Dockerfile
+    environment:
+      API_UPSTREAM: ${API_UPSTREAM:-api:3000}
+    ports:
+      - "0.0.0.0:${WEB_PORT:-8080}:8080"
+
+volumes:
+  platform_mysql_data:

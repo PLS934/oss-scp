@@ -26,7 +26,7 @@ curl http://127.0.0.1:3000/api/v1/health
 docker compose down
 ```
 
-상태 확인 API는 `{"status":"ok"}`, DB 준비 API는 `{"status":"ready"}`를 반환합니다. 기본 Compose는 호스트에 DB 포트를 공개하지 않는 전용 PostgreSQL을 함께 실행합니다. 이미 실행 중인 외부 PostgreSQL을 사용하는 방법은 [플랫폼 DB 가이드](docs/platform-db.md)를 참고하세요.
+상태 확인 API는 `{"status":"ok"}`, DB 준비 API는 `{"status":"ready"}`를 반환합니다. 기본 Compose는 호스트에 DB 포트를 공개하지 않는 전용 PostgreSQL을 함께 실행합니다. MySQL 내장 설치는 `compose.mysql.yaml`을 사용합니다. 외부 PostgreSQL/MySQL 연결 방법은 [플랫폼 DB 가이드](docs/platform-db.md)를 참고하세요.
 
 ## 기여 방법
 

@@ -1,8 +1,8 @@
-# 플랫폼 DB 접속과 PostgreSQL 설치
+# 플랫폼 DB 접속과 PostgreSQL·MySQL 설치
 
 `@oss-scp/platform-db`는 운영자가 입력한 DB 주소·포트·계정·비밀번호를 읽고 검사하는 공통 패키지입니다. 정상 입력은 연결 코드가 사용할 설정으로 반환하고, 잘못된 입력은 수정할 항목을 알리는 `PlatformDbConfigError`를 반환합니다.
 
-PostgreSQL 어댑터는 API 시작 시 이 설정으로 연결하며 `/api/v1/ready`에서 DB 준비 상태를 확인합니다. MySQL은 #28, 업무 테이블·저장·조회는 #29~#31에서 추가합니다. 별도의 웹 설정 화면은 제공하지 않습니다.
+PostgreSQL과 MySQL 어댑터는 API 시작 시 같은 설정으로 선택한 DB에 연결하며 `/api/v1/ready`에서 준비 상태를 확인합니다. 업무 테이블·저장·조회는 #29~#31에서 추가합니다. 별도의 웹 설정 화면은 제공하지 않습니다.
 
 ## 내장 PostgreSQL로 빠르게 시작
 
@@ -37,6 +37,41 @@ DB 관리자는 DB와 전용 계정을 만들고 해당 DB의 `CONNECT`, 대상 
 
 호스트에서 실행 중인 DB에는 `PLATFORM_DB_HOST=host.docker.internal`을 사용할 수 있습니다. 외부 서버의 DB에는 실제 DNS 이름이나 IP를 지정합니다.
 
+## 내장 MySQL로 시작
+
+MySQL 설치는 기본 PostgreSQL과 구분한 진입점을 사용합니다. MySQL 8.4.6과 `mysql2` 3.24.4 조합을 실제 통합 테스트로 검증했습니다. application 계정 비밀번호와 초기화용 root 비밀번호는 서로 다르게 설정하며 root 비밀번호는 API에 전달하지 않습니다.
+
+```sh
+export PLATFORM_DB_PASSWORD='무작위-application-비밀번호'
+export MYSQL_ROOT_PASSWORD='별도의-무작위-root-비밀번호'
+docker compose -f compose.mysql.yaml up --build -d --wait
+docker compose -f compose.mysql.yaml run --rm api node node_modules/@oss-scp/platform-db/dist/migrate-cli.js
+curl http://127.0.0.1:3000/api/v1/ready
+docker compose -f compose.mysql.yaml down
+```
+
+명명된 `platform_mysql_data` 볼륨은 일반 `down`과 컨테이너 재생성 뒤에도 유지됩니다. 데이터 삭제가 목적이 아니라면 `down -v`를 사용하지 않습니다. 기본 `compose.yaml`은 계속 PostgreSQL을 선택합니다.
+
+## 이미 실행 중인 외부 MySQL 사용
+
+DB 관리자는 MySQL에 전용 DB와 application 계정을 만들고 대상 DB에 `SELECT`, `INSERT`, `UPDATE`, `DELETE`, `CREATE`, `ALTER`, `DROP`, `INDEX` 권한을 부여합니다. 전역 관리자 권한이나 root 자격증명을 API에 제공하지 않습니다. MySQL 8.4 기본 인증 방식을 사용하며 레거시 인증 방식으로 자동 하향하지 않습니다.
+
+```sh
+export PLATFORM_DB_HOST=mysql.example.internal
+export PLATFORM_DB_PORT=3306
+export PLATFORM_DB_NAME=oss_scp
+export PLATFORM_DB_USER=oss_scp_app
+export PLATFORM_DB_PASSWORD_FILE_HOST=/secure/host/path/platform_db_password
+export PLATFORM_DB_TLS_MODE=verify-full
+export PLATFORM_DB_TLS_CA_FILE=/run/secrets/platform_db_ca.pem
+docker compose -f compose.external-db.mysql.yaml -f compose.external-db.mysql.secret.yaml up --build -d --wait
+docker compose -f compose.external-db.mysql.yaml -f compose.external-db.mysql.secret.yaml run --rm api node node_modules/@oss-scp/platform-db/dist/migrate-cli.js
+```
+
+외부 구성은 API와 웹만 관리하며 MySQL 인스턴스를 생성·시작·종료·삭제하지 않습니다. CA 파일은 별도 읽기 전용 mount로 제공해야 합니다. MySQL `verify-full`에는 인증서 SAN과 일치하는 DNS 호스트명이 필요하며 TLS 실패 시 평문으로 자동 전환하지 않습니다.
+
+MySQL DDL은 암묵적으로 commit될 수 있어 실패 시 PostgreSQL과 같은 전체 rollback을 보장하지 않습니다. injection 범위를 넓히는 다중 statement 연결 옵션을 켜지 않으므로 MySQL migration 파일 하나에는 SQL statement 하나만 둡니다. migration은 재실행 가능한 전진 변경으로 작성하고, 실패 버전은 이력에 기록하지 않으며 이후 migration은 실행하지 않습니다. 실패한 DDL이 남으면 해당 migration의 복구 절차로 상태를 정리한 뒤 같은 명령을 다시 실행합니다.
+
 ## 운영자가 작성할 입력
 
 로컬 PostgreSQL용 형식 예시입니다. 주소·계정·비밀번호를 자신의 환경에 맞춰 제공하며 비밀번호 예시를 그대로 운영에 사용하지 않습니다.
@@ -67,7 +102,7 @@ PLATFORM_DB_PASSWORD_FILE=/run/secrets/platform_db_password
 
 | 변수 | 규칙·기본값 |
 |---|---|
-| PLATFORM_DB_TYPE | 필수. 호출자가 등록한 DB 어댑터 ID |
+| PLATFORM_DB_TYPE | 필수. 등록된 `postgres` 또는 `mysql` |
 | PLATFORM_DB_HOST | 필수. 호스트명/IP, URL 형식 불가 |
 | PLATFORM_DB_PORT | 등록 어댑터의 기본 포트. 지정 시 십진 정수 1~65535 |
 | PLATFORM_DB_NAME | 필수. 사용할 데이터베이스 이름 |
@@ -79,7 +114,7 @@ PLATFORM_DB_PASSWORD_FILE=/run/secrets/platform_db_password
 | PLATFORM_DB_TLS_MODE | 기본 verify-full. disable 또는 verify-full |
 | PLATFORM_DB_TLS_CA_FILE | 선택. UTF-8 PEM 인증서 파일의 절대 경로, 최대 1 MiB |
 
-DB 종류·주소·이름·계정은 비어 있거나 앞뒤 공백·제어문자를 포함하면 거부합니다. 숫자는 부호·소수·지수·공백을 허용하지 않습니다. 초기 제품 ID는 `postgres`, `mysql`이며 기본 포트는 각각 5432, 3306입니다. 현재 실제 등록 어댑터는 `postgres`입니다.
+DB 종류·주소·이름·계정은 비어 있거나 앞뒤 공백·제어문자를 포함하면 거부합니다. 숫자는 부호·소수·지수·공백을 허용하지 않습니다. 제품 ID는 `postgres`, `mysql`이며 기본 포트는 각각 5432, 3306입니다. API와 migration CLI에 두 어댑터가 고정 등록되어 있습니다.
 
 ## 암호화 연결 설정
 
@@ -90,7 +125,7 @@ PLATFORM_DB_TLS_MODE=verify-full
 PLATFORM_DB_TLS_CA_FILE=/run/secrets/platform_db_ca.pem
 ```
 
-로컬 평문 DB에서는 `disable`을 명시하고 CA 파일 항목을 생략합니다. `disable`과 CA 파일을 함께 지정하면 오류입니다. PostgreSQL 어댑터는 실제 연결에서도 인증서 체인과 호스트명을 검증하며 실패 시 평문으로 자동 전환하지 않습니다.
+로컬 평문 DB에서는 `disable`을 명시하고 CA 파일 항목을 생략합니다. `disable`과 CA 파일을 함께 지정하면 오류입니다. 두 어댑터는 실제 연결에서도 인증서 체인과 호스트명을 검증하며 실패 시 평문으로 자동 전환하지 않습니다. MySQL verify-full은 DNS 호스트명을 요구합니다.
 
 ## 정상·오류 결과
 
@@ -148,4 +183,4 @@ pnpm test
 pnpm build
 ```
 
-패키지 테스트는 Docker의 `postgres:17.6-bookworm` 실제 DB를 사용합니다. PostgreSQL 17.6과 `pg` 8.23.0 조합에서 정상 연결, 인증·접속·TLS 실패, 종료 및 migration 재실행·rollback을 검증합니다. 검증하지 않은 버전의 호환성을 주장하지 않습니다.
+패키지 테스트는 Docker의 `postgres:17.6-bookworm`과 `mysql:8.4.6` 실제 DB를 사용합니다. PostgreSQL 17.6/`pg` 8.23.0과 MySQL 8.4.6/`mysql2` 3.24.4 조합에서 정상 연결, 인증·접속·TLS 실패, 종료 및 migration 재실행·실패 처리를 검증합니다. `pnpm test:docker:mysql`은 MySQL 내장/외부 설치와 영속성을 추가 검증합니다. 검증하지 않은 버전의 호환성을 주장하지 않습니다.

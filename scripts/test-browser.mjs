@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
 import { readFile, writeFile, rm } from 'node:fs/promises';
+import { createConnection } from 'node:net';
 import path from 'node:path';
 import { networkInterfaces } from 'node:os';
 import { chromium, expect } from '@playwright/test';
@@ -25,10 +26,18 @@ for (let attempt = 0; attempt < 100; attempt++) {
 assert.ok(ready, '브라우저 테스트용 PostgreSQL이 준비되지 않았습니다.');
 const databaseAddress = docker('port', database, '5432/tcp');
 const separator = databaseAddress.lastIndexOf(':');
+const databaseHost = databaseAddress.slice(0, separator);
+const databasePort = databaseAddress.slice(separator + 1);
+await waitFor(() => new Promise(resolve => {
+  const socket = createConnection({ host: databaseHost, port: Number(databasePort) });
+  socket.once('connect', () => { socket.destroy(); resolve(true); });
+  socket.once('error', () => resolve(false));
+  socket.setTimeout(500, () => { socket.destroy(); resolve(false); });
+}), '브라우저 테스트용 PostgreSQL 공개 포트');
 const databaseEnv = {
   PLATFORM_DB_TYPE: 'postgres',
-  PLATFORM_DB_HOST: databaseAddress.slice(0, separator),
-  PLATFORM_DB_PORT: databaseAddress.slice(separator + 1),
+  PLATFORM_DB_HOST: databaseHost,
+  PLATFORM_DB_PORT: databasePort,
   PLATFORM_DB_NAME: 'oss_scp',
   PLATFORM_DB_USER: 'oss_scp_app',
   PLATFORM_DB_PASSWORD: 'browser-password',

@@ -1,9 +1,11 @@
 export { readPlatformDbConfig } from './config';
 export { selectPlatformDbAdapter } from './adapters';
-export { PlatformDbConfigError } from './errors';
+export { PlatformDbConfigError, PlatformDbConnectionError } from './errors';
 export type { PlatformDbErrorCode, PlatformDbSetting } from './errors';
 export type { PlatformDbAdapterFactory, PlatformDbConfig, PlatformDbConnection, PlatformDbTls } from './types';
-export { postgresAdapter, postgresPoolConfig, PlatformDbConnectionError } from './postgres';
+export { postgresAdapter, postgresPoolConfig } from './postgres';
 export type { PostgresPlatformDbConnection } from './postgres';
-export { discoverMigrations, runMigrations, defaultMigrationsDirectory, MigrationError } from './migrations';
+export { mysqlAdapter, mysqlPoolConfig } from './mysql';
+export type { MysqlPlatformDbConnection } from './mysql';
+export { discoverMigrations, runMigrations, runPostgresMigrations, runMysqlMigrations, defaultMigrationsDirectory, MigrationError } from './migrations';
 export type { Migration } from './migrations';

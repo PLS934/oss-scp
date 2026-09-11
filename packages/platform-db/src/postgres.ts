@@ -1,12 +1,6 @@
 import { Pool, type PoolClient, type PoolConfig } from 'pg';
 import type { PlatformDbAdapterFactory, PlatformDbConfig, PlatformDbConnection } from './types';
-
-export class PlatformDbConnectionError extends Error {
-  constructor(readonly code: 'CONNECT_FAILED' | 'CONNECTION_CLOSED') {
-    super(code === 'CONNECT_FAILED' ? '플랫폼 DB에 연결할 수 없습니다.' : '플랫폼 DB 연결이 종료되었습니다.');
-    this.name = 'PlatformDbConnectionError';
-  }
-}
+import { PlatformDbConnectionError } from './errors';
 
 export interface PostgresPlatformDbConnection extends PlatformDbConnection {
   withClient<T>(work: (client: PoolClient) => Promise<T>): Promise<T>;
