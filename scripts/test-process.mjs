@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { spawn, execFileSync } from 'node:child_process';
 import { once } from 'node:events';
 import { cp, mkdtemp, readFile, rm, symlink, writeFile } from 'node:fs/promises';
-import { createServer } from 'node:net';
+import { createConnection, createServer } from 'node:net';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { setTimeout as delay } from 'node:timers/promises';
@@ -15,11 +15,27 @@ let dbEnv;
 function docker(...args) { return execFileSync('docker', args, { encoding: 'utf8' }).trim(); }
 async function startDatabase() {
   docker('run', '-d', '--name', dbContainer, '-e', 'POSTGRES_DB=oss_scp', '-e', 'POSTGRES_USER=oss_scp_app', '-e', 'POSTGRES_PASSWORD=process-password', '-p', '127.0.0.1::5432', 'postgres:17.6-bookworm');
+  let ready = false;
   for (let i = 0; i < 100; i++) {
-    try { docker('exec', dbContainer, 'pg_isready', '-U', 'oss_scp_app', '-d', 'oss_scp'); break; } catch { await delay(100); }
+    try { docker('exec', dbContainer, 'pg_isready', '-U', 'oss_scp_app', '-d', 'oss_scp'); ready = true; break; } catch { await delay(100); }
   }
+  assert.equal(ready, true, 'PostgreSQL 컨테이너가 준비되지 않았습니다.');
   const address = docker('port', dbContainer, '5432/tcp');
   dbEnv = { PLATFORM_DB_TYPE: 'postgres', PLATFORM_DB_HOST: address.slice(0, address.lastIndexOf(':')), PLATFORM_DB_PORT: address.slice(address.lastIndexOf(':') + 1), PLATFORM_DB_NAME: 'oss_scp', PLATFORM_DB_USER: 'oss_scp_app', PLATFORM_DB_PASSWORD: 'process-password', PLATFORM_DB_TLS_MODE: 'disable' };
+  for (let i = 0; i < 100; i++) {
+    if (await canConnect(dbEnv.PLATFORM_DB_HOST, dbEnv.PLATFORM_DB_PORT)) return;
+    await delay(100);
+  }
+  throw new Error('PostgreSQL 호스트 포트가 준비되지 않았습니다.');
+}
+async function canConnect(host, port) {
+  return new Promise(resolve => {
+    const socket = createConnection({ host, port: Number(port) });
+    socket.setTimeout(500);
+    socket.once('connect', () => { socket.destroy(); resolve(true); });
+    socket.once('error', () => resolve(false));
+    socket.once('timeout', () => { socket.destroy(); resolve(false); });
+  });
 }
 async function freePort() {
   const server = createServer();

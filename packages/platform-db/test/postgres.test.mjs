@@ -221,6 +221,36 @@ describe('PostgreSQL 공통 레코드 저장 계약', () => {
     expect(result.rows[0]).toMatchObject({ processed_count: '1', records: '1' });
   });
 
+  it('완료된 전체 실행은 처음부터 다시 수집하고 실패한 실행은 마지막 checkpoint에서 재개한다', async () => {
+    const scope = testScope('full-rerun');
+    const firstRun = await start(scope);
+    await commit(firstRun, scope);
+    await storage.finishRun({ runId: firstRun, status: 'success', finishedAt: '2026-09-11T01:02:00Z' });
+
+    expect(await storage.getCheckpoint(scope)).toBeNull();
+    const rerun = await storage.startRun({ ...scope, startedAt: '2026-09-11T02:00:00Z' });
+    await commit(rerun, scope, {
+      records: [{ type: 'asset', key: 'server-1', values: { hostname: 'rerun' } }],
+      nextCheckpoint: { offset: 20 },
+    });
+    await storage.finishRun({ runId: rerun, status: 'failed', finishedAt: '2026-09-11T02:01:00Z' });
+
+    expect(await storage.getCheckpoint(scope)).toEqual({ offset: 20 });
+    const resumed = await storage.startRun({ ...scope, startedAt: '2026-09-11T03:00:00Z' });
+    await commit(resumed, scope, {
+      expectedCheckpoint: { offset: 20 }, nextCheckpoint: { offset: 40 },
+      records: [{ type: 'asset', key: 'server-2', values: { hostname: 'resumed' } }],
+    });
+    const records = await connection.withClient(client => client.query(
+      'SELECT external_key, source_values FROM platform_records WHERE plugin_id=$1 ORDER BY external_key',
+      [scope.pluginId],
+    ));
+    expect(records.rows).toEqual([
+      { external_key: 'server-1', source_values: { hostname: 'rerun' } },
+      { external_key: 'server-2', source_values: { hostname: 'resumed' } },
+    ]);
+  });
+
   it('원천 upsert가 별도 플랫폼 업무 정보를 덮어쓰지 않는다', async () => {
     const scope = testScope('ownership');
     const runId = await start(scope);

@@ -54,6 +54,14 @@
 - **WHEN** 데이터 또는 관계 저장 중 오류가 발생한다
 - **THEN** 플랫폼은 묶음의 모든 변경을 롤백하고 이전 checkpoint를 그대로 유지한다
 
+#### Scenario: Completed full collection starts a new traversal
+- **WHEN** 성공 또는 부분 성공으로 완료된 전체 범위를 다시 수집한다
+- **THEN** 플랫폼은 이전 완료 위치를 보존하되 새 실행에는 `null` 시작 checkpoint를 반환하고 첫 묶음이 기존 완료 checkpoint를 안전하게 대체하도록 허용한다
+
+#### Scenario: Failed full collection resumes
+- **WHEN** 일부 묶음이 확정된 전체 실행이 후속 묶음 저장에 실패한 뒤 다시 실행된다
+- **THEN** 플랫폼은 마지막으로 확정된 checkpoint를 반환하여 실패한 묶음부터 수집을 재개한다
+
 #### Scenario: Retry after rollback has no gaps
 - **WHEN** 실패한 묶음이 이전 checkpoint부터 다시 전달된다
 - **THEN** 플랫폼은 누락 없이 묶음을 저장하고 이미 확정된 레코드가 재전달되더라도 내부 ID를 유지한다

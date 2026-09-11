@@ -11,6 +11,8 @@ interface RunRow {
   scope_key: string; config_revision: string; status: string; isolated_count: string;
 }
 
+interface RunStatusRow { status: string }
+
 function sameScope(row: RunRow, scope: CollectionScope): boolean {
   return row.plugin_id === scope.pluginId && row.source_id === scope.sourceId && row.scope_type === scope.scopeType
     && row.scope_key === scope.scopeKey && row.config_revision === scope.configRevision;
@@ -79,9 +81,15 @@ export function createPostgresRecordStorage(connection: PostgresPlatformDbConnec
     async getCheckpoint(scope: CollectionScope): Promise<JsonValue | null> {
       validateScope(scope);
       try {
-        const result = await connection.withClient(client => client.query<{ checkpoint: JsonValue }>(`SELECT checkpoint FROM collection_checkpoints
-          WHERE plugin_id=$1 AND source_id=$2 AND scope_type=$3 AND scope_key=$4 AND config_revision=$5`, [...scopeValues(scope)]));
-        return result.rows[0]?.checkpoint ?? null;
+        return await connection.withClient(async client => {
+          const runResult = await client.query<RunStatusRow>(`SELECT status FROM collection_runs
+            WHERE plugin_id=$1 AND source_id=$2 AND scope_type=$3 AND scope_key=$4 AND config_revision=$5
+            ORDER BY started_at DESC, id DESC LIMIT 1`, [...scopeValues(scope)]);
+          if (scope.scopeType === 'full' && ['success', 'partial'].includes(runResult.rows[0]?.status ?? '')) return null;
+          const result = await client.query<{ checkpoint: JsonValue }>(`SELECT checkpoint FROM collection_checkpoints
+            WHERE plugin_id=$1 AND source_id=$2 AND scope_type=$3 AND scope_key=$4 AND config_revision=$5`, [...scopeValues(scope)]);
+          return result.rows[0]?.checkpoint ?? null;
+        });
       } catch (error) { throw publicFailure(error); }
     },
 
@@ -101,7 +109,16 @@ export function createPostgresRecordStorage(connection: PostgresPlatformDbConnec
           const checkpointResult = await client.query<{ checkpoint: JsonValue }>(`SELECT checkpoint FROM collection_checkpoints
             WHERE plugin_id=$1 AND source_id=$2 AND scope_type=$3 AND scope_key=$4 AND config_revision=$5 FOR UPDATE`, [...scopeValues(input.scope)]);
           const current = checkpointResult.rows[0]?.checkpoint;
-          if (current === undefined ? input.expectedCheckpoint !== null : input.expectedCheckpoint === null || !(await jsonbEqual(client, current, input.expectedCheckpoint))) throw new StorageError('CHECKPOINT_CONFLICT');
+          let completedRunRestart = false;
+          if (input.scope.scopeType === 'full' && current !== undefined && input.expectedCheckpoint === null) {
+            const previous = await client.query<RunStatusRow>(`SELECT status FROM collection_runs
+              WHERE plugin_id=$1 AND source_id=$2 AND scope_type=$3 AND scope_key=$4 AND config_revision=$5 AND id<>$6
+              ORDER BY started_at DESC, id DESC LIMIT 1`, [...scopeValues(input.scope), input.runId]);
+            completedRunRestart = ['success', 'partial'].includes(previous.rows[0]?.status ?? '');
+          }
+          if (current === undefined ? input.expectedCheckpoint !== null
+            : input.expectedCheckpoint === null ? !completedRunRestart
+            : !(await jsonbEqual(client, current, input.expectedCheckpoint))) throw new StorageError('CHECKPOINT_CONFLICT');
 
           const ids = new Map<string, string>();
           for (const record of input.records) {

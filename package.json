@@ -13,7 +13,7 @@
     "build:plugin-transforms": "pnpm --filter @oss-scp/plugin-sdk build && pnpm --filter @oss-scp/plugin-sample1-offset-api build && pnpm --filter @oss-scp/plugin-sample2-single-api build && pnpm --filter @oss-scp/plugin-vulnerabilities-local-csv build",
     "typecheck": "pnpm -r typecheck",
     "lint": "eslint .",
-    "test": "pnpm -r test",
+    "test": "pnpm -r --workspace-concurrency=1 test",
     "test:process": "node scripts/test-process.mjs",
     "test:docker": "bash scripts/test-docker.sh",
     "test:docker:workspace": "node scripts/test-docker-workspace.mjs",
@@ -30,6 +30,7 @@
     "test:docker:external-db": "bash scripts/test-external-db.sh",
     "test:docker:mysql": "bash scripts/test-mysql-docker.sh",
     "test:http-collector": "pnpm --filter @oss-scp/http-collector test",
+    "test:integration:sample1": "pnpm build:plugin-transforms && pnpm --filter @oss-scp/mock-api build && pnpm --filter @oss-scp/collector-cli build && pnpm --filter @oss-scp/api build && node scripts/test-sample1-postgres.mjs",
     "collect": "pnpm --filter @oss-scp/collector-cli start"
   },
   "devDependencies": {
