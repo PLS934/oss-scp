@@ -25,6 +25,8 @@ jobs:
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       - run: pnpm --filter @oss-scp/platform-db test
+      # sample1 동일 수집·가공·저장·재개·조회 계약을 MySQL에서도 검증
+      - run: pnpm test:integration:sample1:mysql
   postgres:
     name: PostgreSQL 17.6 연결 및 migration
     runs-on: ubuntu-24.04
@@ -57,6 +59,8 @@ jobs:
       - run: pnpm test
       # JSON offset·single HTTP 수집의 loopback 통합·오류·자원 제한 검증
       - run: pnpm test:http-collector
+      # HTTP CSV의 공통 파서 재사용·압축·한도·중단·backpressure 검증
+      - run: pnpm test:http-csv-source
       # 수동 CLI 선택·종료 코드·비밀정보 비노출·signal 정리 검증
       - run: pnpm --filter @oss-scp/collector-cli test
       - run: pnpm build

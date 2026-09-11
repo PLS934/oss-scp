@@ -1,0 +1,23 @@
+{
+  "apiVersion": "oss-scp/plugin-v1",
+  "id": "vulnerabilities-http-csv",
+  "name": "Vulnerabilities HTTP CSV",
+  "version": "0.1.0",
+  "source": "./source.json",
+  "transform": "./dist/transform.js",
+  "menu": { "title": "HTTP 취약점", "icon": "shield", "group": "보안 관리", "order": 20, "path": "/vulnerabilities/http", "dataType": "vulnerability" },
+  "data": {
+    "types": {
+      "vulnerability": {
+        "uniqueKey": "cve",
+        "fields": {
+          "cve": { "type": "string", "required": true },
+          "name": { "type": "string", "required": true },
+          "score": { "type": "number", "required": true },
+          "affected": { "type": "boolean", "required": true },
+          "observedAt": { "type": "datetime", "required": true }
+        }
+      }
+    }
+  }
+}

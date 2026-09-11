@@ -35,14 +35,14 @@ node scripts/check-db-compose-config.mjs
 docker compose -p "$bundled_project" -f compose.mysql.yaml up --build -d --wait --wait-timeout 150 api
 test "$(curl --fail --silent --show-error --max-time 5 "http://127.0.0.1:${API_PORT}/api/v1/health")" = '{"status":"ok"}'
 test "$(curl --fail --silent --show-error --max-time 5 "http://127.0.0.1:${API_PORT}/api/v1/ready")" = '{"status":"ready"}'
-docker compose -p "$bundled_project" -f compose.mysql.yaml run --rm api node node_modules/@oss-scp/platform-db/dist/migrate-cli.js | grep -q '1개 적용'
+docker compose -p "$bundled_project" -f compose.mysql.yaml run --rm api node node_modules/@oss-scp/platform-db/dist/migrate-cli.js | grep -q '6개 적용'
 docker compose -p "$bundled_project" -f compose.mysql.yaml run --rm api node node_modules/@oss-scp/platform-db/dist/migrate-cli.js | grep -q '0개 적용'
 docker compose -p "$bundled_project" -f compose.mysql.yaml stop mysql
 test "$(curl --fail --silent --show-error --max-time 5 "http://127.0.0.1:${API_PORT}/api/v1/health")" = '{"status":"ok"}'
 test "$(curl --silent --output /dev/null --write-out '%{http_code}' --max-time 5 "http://127.0.0.1:${API_PORT}/api/v1/ready")" = '503'
 docker compose -p "$bundled_project" -f compose.mysql.yaml rm -f mysql
 docker compose -p "$bundled_project" -f compose.mysql.yaml up -d --wait --wait-timeout 150 mysql api
-test "$(docker compose -p "$bundled_project" -f compose.mysql.yaml exec -T mysql mysql -N -uoss_scp_app -p"$PLATFORM_DB_PASSWORD" oss_scp -e 'select count(*) from oss_scp_schema_migrations')" = '1'
+test "$(docker compose -p "$bundled_project" -f compose.mysql.yaml exec -T mysql mysql -N -uoss_scp_app -p"$PLATFORM_DB_PASSWORD" oss_scp -e 'select count(*) from oss_scp_schema_migrations')" = '6'
 test "$(docker inspect "${bundled_project}-mysql-1" --format '{{json .NetworkSettings.Ports}}')" = '{"3306/tcp":null,"33060/tcp":null}'
 
 docker run -d --name "$external_database" -e MYSQL_DATABASE=oss_scp -e MYSQL_USER=oss_scp_app \
@@ -63,8 +63,8 @@ export PLATFORM_DB_TLS_MODE=disable
 export API_PORT=$((API_PORT + 1))
 docker compose -p "$external_project" -f compose.external-db.mysql.yaml -f compose.external-db.mysql.secret.yaml up --build -d --wait --wait-timeout 150 api
 test "$(curl --fail --silent --show-error --max-time 5 "http://127.0.0.1:${API_PORT}/api/v1/ready")" = '{"status":"ready"}'
-docker compose -p "$external_project" -f compose.external-db.mysql.yaml -f compose.external-db.mysql.secret.yaml run --rm api node node_modules/@oss-scp/platform-db/dist/migrate-cli.js | grep -q '1개 적용'
+docker compose -p "$external_project" -f compose.external-db.mysql.yaml -f compose.external-db.mysql.secret.yaml run --rm api node node_modules/@oss-scp/platform-db/dist/migrate-cli.js | grep -q '6개 적용'
 docker compose -p "$external_project" -f compose.external-db.mysql.yaml -f compose.external-db.mysql.secret.yaml down --remove-orphans
 test "$(docker inspect --format '{{.State.Running}}' "$external_database")" = true
-test "$(docker exec "$external_database" mysql -N -uoss_scp_app -p"$PLATFORM_DB_PASSWORD" oss_scp -e 'select count(*) from oss_scp_schema_migrations')" = '1'
+test "$(docker exec "$external_database" mysql -N -uoss_scp_app -p"$PLATFORM_DB_PASSWORD" oss_scp -e 'select count(*) from oss_scp_schema_migrations')" = '6'
 echo 'MySQL 내장/외부 연결·상태·migration·영속성과 외부 DB 생명주기 비관리 통과'

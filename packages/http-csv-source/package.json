@@ -1,0 +1,26 @@
+{
+  "name": "@oss-scp/http-csv-source",
+  "version": "0.1.0",
+  "private": true,
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "files": ["dist"],
+  "scripts": {
+    "prebuild": "pnpm --filter @oss-scp/csv-reader build && pnpm --filter @oss-scp/plugin-config build",
+    "build": "tsc",
+    "pretypecheck": "pnpm --filter @oss-scp/csv-reader build && pnpm --filter @oss-scp/plugin-config build",
+    "typecheck": "tsc --noEmit",
+    "pretest": "pnpm --filter @oss-scp/local-csv-source build",
+    "test": "pnpm build && vitest run"
+  },
+  "dependencies": {
+    "@oss-scp/csv-reader": "workspace:*",
+    "@oss-scp/plugin-config": "workspace:*"
+  },
+  "devDependencies": {
+    "@oss-scp/local-csv-source": "workspace:*",
+    "@types/node": "24.13.3",
+    "typescript": "5.9.3",
+    "vitest": "4.1.11"
+  }
+}

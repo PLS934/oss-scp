@@ -16,6 +16,7 @@ export function mysqlPoolConfig(config: PlatformDbConfig): PoolOptions {
     password: config.password,
     connectionLimit: config.poolMax,
     connectTimeout: config.connectTimeoutMs,
+    timezone: 'Z',
     enableKeepAlive: true,
     ssl: config.tls.mode === 'disable' ? undefined : {
       rejectUnauthorized: true,

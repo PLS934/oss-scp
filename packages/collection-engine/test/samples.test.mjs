@@ -36,7 +36,8 @@ describe('sample transform integration', () => {
     expect(configuration.ok).toBe(true);
     if (!configuration.ok) return;
     const input = source('sample2.json');
-    const output = await collect(configuration.definitions[2], input.items, { test_field6: input.test_field6 });
+    const definition = configuration.definitions.find((item) => item.plugin.id === 'sample2-single-api');
+    const output = await collect(definition, input.items, { test_field6: input.test_field6 });
     expect(output.result).toMatchObject({ status: 'success', accepted: 153, rejected: 0 });
     expect(output.records[0]).toMatchObject({ values: { details: { label: 'a', observedAt: '2026-09-01T09:24:00Z' }, members: [{ login: 'minyung' }, { login: 'minyoung' }], feed: 'true' } });
   });

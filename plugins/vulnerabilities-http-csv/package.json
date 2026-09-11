@@ -1,0 +1,11 @@
+{
+  "name": "@oss-scp/plugin-vulnerabilities-http-csv", "version": "0.1.0", "private": true,
+  "scripts": {
+    "prebuild": "pnpm --filter @oss-scp/plugin-sdk build",
+    "build": "tsc",
+    "pretypecheck": "pnpm --filter @oss-scp/plugin-sdk build",
+    "typecheck": "tsc --noEmit",
+    "test": "pnpm build"
+  },
+  "devDependencies": { "@oss-scp/plugin-sdk": "workspace:*", "typescript": "5.9.3" }
+}

@@ -9,7 +9,7 @@ import { checkWorkspaceVolumes, assertDependencyMounts, assertCleanDependencyPat
 await run('pnpm', ['build:plugin-transforms'], { cwd: process.cwd(), env: process.env });
 const dir = await fixture();
 await chmod(dir, 0o755);
-for (const plugin of ['sample1-offset-api', 'sample2-single-api', 'vulnerabilities-local-csv']) {
+for (const plugin of ['sample1-offset-api', 'sample2-single-api', 'vulnerabilities-local-csv', 'vulnerabilities-http-csv']) {
   await cp(path.join(process.cwd(), 'plugins', plugin, 'dist'), path.join(dir, 'plugins', plugin, 'dist'), { recursive: true });
 }
 const project = `oss-scp-web-check-${process.pid}`;

@@ -2,7 +2,7 @@
 
 `@oss-scp/platform-db`는 운영자가 입력한 DB 주소·포트·계정·비밀번호를 읽고 검사하는 공통 패키지입니다. 정상 입력은 연결 코드가 사용할 설정으로 반환하고, 잘못된 입력은 수정할 항목을 알리는 `PlatformDbConfigError`를 반환합니다.
 
-PostgreSQL과 MySQL 어댑터는 API 시작 시 같은 설정으로 선택한 DB에 연결하며 `/api/v1/ready`에서 준비 상태를 확인합니다. PostgreSQL은 가공·검증된 플러그인 데이터를 위한 공통 저장 계약을 제공하며, MySQL 저장과 조회 API는 후속 작업입니다. 별도의 웹 설정 화면은 제공하지 않습니다.
+PostgreSQL과 MySQL 어댑터는 API 시작 시 같은 설정으로 선택한 DB에 연결하며 `/api/v1/ready`에서 준비 상태를 확인합니다. 두 제품 모두 가공·검증된 플러그인 데이터를 위한 같은 공통 저장·기본 조회 계약을 제공합니다. 별도의 웹 설정 화면은 제공하지 않습니다.
 
 ## 내장 PostgreSQL로 빠르게 시작
 
@@ -71,6 +71,8 @@ docker compose -f compose.external-db.mysql.yaml -f compose.external-db.mysql.se
 외부 구성은 API와 웹만 관리하며 MySQL 인스턴스를 생성·시작·종료·삭제하지 않습니다. CA 파일은 별도 읽기 전용 mount로 제공해야 합니다. MySQL `verify-full`에는 인증서 SAN과 일치하는 DNS 호스트명이 필요하며 TLS 실패 시 평문으로 자동 전환하지 않습니다.
 
 MySQL DDL은 암묵적으로 commit될 수 있어 실패 시 PostgreSQL과 같은 전체 rollback을 보장하지 않습니다. injection 범위를 넓히는 다중 statement 연결 옵션을 켜지 않으므로 MySQL migration 파일 하나에는 SQL statement 하나만 둡니다. migration은 재실행 가능한 전진 변경으로 작성하고, 실패 버전은 이력에 기록하지 않으며 이후 migration은 실행하지 않습니다. 실패한 DDL이 남으면 해당 migration의 복구 절차로 상태를 정리한 뒤 같은 명령을 다시 실행합니다.
+
+공통 레코드 schema는 MySQL JSON, UTC `DATETIME(3)`과 식별·정렬 컬럼의 binary collation을 사용합니다. 최대 2,048자인 외부 키와 범위 조합은 길이 구분 canonical 값의 SHA-256 digest로 인덱싱하고 항상 저장된 원문 identity를 다시 비교합니다. digest가 같지만 원문이 다르면 다른 레코드를 갱신하지 않고 해당 저장 묶음을 실패·rollback합니다. cursor 인덱스는 범위 digest, `last_seen_at DESC`, 내부 UUID `id ASC` 순서입니다.
 
 ## 운영자가 작성할 입력
 
@@ -170,9 +172,9 @@ function readSettings(adapters: readonly PlatformDbAdapterFactory[]) {
 
 설정/최초 연결 실패는 API 시작 실패입니다. 실행 중 DB 장애는 `/api/v1/ready`의 HTTP 503이며 `/api/v1/health` liveness는 성공을 유지합니다. migration은 앱 시작 시 자동 실행하지 않고 `pnpm db:migrate` 또는 위 Compose 명령으로 명시적으로 실행합니다.
 
-## PostgreSQL 공통 레코드 저장
+## PostgreSQL·MySQL 공통 레코드 저장
 
-`createPostgresRecordStorage(connection)`은 DB driver 타입을 호출자에게 노출하지 않는 `RecordStorage` 구현을 반환합니다. 이 저장소는 #41의 가공·검증 결과를 받을 수 있지만, 현재 수집 CLI나 worker에 자동 연결되지는 않습니다.
+`createPlatformRecordAdapters(type, connection)`은 선택한 제품에 맞는 `RecordStorage`와 `RecordQuery`를 반환합니다. API와 수동 수집 CLI는 이 조립 경계를 사용하므로 가공 코드와 업무 서비스는 DB driver 타입이나 SQL 방언을 알지 않습니다. 제품별 직접 factory도 테스트와 저수준 조립을 위해 제공합니다.
 
 ### 데이터와 식별 범위
 
@@ -190,7 +192,7 @@ pluginId + dataType + sourceId + externalKeyType + externalKey
 
 `collection_runs`는 플러그인·수집처·실행 범위·설정 revision, 상태와 처리 집계를 기록합니다. `collection_checkpoints`는 같은 범위의 마지막 저장 완료 위치를 보관합니다. `collection_issues`에는 격리된 원천 레코드의 위치, 오류 코드·경로·제한된 메시지와 key hint만 기록하며 원천 레코드 전체와 응답 메타데이터는 복제하지 않습니다.
 
-`commitBatch`는 다음 항목을 하나의 PostgreSQL 트랜잭션으로 확정합니다.
+`commitBatch`는 다음 항목을 선택한 DB의 하나의 transaction으로 확정합니다.
 
 1. 레코드 upsert와 내부 ID 유지
 2. 관계 참조 확인과 멱등 저장
@@ -204,7 +206,7 @@ pluginId + dataType + sourceId + externalKeyType + externalKey
 
 공통 저장 경로가 소유하는 값은 `platform_records.source_values`와 원천 관측 시각입니다. 담당자, 수동 상태와 감사 정보는 후속 별도 테이블이 레코드 내부 UUID를 참조해야 합니다. 공통 upsert는 그러한 플랫폼 소유 행을 생성·수정·삭제하지 않습니다.
 
-현재 PostgreSQL 저장 범위에는 MySQL 구현, JSON 내부 필드 검색·정렬 인덱스, 조회 API, 전체 수집 완료에 따른 보관·복원, 담당자 기능과 수집 실행 오케스트레이션이 포함되지 않습니다.
+현재 공통 저장 범위에는 JSON 내부 필드 검색·필터·사용자 지정 정렬 인덱스, 전체 수집 완료에 따른 보관·복원과 담당자 기능이 포함되지 않습니다. PostgreSQL과 MySQL 사이의 기존 데이터 이전 또는 down migration도 제공하지 않습니다.
 
 ## 개발·검증
 
