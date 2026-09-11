@@ -4,7 +4,9 @@ import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { GenericContainer, Wait } from 'testcontainers';
 import { spawnSync } from 'node:child_process';
+import { randomUUID } from 'node:crypto';
 import {
+  createPostgresRecordStorage, defaultMigrationsDirectory,
   discoverMigrations, MigrationError,
   postgresAdapter, postgresPoolConfig, runMigrations,
 } from '../dist/index.js';
@@ -94,5 +96,145 @@ describe('migration', () => {
     try {
       expect((await Promise.all([runMigrations(first, [migration], 5000), runMigrations(second, [migration], 5000)])).sort()).toEqual([0, 1]);
     } finally { await Promise.all([first.close(), second.close()]); }
+  });
+});
+
+describe('PostgreSQL 공통 레코드 저장 계약', () => {
+  let connection;
+  let storage;
+
+  beforeAll(async () => {
+    connection = await postgresAdapter.connect(config());
+    await runMigrations(connection, discoverMigrations(defaultMigrationsDirectory('postgres')), 5000);
+    storage = createPostgresRecordStorage(connection);
+  });
+  afterAll(async () => { await connection?.close(); });
+
+  const testScope = suffix => ({
+    pluginId: `plugin-${suffix}-${randomUUID()}`,
+    sourceId: 'source-a', scopeType: 'full', scopeKey: '', configRevision: 'rev-1',
+  });
+  const start = async scope => storage.startRun({ ...scope, startedAt: '2026-09-11T01:00:00Z' });
+  const commit = (runId, scope, patch = {}) => storage.commitBatch({
+    runId, scope, observedAt: '2026-09-11T01:01:00Z', expectedCheckpoint: null,
+    nextCheckpoint: { offset: 1 }, processedCount: 1, acceptedCount: 1,
+    records: [{ type: 'asset', key: 'server-1', values: { hostname: 'old' } }],
+    relations: [], issues: [], ...patch,
+  });
+
+  it('migration을 재실행하고 실행 상태를 기록한다', async () => {
+    expect(await runMigrations(connection, discoverMigrations(defaultMigrationsDirectory('postgres')), 5000)).toBe(0);
+    const scope = testScope('run');
+    const runId = await start(scope);
+    await commit(runId, scope);
+    await storage.finishRun({ runId, status: 'success', finishedAt: '2026-09-11T01:02:00Z' });
+    const result = await connection.withClient(client => client.query('SELECT status, processed_count, accepted_count, isolated_count, finished_at FROM collection_runs WHERE id=$1', [runId]));
+    expect(result.rows[0]).toMatchObject({ status: 'success', processed_count: '1', accepted_count: '1', isolated_count: '0' });
+    expect(result.rows[0].finished_at).toBeInstanceOf(Date);
+    await expect(storage.finishRun({ runId, status: 'success', finishedAt: '2026-09-11T01:03:00Z' })).rejects.toMatchObject({ code: 'RUN_NOT_ACTIVE' });
+  });
+
+  it('재전달은 내부 ID를 유지하고 타입·출처 범위는 분리한다', async () => {
+    const scope = testScope('identity');
+    const firstRun = await start(scope);
+    await commit(firstRun, scope, {
+      processedCount: 2, acceptedCount: 2,
+      records: [
+        { type: 'asset', key: '1', values: { hostname: 'string-key' } },
+        { type: 'asset', key: 1, values: { hostname: 'number-key' } },
+      ],
+    });
+    const before = await connection.withClient(client => client.query('SELECT id, external_key_type, source_values FROM platform_records WHERE plugin_id=$1 ORDER BY external_key_type DESC', [scope.pluginId]));
+    expect(before.rows).toHaveLength(2);
+
+    const secondRun = await start(scope);
+    await commit(secondRun, scope, {
+      records: [{ type: 'asset', key: '1', values: { hostname: 'updated' } }],
+      expectedCheckpoint: { offset: 1 }, nextCheckpoint: { offset: 2 },
+    });
+    const updated = await connection.withClient(client => client.query("SELECT id, source_values FROM platform_records WHERE plugin_id=$1 AND external_key_type='string'", [scope.pluginId]));
+    expect(updated.rows[0]).toEqual({ id: before.rows.find(row => row.external_key_type === 'string').id, source_values: { hostname: 'updated' } });
+
+    const otherScope = { ...scope, sourceId: 'source-b' };
+    const otherRun = await start(otherScope);
+    await commit(otherRun, otherScope, { records: [{ type: 'asset', key: '1', values: { hostname: 'other' } }] });
+    const count = await connection.withClient(client => client.query('SELECT count(*) AS count FROM platform_records WHERE plugin_id=$1', [scope.pluginId]));
+    expect(count.rows[0].count).toBe('3');
+  });
+
+  it('관계를 내부 ID로 멱등 저장하고 누락 참조 시 묶음을 rollback한다', async () => {
+    const scope = testScope('relation');
+    const failedRun = await start(scope);
+    await expect(commit(failedRun, scope, {
+      records: [{ type: 'asset', key: 'server-1', values: { hostname: 'server-1' } }],
+      relations: [{ type: 'has-finding', from: { type: 'asset', key: 'server-1' }, to: { type: 'finding', key: 'missing' } }],
+    })).rejects.toMatchObject({ code: 'RELATION_NOT_FOUND' });
+    expect(await storage.getCheckpoint(scope)).toBeNull();
+    const rolledBack = await connection.withClient(client => client.query('SELECT count(*) AS count FROM platform_records WHERE plugin_id=$1', [scope.pluginId]));
+    expect(rolledBack.rows[0].count).toBe('0');
+
+    await commit(failedRun, scope, {
+      processedCount: 2, acceptedCount: 2,
+      records: [
+        { type: 'asset', key: 'server-1', values: { hostname: 'server-1' } },
+        { type: 'finding', key: 'finding-1', values: { severity: 'high' } },
+      ],
+      relations: [{ type: 'has-finding', from: { type: 'asset', key: 'server-1' }, to: { type: 'finding', key: 'finding-1' } }],
+    });
+    const nextRun = await start(scope);
+    await commit(nextRun, scope, {
+      expectedCheckpoint: { offset: 1 }, nextCheckpoint: { offset: 2 },
+      records: [], processedCount: 0, acceptedCount: 0,
+      relations: [{ type: 'has-finding', from: { type: 'asset', key: 'server-1' }, to: { type: 'finding', key: 'finding-1' } }],
+    });
+    const relations = await connection.withClient(client => client.query('SELECT count(*) AS count FROM platform_record_relations WHERE plugin_id=$1', [scope.pluginId]));
+    expect(relations.rows[0].count).toBe('1');
+  });
+
+  it('격리 오류를 checkpoint 전에 저장하고 partial 집계를 남긴다', async () => {
+    const scope = testScope('partial');
+    const runId = await start(scope);
+    await commit(runId, scope, {
+      processedCount: 2, acceptedCount: 1,
+      issues: [{ sourceIndex: 1, code: 'INVALID_FIELD_TYPE', path: '/records/0', message: 'transform output rejected', keyHint: 'bad-1' }],
+    });
+    await storage.finishRun({ runId, status: 'partial', finishedAt: '2026-09-11T01:02:00Z' });
+    const result = await connection.withClient(client => client.query(`SELECT r.status, r.processed_count, r.accepted_count, r.isolated_count,
+      i.batch_start_checkpoint, i.source_index, i.code, i.path, i.message, i.key_hint
+      FROM collection_runs r JOIN collection_issues i ON i.run_id=r.id WHERE r.id=$1`, [runId]));
+    expect(result.rows[0]).toMatchObject({ status: 'partial', processed_count: '2', accepted_count: '1', isolated_count: '1', batch_start_checkpoint: null, source_index: '1', code: 'INVALID_FIELD_TYPE', key_hint: 'bad-1' });
+  });
+
+  it('checkpoint 충돌은 데이터와 실행 집계를 변경하지 않는다', async () => {
+    const scope = testScope('checkpoint');
+    const runId = await start(scope);
+    await commit(runId, scope);
+    await expect(commit(runId, scope, {
+      expectedCheckpoint: { offset: 0 }, nextCheckpoint: { offset: 2 },
+      records: [{ type: 'asset', key: 'server-2', values: { hostname: 'must-rollback' } }],
+    })).rejects.toMatchObject({ code: 'CHECKPOINT_CONFLICT' });
+    expect(await storage.getCheckpoint(scope)).toEqual({ offset: 1 });
+    const result = await connection.withClient(client => client.query(`SELECT r.processed_count,
+      (SELECT count(*) FROM platform_records p WHERE p.plugin_id=$2) AS records FROM collection_runs r WHERE r.id=$1`, [runId, scope.pluginId]));
+    expect(result.rows[0]).toMatchObject({ processed_count: '1', records: '1' });
+  });
+
+  it('원천 upsert가 별도 플랫폼 업무 정보를 덮어쓰지 않는다', async () => {
+    const scope = testScope('ownership');
+    const runId = await start(scope);
+    await commit(runId, scope);
+    const record = await connection.withClient(client => client.query('SELECT id FROM platform_records WHERE plugin_id=$1', [scope.pluginId]));
+    await connection.withClient(async client => {
+      await client.query('CREATE TABLE IF NOT EXISTS test_platform_assignments(record_id uuid PRIMARY KEY REFERENCES platform_records(id), assignee text NOT NULL)');
+      await client.query('INSERT INTO test_platform_assignments(record_id, assignee) VALUES ($1,$2)', [record.rows[0].id, 'security-team']);
+    });
+    const nextRun = await start(scope);
+    await commit(nextRun, scope, {
+      expectedCheckpoint: { offset: 1 }, nextCheckpoint: { offset: 2 },
+      records: [{ type: 'asset', key: 'server-1', values: { hostname: 'new-source-value' } }],
+    });
+    const preserved = await connection.withClient(client => client.query(`SELECT p.id, p.source_values, a.assignee
+      FROM platform_records p JOIN test_platform_assignments a ON a.record_id=p.id WHERE p.id=$1`, [record.rows[0].id]));
+    expect(preserved.rows[0]).toEqual({ id: record.rows[0].id, source_values: { hostname: 'new-source-value' }, assignee: 'security-team' });
   });
 });
