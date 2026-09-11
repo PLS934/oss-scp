@@ -40,12 +40,12 @@ let value=""; process.stdin.on("data", chunk => value += chunk); process.stdin.o
 });'
 docker compose -p "$project" up --build -d --wait --wait-timeout 90 api
 check_response "http://127.0.0.1:${API_PORT}"
-docker compose -p "$project" run --rm api node node_modules/@oss-scp/platform-db/dist/migrate-cli.js | grep -q '1개 적용'
+docker compose -p "$project" run --rm api node node_modules/@oss-scp/platform-db/dist/migrate-cli.js | grep -q '2개 적용'
 docker compose -p "$project" run --rm api node node_modules/@oss-scp/platform-db/dist/migrate-cli.js | grep -q '0개 적용'
 docker compose -p "$project" stop postgres
 docker compose -p "$project" rm -f postgres
 docker compose -p "$project" up -d --wait --wait-timeout 90 postgres api
-test "$(docker compose -p "$project" exec -T postgres psql -U oss_scp_app -d oss_scp -Atc 'select count(*) from oss_scp_schema_migrations')" = 1
+test "$(docker compose -p "$project" exec -T postgres psql -U oss_scp_app -d oss_scp -Atc 'select count(*) from oss_scp_schema_migrations')" = 2
 test "$(docker inspect "${project}-postgres-1" --format '{{json .NetworkSettings.Ports}}')" = '{"5432/tcp":null}'
 docker run -d --name "$standalone" --network "${project}_default" -p 127.0.0.1::3000 \
   -e PLATFORM_DB_TYPE=postgres -e PLATFORM_DB_HOST=postgres -e PLATFORM_DB_PORT=5432 \

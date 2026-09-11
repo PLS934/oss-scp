@@ -34,8 +34,8 @@ if ! docker compose -p "$project" -f compose.external-db.yaml -f compose.externa
   exit 1
 fi
 test "$(curl --fail --silent --show-error --max-time 5 "http://127.0.0.1:${API_PORT}/api/v1/ready")" = '{"status":"ready"}'
-docker compose -p "$project" -f compose.external-db.yaml -f compose.external-db.secret.yaml run --rm api node node_modules/@oss-scp/platform-db/dist/migrate-cli.js | grep -q '1개 적용'
+docker compose -p "$project" -f compose.external-db.yaml -f compose.external-db.secret.yaml run --rm api node node_modules/@oss-scp/platform-db/dist/migrate-cli.js | grep -q '2개 적용'
 docker compose -p "$project" -f compose.external-db.yaml -f compose.external-db.secret.yaml down --remove-orphans
 test "$(docker inspect --format '{{.State.Running}}' "$database")" = true
-test "$(docker exec "$database" psql -U oss_scp_app -d oss_scp -Atc 'select count(*) from oss_scp_schema_migrations')" = 1
+test "$(docker exec "$database" psql -U oss_scp_app -d oss_scp -Atc 'select count(*) from oss_scp_schema_migrations')" = 2
 echo '외부 PostgreSQL: API·migration 연결 및 외부 DB 생명주기 비관리 통과'
