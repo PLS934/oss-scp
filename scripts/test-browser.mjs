@@ -89,7 +89,8 @@ try {
   await page.reload();
   await expect(page.getByRole('status')).toHaveText('서버 연결 성공');
 
-  collision = start('pnpm', args, { cwd: dir });
+  const collisionArgs = ['--filter', '@oss-scp/web', 'exec', 'vite', '--port', String(webPort)];
+  collision = start('pnpm', collisionArgs, { cwd: dir });
   const code = await Promise.race([collision.done, new Promise(resolve => setTimeout(() => resolve('timeout'), 10000))]);
   assert.notEqual(code, 'timeout');
   assert.notEqual(code, 0);
