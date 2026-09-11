@@ -60,6 +60,8 @@
 !plugins/**
 !connections/
 !connections/**
+!scripts/
+!scripts/generate-plugin-menu.mjs
 !fixtures/csv/
 !fixtures/csv/**
 **/node_modules

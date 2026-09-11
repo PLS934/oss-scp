@@ -40,6 +40,13 @@ try {
   await page.goto(url);
   await expect(page.getByRole('status')).toHaveText('서버 연결 성공');
   assert.equal((await fetch(`${url}/api/unknown`)).status, 404);
+  await page.goto(`${url}/assets/servers`);
+  await expect(page.getByLabel('조회 범위')).toContainText('sample1-offset-api');
+  await page.reload();
+  await expect(page.getByLabel('조회 범위')).toContainText('mock-api-sample1');
+  await page.goto(`${url}/unknown-menu`);
+  await expect(page.getByRole('heading', { name: '페이지를 찾을 수 없습니다' })).toBeVisible();
+  await page.goto(url);
 
   // 별도 네트워크 클라이언트가 호스트 공개 포트에 접근한다.
   const probe = ['run', '--rm', 'oss-scp-api:local', 'node', '-e'];
@@ -80,7 +87,7 @@ try {
   await page.waitForFunction(() => performance.getEntriesByType('resource').some(entry => entry.name.includes('/@vite/client')));
   await page.evaluate(() => { document.documentElement.dataset.hmrCheck = 'docker'; });
   const appFile = path.join(dir, 'apps/web/src/App.tsx');
-  await writeFile(appFile, (await readFile(appFile, 'utf8')).replace('<h1>OSS-SCP</h1>', '<h1>Docker HMR 확인</h1>'));
+  await writeFile(appFile, (await readFile(appFile, 'utf8')).replace('OSS-SCP</NavLink>', 'Docker HMR 확인</NavLink>'));
   await expect(page.getByRole('heading', { name: 'Docker HMR 확인' })).toBeVisible({ timeout: 20000 });
   assert.equal(await page.evaluate(() => document.documentElement.dataset.hmrCheck), 'docker');
   const healthFile = path.join(dir, 'apps/api/src/health.service.ts');

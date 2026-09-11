@@ -5,6 +5,7 @@
   "version": "0.1.0",
   "source": "./source.json",
   "transform": "./dist/transform.js",
+  "menu": { "title": "저장소", "icon": "repository", "group": "자산 관리", "order": 20, "path": "/assets/repositories", "dataType": "repository" },
   "data": {
     "types": {
       "repository": {

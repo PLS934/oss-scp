@@ -65,10 +65,18 @@ try {
   await page.goto(url);
   await expect(page.getByRole('heading', { name: 'OSS-SCP', exact: true })).toBeVisible();
   await expect(page.getByRole('status')).toHaveText('서버 연결 성공');
+  await page.getByRole('link', { name: /저장소/ }).click();
+  await expect(page.getByRole('heading', { name: '저장소', exact: true })).toBeVisible();
+  await expect(page.getByLabel('조회 범위')).toContainText('sample2-single-api');
+  await page.reload();
+  await expect(page.getByLabel('조회 범위')).toContainText('mock-api-sample2');
+  await page.goto(`${url}/removed-plugin`);
+  await expect(page.getByRole('heading', { name: '페이지를 찾을 수 없습니다' })).toBeVisible();
+  await page.goto(url);
   await page.evaluate(() => { document.documentElement.dataset.hmrCheck = 'same-document'; });
   const appFile = path.join(dir, 'apps/web/src/App.tsx');
   const original = await readFile(appFile, 'utf8');
-  await writeFile(appFile, original.replace('<h1>OSS-SCP</h1>', '<h1>OSS-SCP HMR 확인</h1>'));
+  await writeFile(appFile, original.replace('OSS-SCP</NavLink>', 'OSS-SCP HMR 확인</NavLink>'));
   await expect(page.getByRole('heading', { name: 'OSS-SCP HMR 확인', exact: true })).toBeVisible();
   assert.equal(await page.evaluate(() => document.documentElement.dataset.hmrCheck), 'same-document');
 
@@ -90,7 +98,7 @@ try {
   await page.reload();
   await expect(page.getByRole('status')).toHaveText('서버 연결 실패');
   await expect(page.getByRole('heading', { name: 'OSS-SCP HMR 확인', exact: true })).toBeVisible();
-  console.log('브라우저: 시작 화면·로딩·성공·5초 실패·복구·실제 API 중단·404·사용자 지정 프록시·포트 충돌·HMR 통과');
+  console.log('브라우저: 메뉴·직접 경로·새로고침·not-found·로딩·성공·5초 실패·복구·API 404·포트 충돌·HMR 통과');
 } catch (error) {
   console.error(api.output(), web?.output());
   throw error;

@@ -38,6 +38,11 @@ describe('validateRepository', () => {
     expect(result.ok).toBe(true);
     if (!result.ok) return;
     expect(result.definitions).toHaveLength(3);
+    expect(result.menus).toEqual([
+      { title: '취약점', icon: 'shield', group: '보안 관리', order: 10, path: '/vulnerabilities', dataType: 'vulnerability', pluginId: 'vulnerabilities-local-csv', sourceId: 'fixtures/csv/vulnerabilities.csv' },
+      { title: '서버 자산', icon: 'server', group: '자산 관리', order: 10, path: '/assets/servers', dataType: 'asset', pluginId: 'sample1-offset-api', sourceId: 'mock-api-sample1' },
+      { title: '저장소', icon: 'repository', group: '자산 관리', order: 20, path: '/assets/repositories', dataType: 'repository', pluginId: 'sample2-single-api', sourceId: 'mock-api-sample2' },
+    ]);
     expect(result.definitions[0]).toEqual(expect.objectContaining({
       plugin: expect.objectContaining({
         id: 'sample1-offset-api',
@@ -91,6 +96,44 @@ describe('validateRepository', () => {
       response: { itemsPath: 'items', metadataPaths: ['test_field6'] },
       pagination: { type: 'single' },
     }));
+  });
+
+  test.each([
+    ['메뉴 누락', (plugin) => delete plugin.menu, '/menu'],
+    ['지원하지 않는 아이콘', (plugin) => (plugin.menu.icon = 'unknown'), '/menu/icon'],
+    ['상대 메뉴 경로', (plugin) => (plugin.menu.path = 'assets'), '/menu/path'],
+  ])('플러그인의 %s을 거부한다', (_name, mutate, expectedPath) => {
+    const root = temporaryRepository();
+    const plugin = readJson(root, 'plugins/sample1-offset-api/plugin.json');
+    mutate(plugin);
+    writeJson(root, 'plugins/sample1-offset-api/plugin.json', plugin);
+    const result = validateRepository(root);
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.errors.some(error => error.path === expectedPath)).toBe(true);
+  });
+
+  test('메뉴 데이터 종류와 registry 전체 중복 경로를 거부한다', () => {
+    const root = temporaryRepository();
+    const first = readJson(root, 'plugins/sample1-offset-api/plugin.json');
+    first.menu.dataType = 'missing';
+    writeJson(root, 'plugins/sample1-offset-api/plugin.json', first);
+    const second = readJson(root, 'plugins/sample2-single-api/plugin.json');
+    second.menu.path = '/vulnerabilities';
+    writeJson(root, 'plugins/sample2-single-api/plugin.json', second);
+    const result = validateRepository(root);
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.errors).toEqual(expect.arrayContaining([
+      expect.objectContaining({ file: 'plugins/sample1-offset-api/plugin.json', path: '/menu/dataType', message: expect.stringContaining('missing') }),
+      expect.objectContaining({ file: 'plugins/sample2-single-api/plugin.json', path: '/menu/path', message: expect.stringContaining('duplicate') }),
+    ]));
+  });
+
+  test('registry 순서와 무관하게 메뉴를 결정적으로 정렬한다', () => {
+    const root = temporaryRepository();
+    writeJson(root, 'plugins/registry.json', { plugins: ['./sample2-single-api', './sample1-offset-api', './vulnerabilities-local-csv'] });
+    const result = validateRepository(root);
+    expect(result.ok).toBe(true);
+    if (result.ok) expect(result.menus.map(menu => menu.path)).toEqual(['/vulnerabilities', '/assets/servers', '/assets/repositories']);
   });
 
   test('로컬 CSV source의 옵션과 저장소 내부 경로를 해석한다', () => {

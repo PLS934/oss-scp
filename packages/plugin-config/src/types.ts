@@ -6,7 +6,12 @@ export interface PluginConfig {
   source: string;
   transform: string;
   data: PluginDataDefinition;
+  menu: PluginMenuDefinition;
 }
+
+export type PluginMenuIcon = 'server' | 'shield' | 'repository';
+export interface PluginMenuDefinition { title: string; icon: PluginMenuIcon; group: string; order: number; path: string; dataType: string; }
+export interface ClientMenuItem extends PluginMenuDefinition { pluginId: string; sourceId: string; }
 
 export type ScalarFieldType = 'string' | 'number' | 'boolean' | 'datetime';
 export type FieldDefinition =
@@ -16,7 +21,7 @@ export type FieldDefinition =
 export interface DataTypeDefinition { uniqueKey: string; fields: Record<string, FieldDefinition>; }
 export interface RelationDefinition { from: { types: string[] }; to: { types: string[] }; }
 export interface PluginDataDefinition { types: Record<string, DataTypeDefinition>; relations?: Record<string, RelationDefinition>; }
-export interface PluginRuntimeDefinition { id: string; name: string; version: string; transformPath: string; data: PluginDataDefinition; }
+export interface PluginRuntimeDefinition { id: string; name: string; version: string; transformPath: string; data: PluginDataDefinition; menu: PluginMenuDefinition; }
 
 export interface SourceConfigBase {
   apiVersion: 'oss-scp/source-v1';
@@ -116,5 +121,5 @@ export interface ConfigurationIssue {
 }
 
 export type ConfigurationResult =
-  | { ok: true; definitions: CollectionDefinition[] }
+  | { ok: true; definitions: CollectionDefinition[]; menus: ClientMenuItem[] }
   | { ok: false; errors: ConfigurationIssue[] };

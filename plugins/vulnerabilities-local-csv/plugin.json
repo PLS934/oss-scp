@@ -5,6 +5,7 @@
   "version": "0.1.0",
   "source": "./source.json",
   "transform": "./dist/transform.js",
+  "menu": { "title": "취약점", "icon": "shield", "group": "보안 관리", "order": 10, "path": "/vulnerabilities", "dataType": "vulnerability" },
   "data": {
     "types": {
       "vulnerability": {

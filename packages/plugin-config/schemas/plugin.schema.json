@@ -4,7 +4,7 @@
   "title": "oss-scp plugin",
   "type": "object",
   "additionalProperties": false,
-  "required": ["apiVersion", "id", "name", "version", "source", "transform", "data"],
+  "required": ["apiVersion", "id", "name", "version", "source", "transform", "data", "menu"],
   "properties": {
     "apiVersion": { "const": "oss-scp/plugin-v1" },
     "id": {
@@ -26,6 +26,19 @@
       "type": "string",
       "pattern": "^\\./[^\\u0000]+\\.js$",
       "maxLength": 255
+    },
+    "menu": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["title", "icon", "group", "order", "path", "dataType"],
+      "properties": {
+        "title": { "type": "string", "minLength": 1, "maxLength": 100 },
+        "icon": { "enum": ["server", "shield", "repository"] },
+        "group": { "type": "string", "minLength": 1, "maxLength": 100 },
+        "order": { "type": "integer", "minimum": 0, "maximum": 100000 },
+        "path": { "type": "string", "pattern": "^/(?:[a-z][a-z0-9-]*)(?:/[a-z][a-z0-9-]*)*$", "maxLength": 255 },
+        "dataType": { "$ref": "#/$defs/id" }
+      }
     },
     "data": {
       "type": "object",

@@ -24,7 +24,7 @@ export function run(args = process.argv.slice(2)): number {
     }
     return 1;
   }
-  console.log(JSON.stringify({ definitions: result.definitions }, null, 2));
+  console.log(JSON.stringify({ definitions: result.definitions, menus: result.menus }, null, 2));
   return 0;
 }
 
