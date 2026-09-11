@@ -4,12 +4,18 @@
   "private": true,
   "type": "module",
   "scripts": {
+    "predev": "pnpm -w generate:web-menu",
     "dev": "vite",
+    "prebuild": "pnpm -w generate:web-menu",
     "build": "tsc --noEmit && vite build",
     "typecheck": "tsc --noEmit",
     "test": "vitest run"
   },
-  "dependencies": { "react": "19.2.8", "react-dom": "19.2.8" },
+  "dependencies": {
+    "react": "19.2.8",
+    "react-dom": "19.2.8",
+    "react-router-dom": "7.18.3"
+  },
   "devDependencies": {
     "@types/node": "24.13.3",
     "@types/react": "19.2.18",

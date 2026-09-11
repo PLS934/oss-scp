@@ -41,7 +41,28 @@ packages/plugin-config/
         └── single.ts
 ```
 
-`plugin.json`은 플러그인 ID·이름·릴리스 버전, 같은 폴더의 source와 빌드된 transform 파일, 데이터 종류·필드·유일키·관계를 정의합니다. sample1의 `source.json`은 `/sample1` 경로, GET, `rows`·`total` 응답 경로와 offset·limit 설정을 정의합니다. sample2의 `source.json`은 `/sample2` 경로, GET, `items` 응답 경로와 `single` 방식을 정의합니다.
+`plugin.json`은 플러그인 ID·이름·릴리스 버전, 같은 폴더의 source와 빌드된 transform 파일, 데이터 종류·필드·유일키·관계 및 메뉴를 정의합니다. sample1의 `source.json`은 `/sample1` 경로, GET, `rows`·`total` 응답 경로와 offset·limit 설정을 정의합니다. sample2의 `source.json`은 `/sample2` 경로, GET, `items` 응답 경로와 `single` 방식을 정의합니다.
+
+## 메뉴와 라우팅
+
+플러그인은 하나의 메뉴를 필수로 선언합니다. `dataType`은 같은 파일의 `data.types` 키를 참조하며, `path`는 소문자 영숫자와 하이픈으로 이루어진 절대 경로입니다.
+
+```json
+{
+  "menu": {
+    "title": "서버 자산",
+    "icon": "server",
+    "group": "자산 관리",
+    "order": 10,
+    "path": "/assets/servers",
+    "dataType": "asset"
+  }
+}
+```
+
+지원 아이콘은 `server`, `shield`, `repository`입니다. 서로 다른 플러그인이 같은 경로를 선언하거나 존재하지 않는 데이터 종류·아이콘을 참조하면 배포 전 검증이 실패합니다. 메뉴는 registry의 등록 순서가 아니라 그룹 이름, 숫자 `order`, 제목, 경로 순으로 정렬됩니다.
+
+`plugins/`와 `registry.json`이 구조의 유일한 원본입니다. `pnpm generate:web-menu`는 전체 설정을 검증한 뒤 base URL·비밀·절대 파일 경로를 제외한 웹용 `apps/web/src/generated/plugin-menu.ts`를 생성합니다. 브라우저는 이 빌드 산출물만 읽으며 메뉴 구조를 생성하거나 수정하지 않습니다. `pnpm check:web-menu`는 Git 설정과 생성 파일이 다르면 실패합니다.
 
 ## 데이터 가공 코드
 

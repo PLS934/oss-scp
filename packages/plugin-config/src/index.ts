@@ -5,6 +5,7 @@ import { loadSourceDefinition } from './source-loader';
 import { loadLocalCsvSource } from './source-loaders/file';
 import type {
   CollectionDefinition,
+  ClientMenuItem,
   CollectionDefinitionBase,
   ConfigurationIssue,
   ConfigurationResult,
@@ -187,12 +188,14 @@ function loadPlugins(
   root: string,
   connections: Map<string, Candidate<HttpConnectionConfig>>,
   errors: ConfigurationIssue[],
+  menus: ClientMenuItem[],
 ): CollectionDefinition[] {
   const pluginRoot = join(root, 'plugins');
   const registryFile = join(pluginRoot, 'registry.json');
   const entries = readRegistry(root, registryFile, 'plugins', errors);
   const definitions: CollectionDefinition[] = [];
   const pluginIds = new Set<string>();
+  const menuPaths = new Map<string, string>();
 
   for (const entry of entries) {
     const pluginDirectory = safeResolve(
@@ -245,6 +248,17 @@ function loadPlugins(
         }
       }
     }
+    if (!(pluginValue.menu.dataType in pluginValue.data.types)) {
+      issue(errors, root, pluginFile, '/menu/dataType', `unknown data type: ${pluginValue.menu.dataType}`);
+      invalidReference = true;
+    }
+    const existingMenu = menuPaths.get(pluginValue.menu.path);
+    if (existingMenu) {
+      issue(errors, root, pluginFile, '/menu/path', `duplicate menu path: ${pluginValue.menu.path} (already declared by ${existingMenu})`);
+      invalidReference = true;
+    } else {
+      menuPaths.set(pluginValue.menu.path, displayPath(root, pluginFile));
+    }
     if (invalidReference) continue;
     const runtimePlugin: PluginRuntimeDefinition = {
       id: pluginValue.id,
@@ -252,6 +266,7 @@ function loadPlugins(
       version: pluginValue.version,
       transformPath,
       data: pluginValue.data,
+      menu: pluginValue.menu,
     };
 
     const sourceFile = safeResolve(
@@ -281,6 +296,7 @@ function loadPlugins(
       );
       if (!csvPath) continue;
       definitions.push(loadLocalCsvSource(runtimePlugin, sourceValue, csvPath));
+      menus.push({ ...pluginValue.menu, pluginId: pluginValue.id, sourceId: sourceValue.path });
       continue;
     }
 
@@ -319,6 +335,7 @@ function loadPlugins(
       },
     };
     definitions.push(loadSourceDefinition(commonDefinition, sourceValue));
+    menus.push({ ...pluginValue.menu, pluginId: pluginValue.id, sourceId: connection.value.id });
   }
   return definitions;
 }
@@ -327,6 +344,8 @@ export function validateRepository(rootDirectory: string): ConfigurationResult {
   const root = resolve(rootDirectory);
   const errors: ConfigurationIssue[] = [];
   const connections = loadConnections(root, errors);
-  const definitions = loadPlugins(root, connections, errors);
-  return errors.length > 0 ? { ok: false, errors } : { ok: true, definitions };
+  const menus: ClientMenuItem[] = [];
+  const definitions = loadPlugins(root, connections, errors, menus);
+  menus.sort((a, b) => a.group < b.group ? -1 : a.group > b.group ? 1 : a.order - b.order || (a.title < b.title ? -1 : a.title > b.title ? 1 : a.path < b.path ? -1 : a.path > b.path ? 1 : 0));
+  return errors.length > 0 ? { ok: false, errors } : { ok: true, definitions, menus };
 }
