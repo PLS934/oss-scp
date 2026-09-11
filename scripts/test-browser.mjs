@@ -67,12 +67,32 @@ try {
     { title: '저장소', icon: 'repository', group: '자산 관리', order: 20, path: '/assets/repositories', dataType: 'repository', pluginId: 'sample2-single-api', sourceId: 'mock-api-sample2', list: { columns: [{ key: 'fullName', label: '저장소 전체 이름', type: 'string' }] }, detail: { sections: [{ title: '기본 정보', fields: [{ key: 'fullName', label: '저장소 전체 이름', type: 'string' }] }] } },
   ];
   const recordRequests = [];
+  const detailRequests = [];
   let sourceRequests = 0;
   page.on('request', request => {
     const requestUrl = new URL(request.url());
     if (['/sample1', '/sample2', '/vulnerabilities.csv'].includes(requestUrl.pathname)) sourceRequests += 1;
   });
   await page.route('**/api/v1/plugin-menus', route => route.fulfill({ json: browserMenus }));
+  await page.route('**/api/v1/records/*', async route => {
+    const id = new URL(route.request().url()).pathname.split('/').at(-1);
+    detailRequests.push(id);
+    if (id === '00000000-0000-4000-8000-000000000404') {
+      await route.fulfill({ status: 404, json: { code: 'RECORD_NOT_FOUND', message: 'private server text' } });
+      return;
+    }
+    if (id === '00000000-0000-4000-8000-000000000500') {
+      await route.fulfill({ status: 500, json: { code: 'INTERNAL_ERROR', message: 'private server text' } });
+      return;
+    }
+    const mismatch = id === '00000000-0000-4000-8000-000000000403';
+    await route.fulfill({ json: {
+      id, pluginId: mismatch ? 'sample1-offset-api' : 'sample2-single-api',
+      sourceId: mismatch ? 'mock-api-sample1' : 'mock-api-sample2', dataType: mismatch ? 'asset' : 'repository',
+      externalKey: 'source-visible-key', sourceValues: { fullName: '<b>example/another-repository</b>', secret: 'never-render' },
+      firstSeenAt: '2026-09-11T01:00:00.000Z', lastSeenAt: '2026-09-11T01:01:00.000Z',
+    } });
+  });
   await page.route('**/api/v1/records?*', async route => {
     const requestUrl = new URL(route.request().url());
     const pluginId = requestUrl.searchParams.get('pluginId');
@@ -130,6 +150,31 @@ try {
   await expect(page.getByText('never-render')).toHaveCount(0);
   await page.reload();
   await expect(page.getByRole('cell', { name: 'example/another-repository' })).toBeVisible();
+  await page.getByRole('link', { name: '보기' }).click();
+  await expect(page).toHaveURL(`${url}/assets/repositories/00000000-0000-4000-8000-000000000001`);
+  await expect(page.getByRole('heading', { name: '저장소 상세' })).toBeVisible();
+  await expect(page.getByText('<b>example/another-repository</b>')).toBeVisible();
+  await expect(page.locator('b')).toHaveCount(0);
+  await expect(page.getByText('never-render')).toHaveCount(0);
+  await page.reload();
+  await expect(page.getByRole('heading', { name: '저장소 상세' })).toBeVisible();
+  await page.getByRole('link', { name: '목록으로 돌아가기' }).click();
+  await expect(page.getByRole('cell', { name: 'example/another-repository' })).toBeVisible();
+
+  const beforeInvalid = detailRequests.length;
+  await page.goto(`${url}/assets/repositories/not-a-uuid`);
+  await expect(page.getByRole('heading', { name: '잘못된 레코드 ID입니다.' })).toBeVisible();
+  assert.equal(detailRequests.length, beforeInvalid, '잘못된 UUID가 상세 API를 호출했습니다.');
+  await page.goto(`${url}/assets/repositories/00000000-0000-4000-8000-000000000404`);
+  await expect(page.getByRole('heading', { name: '저장 레코드를 찾을 수 없습니다.' })).toBeVisible();
+  await expect(page.getByText('private server text')).toHaveCount(0);
+  await page.goto(`${url}/assets/repositories/00000000-0000-4000-8000-000000000403`);
+  await expect(page.getByRole('heading', { name: '현재 플러그인에 속한 레코드가 아닙니다.' })).toBeVisible();
+  await expect(page.getByText('source-visible-key')).toHaveCount(0);
+  await page.goto(`${url}/assets/repositories/00000000-0000-4000-8000-000000000500`);
+  await expect(page.getByRole('heading', { name: '상세 정보를 불러오지 못했습니다.' })).toBeVisible();
+  await expect(page.getByRole('button', { name: '다시 시도' })).toBeVisible();
+  await expect(page.getByText('private server text')).toHaveCount(0);
   assert.equal(sourceRequests, 0, '브라우저 목록이 원천 API를 호출했습니다.');
   await page.goto(`${url}/removed-plugin`);
   await expect(page.getByRole('heading', { name: '페이지를 찾을 수 없습니다' })).toBeVisible();
@@ -160,7 +205,7 @@ try {
   await page.reload();
   await expect(page.getByRole('status')).toHaveText('서버 연결 실패');
   await expect(page.getByRole('heading', { name: 'OSS-SCP HMR 확인', exact: true })).toBeVisible();
-  console.log('브라우저: 선언형 목록·cursor·묶음 크기·플러그인 재사용·원천 미호출·직접 경로·새로고침·not-found·health·API 404·포트 충돌·HMR 통과');
+  console.log('브라우저: 선언형 목록·상세 이동·직접 URL·새로고침·복귀·상세 오류·cursor·묶음 크기·플러그인 재사용·원천 미호출·not-found·health·API 404·포트 충돌·HMR 통과');
 } catch (error) {
   console.error(api.output(), web?.output());
   throw error;

@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
-import type { ListColumn, MenuItem } from './menu';
+import { Link } from 'react-router-dom';
+import { recordDetailPath, type ListColumn, type MenuItem } from './menu';
 import {
   listRecords,
   type ApiResult,
@@ -61,8 +62,8 @@ export function RecordListView({ menu, limit, loading, result, error, onLimitCha
     {!loading && !error && result?.collection.status === 'success' && !hasItems ? <p className="empty-state">수집이 완료됐지만 표시할 결과가 없습니다.</p> : null}
     {!loading && !error && result && result.collection.status !== 'never_collected' && result.collection.status !== 'success' && !hasItems ? <p className="empty-state">현재 표시할 저장 데이터가 없습니다.</p> : null}
     {!loading && !error && result && hasItems ? <div className="record-table-wrap"><table>
-      <thead><tr>{menu.list.columns.map(column => <th key={column.key} scope="col">{column.label}</th>)}</tr></thead>
-      <tbody>{result.items.map(item => <tr key={item.id}>{menu.list.columns.map(column => <td key={column.key}>{formatColumnValue(column.type, item.sourceValues[column.key])}</td>)}</tr>)}</tbody>
+      <thead><tr>{menu.list.columns.map(column => <th key={column.key} scope="col">{column.label}</th>)}<th scope="col">상세</th></tr></thead>
+      <tbody>{result.items.map(item => <tr key={item.id}>{menu.list.columns.map(column => <td key={column.key}>{formatColumnValue(column.type, item.sourceValues[column.key])}</td>)}<td><Link to={recordDetailPath(menu.path, item.id)}>보기</Link></td></tr>)}</tbody>
     </table></div> : null}
     {!loading && !error && result && hasItems ? <div className="pagination">
       <span>{result.items.length}개 항목</span>

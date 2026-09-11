@@ -36,3 +36,7 @@ export function groupMenus(menus: readonly MenuItem[]) {
     return groups;
   }, new Map());
 }
+
+export function recordDetailPath(menuPath: string, recordId: string): string {
+  return `${menuPath}/${encodeURIComponent(recordId)}`;
+}
