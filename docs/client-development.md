@@ -131,7 +131,15 @@ if (first.ok && first.data.pageInfo.nextCursor) {
 
 두 함수는 예외 대신 `{ ok: true, data }` 또는 `{ ok: false, error }`를 반환합니다. 오류 `kind`는 입력 오류 `INVALID_INPUT`, cursor 오류 `INVALID_CURSOR`, 상세 없음 `NOT_FOUND`, DB 조회 불가 `NOT_READY`, 계약에 맞지 않는 응답 `INVALID_RESPONSE`, 네트워크 오류 `NETWORK_ERROR`, 취소 `ABORTED`, 나머지 API 실패 `API_ERROR`입니다. 오류에는 서버 응답 원문이나 내부 접속 정보가 포함되지 않습니다. 화면 전환이나 재요청 시 `AbortController`를 취소하고 `ABORTED` 결과로 화면 상태를 갱신하지 않아야 합니다.
 
-현재 계층은 목록·상세 UI와 상태 관리, 캐시·자동 재시도·timeout을 제공하지 않습니다. 정확한 전체 건수, 임의 페이지 및 이전 cursor 이동, 검색·필터·사용자 지정 정렬도 현재 서버 계약과 클라이언트 함수의 범위가 아닙니다.
+API 계층 자체는 UI 상태, 캐시·자동 재시도·timeout을 제공하지 않습니다. 정확한 전체 건수, 임의 페이지 및 이전 cursor 이동, 검색·필터·사용자 지정 정렬도 현재 서버 계약과 클라이언트 함수의 범위가 아닙니다.
+
+## 플러그인 기본 목록
+
+등록된 메뉴 경로에서는 `apps/web/src/record-list.tsx`의 공통 목록이 route context와 검증된 `list.columns`를 결합합니다. 플러그인별 React 목록 코드는 만들지 않습니다. 화면은 columns 순서와 표시명을 사용하며 `sourceValues` 중 선언된 최상위 scalar 필드만 표시합니다. string은 그대로, number와 datetime은 한국어 locale, boolean은 `예`·`아니요`로 표현하고 null·누락·타입 불일치는 `—`로 표시합니다. 응답에 함께 온 미선언 필드, `omittedFields`, 큰 본문, 원천 설정과 Connection 정보는 렌더링하지 않습니다.
+
+첫 요청은 cursor 없이 20건을 읽습니다. 화면에서 20·50·100·200건 중 묶음 크기를 선택할 수 있으며 변경하면 기존 cursor를 버리고 첫 묶음부터 다시 조회합니다. `hasNextPage`가 true일 때만 서버의 불투명 `nextCursor`로 다음 묶음을 조회하고 현재 표를 새 묶음으로 교체합니다. 이전 묶음 복귀와 임의 페이지 이동은 아직 지원하지 않습니다. 메뉴 이동이나 조건 변경 중인 요청은 취소하고 늦은 응답을 무시합니다.
+
+목록은 로딩, 미수집, 정상 빈 결과, 수집 중, 마지막 실행 실패·부분 완료와 API 조회 실패를 구분합니다. 수집 중·실패·부분 완료 응답에 저장된 items가 있으면 상태 안내와 함께 기존 데이터를 계속 표시합니다. 조회 실패의 `다시 시도`는 같은 조회 범위·묶음·cursor를 재요청합니다. 검색·필터·사용자 지정 정렬, 개인 컬럼 선택·순서·너비, 중첩 object·array 고급 표시와 사용자 정의 React 화면은 후속 범위입니다.
 
 ## 환경변수
 
