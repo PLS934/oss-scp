@@ -3,11 +3,14 @@ import { execFileSync, spawnSync } from 'node:child_process';
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
+import { randomUUID } from 'node:crypto';
 import { GenericContainer, Wait } from 'testcontainers';
 import {
-  defaultMigrationsDirectory, discoverMigrations, mysqlAdapter, mysqlPoolConfig,
+  createMysqlRecordQuery, createMysqlRecordStorage, defaultMigrationsDirectory, discoverMigrations, mysqlAdapter, mysqlPoolConfig,
+  recordIdentity, recordQueryScopeIdentity,
   runMysqlMigrations,
 } from '../dist/index.js';
+import { verifyRecordContract } from './record-contract.mjs';
 
 const image = 'mysql:8.4.6';
 const password = 'integration-password';
@@ -78,7 +81,7 @@ describe('MySQL 어댑터', () => {
 describe('MySQL migration', () => {
   it('제품별 기본 디렉터리만 선택한다', () => {
     expect(defaultMigrationsDirectory('mysql')).toMatch(/migrations\/mysql$/);
-    expect(discoverMigrations(defaultMigrationsDirectory('mysql')).map(item => item.version)).toEqual([1]);
+    expect(discoverMigrations(defaultMigrationsDirectory('mysql')).map(item => item.version)).toEqual([1, 2, 3, 4, 5, 6]);
   });
   it('최초 적용·재실행·checksum과 실패 버전 미기록을 검증한다', async () => {
     const connection = await mysqlAdapter.connect(config());
@@ -112,5 +115,125 @@ describe('MySQL migration', () => {
     expect(failed.status).not.toBe(0);
     expect(`${failed.stdout}${failed.stderr}`).toContain('플랫폼 DB에 연결할 수 없습니다.');
     expect(`${failed.stdout}${failed.stderr}`).not.toContain(marker);
+  });
+});
+
+describe('MySQL 공통 레코드 저장·조회 계약', () => {
+  let connection;
+  let storage;
+  let query;
+
+  beforeAll(async () => {
+    connection = await mysqlAdapter.connect(config());
+    await runMysqlMigrations(connection, discoverMigrations(defaultMigrationsDirectory('mysql')), 5000);
+    storage = createMysqlRecordStorage(connection);
+    query = createMysqlRecordQuery(connection);
+  });
+  afterAll(async () => { await connection?.close(); });
+
+  const scopeFor = suffix => ({ pluginId: `mysql-${suffix}-${randomUUID()}`, sourceId: 'source-A', scopeType: 'full', scopeKey: '', configRevision: 'rev-1' });
+  const start = (scope, at = '2026-09-11T01:00:00.000Z') => storage.startRun({ ...scope, startedAt: at });
+  const commit = (runId, scope, patch = {}) => storage.commitBatch({
+    runId, scope, observedAt: '2026-09-11T01:01:00.000Z', expectedCheckpoint: null, nextCheckpoint: { offset: 1 },
+    processedCount: 1, acceptedCount: 1, records: [{ type: 'asset', key: 'server-1', values: { hostname: 'old' } }], relations: [], issues: [], ...patch,
+  });
+
+  it('제품 중립 공통 fixture를 통과한다', async () => {
+    await verifyRecordContract(storage, query, scopeFor('shared-contract'));
+  });
+
+  it('migration 재실행과 실행·checkpoint 상태 전이를 보존한다', async () => {
+    expect(await runMysqlMigrations(connection, discoverMigrations(defaultMigrationsDirectory('mysql')), 5000)).toBe(0);
+    const scope = scopeFor('run');
+    const runId = await start(scope);
+    await commit(runId, scope);
+    expect(await storage.getCheckpoint(scope)).toEqual({ offset: 1 });
+    await storage.finishRun({ runId, status: 'success', finishedAt: '2026-09-11T01:02:00.000Z' });
+    expect(await storage.getCheckpoint(scope)).toBeNull();
+    await expect(storage.finishRun({ runId, status: 'success', finishedAt: '2026-09-11T01:03:00.000Z' })).rejects.toMatchObject({ code: 'RUN_NOT_ACTIVE' });
+  });
+
+  it('키 타입·대소문자·긴 키를 구분하고 재수집 내부 ID를 유지한다', async () => {
+    const scope = scopeFor('identity');
+    const longKey = '가'.repeat(2048);
+    const runId = await start(scope);
+    await commit(runId, scope, { processedCount: 4, acceptedCount: 4, records: [
+      { type: 'asset', key: 'Key', values: { value: 'upper' } },
+      { type: 'asset', key: 'key', values: { value: 'lower' } },
+      { type: 'asset', key: 1, values: { value: null } },
+      { type: 'asset', key: longKey, values: { nested: { number: 1, datetime: '2026-09-11T01:00:00.000Z' } } },
+    ] });
+    const [before] = await connection.withClient(client => client.query("SELECT id FROM platform_records WHERE plugin_id=? AND external_key='Key'", [scope.pluginId]));
+    await connection.withClient(async client => {
+      await client.query('CREATE TABLE IF NOT EXISTS test_mysql_assignments(record_id char(36) CHARACTER SET ascii COLLATE ascii_bin PRIMARY KEY, assignee varchar(255) NOT NULL, CONSTRAINT test_mysql_assignments_record_fk FOREIGN KEY(record_id) REFERENCES platform_records(id)) ENGINE=InnoDB');
+      await client.query('INSERT INTO test_mysql_assignments(record_id, assignee) VALUES (?, ?)', [before[0].id, 'security-team']);
+    });
+    const next = await start(scope, '2026-09-11T02:00:00.000Z');
+    await commit(next, scope, { expectedCheckpoint: { offset: 1 }, nextCheckpoint: { offset: 2 }, records: [{ type: 'asset', key: 'Key', values: { value: 'updated' } }] });
+    const page = await query.listRecords({ pluginId: scope.pluginId, sourceId: scope.sourceId, dataType: 'asset', limit: 20 });
+    expect(page.items).toHaveLength(4);
+    expect((await query.getRecord(before[0].id))).toMatchObject({ id: before[0].id, sourceValues: { value: 'updated' } });
+    const [assignment] = await connection.withClient(client => client.query('SELECT assignee FROM test_mysql_assignments WHERE record_id=?', [before[0].id]));
+    expect(assignment[0].assignee).toBe('security-team');
+    expect(page.items.map(item => item.externalKey)).toEqual(expect.arrayContaining(['Key', 'key', 1, longKey]));
+  });
+
+  it('누락 관계와 checkpoint 충돌에서 묶음 전체를 rollback한다', async () => {
+    const scope = scopeFor('rollback');
+    const runId = await start(scope);
+    await expect(commit(runId, scope, { relations: [{ type: 'has', from: { type: 'asset', key: 'server-1' }, to: { type: 'finding', key: 'missing' } }] })).rejects.toMatchObject({ code: 'RELATION_NOT_FOUND' });
+    expect(await storage.getCheckpoint(scope)).toBeNull();
+    const [empty] = await connection.withClient(client => client.query('SELECT count(*) AS count FROM platform_records WHERE plugin_id=?', [scope.pluginId]));
+    expect(Number(empty[0].count)).toBe(0);
+    await commit(runId, scope, { processedCount: 2, acceptedCount: 2, records: [
+      { type: 'asset', key: 'server-1', values: { hostname: 'one' } }, { type: 'finding', key: 'finding-1', values: { severity: 'high' } },
+    ], relations: [{ type: 'has', from: { type: 'asset', key: 'server-1' }, to: { type: 'finding', key: 'finding-1' } }] });
+    await expect(commit(runId, scope, { expectedCheckpoint: { offset: 0 }, nextCheckpoint: { offset: 2 } })).rejects.toMatchObject({ code: 'CHECKPOINT_CONFLICT' });
+    expect(await storage.getCheckpoint(scope)).toEqual({ offset: 1 });
+  });
+
+  it('완료 재순회와 실패 재개를 구분하고 원천 데이터만 갱신한다', async () => {
+    const scope = scopeFor('resume');
+    const first = await start(scope);
+    await commit(first, scope);
+    await storage.finishRun({ runId: first, status: 'success', finishedAt: '2026-09-11T01:02:00.000Z' });
+    const rerun = await start(scope, '2026-09-11T02:00:00.000Z');
+    await commit(rerun, scope, { nextCheckpoint: { offset: 20 }, records: [{ type: 'asset', key: 'server-1', values: { hostname: 'rerun' } }] });
+    await storage.finishRun({ runId: rerun, status: 'failed', finishedAt: '2026-09-11T02:02:00.000Z' });
+    expect(await storage.getCheckpoint(scope)).toEqual({ offset: 20 });
+    const resumed = await start(scope, '2026-09-11T03:00:00.000Z');
+    await commit(resumed, scope, { expectedCheckpoint: { offset: 20 }, nextCheckpoint: { offset: 40 }, records: [{ type: 'asset', key: 'server-2', values: { hostname: 'resumed' } }] });
+    expect((await query.listRecords({ pluginId: scope.pluginId, sourceId: scope.sourceId, dataType: 'asset' })).items).toHaveLength(2);
+  });
+
+  it('동일 시각 keyset의 전체 순회와 마지막 부분 묶음에 중복·누락이 없다', async () => {
+    const scope = scopeFor('cursor');
+    const runId = await start(scope);
+    await commit(runId, scope, { processedCount: 47, acceptedCount: 47, observedAt: '2026-09-11T04:00:00.000Z', records: Array.from({ length: 47 }, (_, index) => ({ type: 'asset', key: `row-${index}`, values: { index, nullable: null, nested: { ok: true } } })) });
+    const ids = [];
+    let cursor;
+    do {
+      const page = await query.listRecords({ pluginId: scope.pluginId, sourceId: scope.sourceId, dataType: 'asset', limit: 20, ...(cursor ? { cursor } : {}) });
+      ids.push(...page.items.map(item => item.id));
+      cursor = page.pageInfo.nextCursor ?? undefined;
+      if (!cursor) expect(page.pageInfo.hasNextPage).toBe(false);
+    } while (cursor);
+    expect(ids).toHaveLength(47);
+    expect(new Set(ids).size).toBe(47);
+    expect(ids).toEqual([...ids].sort());
+    const [plan] = await connection.withClient(client => client.query('EXPLAIN SELECT id FROM platform_records WHERE query_scope_hash=? ORDER BY last_seen_at DESC, id ASC LIMIT 21', [recordQueryScopeIdentity(scope.pluginId, scope.sourceId, 'asset')]));
+    expect(plan[0].key).toBe('platform_records_cursor_index');
+  });
+
+  it('identity digest 충돌과 DB 오류를 민감정보 없는 오류로 바꾼다', async () => {
+    const scope = scopeFor('collision');
+    const runId = await start(scope);
+    await commit(runId, scope);
+    await connection.withClient(client => client.query("UPDATE platform_records SET external_key='different' WHERE identity_hash=?", [recordIdentity(scope.pluginId, scope.sourceId, 'asset', 'server-1')]));
+    await expect(commit(runId, scope, { expectedCheckpoint: { offset: 1 }, nextCheckpoint: { offset: 2 } })).rejects.toMatchObject({ code: 'PERSIST_FAILED', message: '플랫폼 데이터 저장에 실패했습니다.' });
+    const failed = createMysqlRecordQuery({ withClient: async () => { throw new Error('mysql://secret-password'); } });
+    const error = await failed.listRecords({ pluginId: 'p', sourceId: 's', dataType: 'asset' }).catch(value => value);
+    expect(error).toMatchObject({ code: 'QUERY_FAILED', message: '플랫폼 데이터 조회에 실패했습니다.' });
+    expect(error.message).not.toContain('secret-password');
   });
 });

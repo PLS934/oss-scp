@@ -16,7 +16,7 @@ GET /api/v1/records?pluginId=sample1&sourceId=sample-api&dataType=asset&limit=20
 GET /api/v1/records?pluginId=sample1&sourceId=sample-api&dataType=asset&limit=20&cursor=<opaque-token>
 ```
 
-`pluginId`, `sourceId`, `dataType`은 필수다. `limit`은 20·50·100·200 중 하나이며 생략하면 20이다. 결과는 `lastSeenAt` 내림차순, 같은 시각에는 내부 `id` 오름차순으로 고정된다. PostgreSQL은 offset 없이 마지막 정렬 키 다음부터 읽는다.
+`pluginId`, `sourceId`, `dataType`은 필수다. `limit`은 20·50·100·200 중 하나이며 생략하면 20이다. 결과는 `lastSeenAt` 내림차순, 같은 시각에는 내부 `id` 오름차순으로 고정된다. PostgreSQL과 MySQL 모두 offset 없이 마지막 정렬 키 다음부터 읽으며, MySQL은 UTC `DATETIME(3)`과 UUID binary collation으로 PostgreSQL과 같은 cursor 경계를 유지한다.
 
 ```json
 {
@@ -54,7 +54,7 @@ GET /api/v1/records?pluginId=sample1&sourceId=sample-api&dataType=asset&limit=20
 
 `collection.status`는 같은 plugin/source의 최신 전체 수집 실행 상태이며 `never_collected`, `running`, `success`, `partial`, `failed` 중 하나다. 이는 data type별 상태가 아니다. `lastStoredAt`은 현재 묶음이 아니라 조회 범위 전체의 마지막 저장 시각이다.
 
-이 계약은 정확한 전체 건수, 임의 페이지 번호 이동, 이전 cursor, 검색·필터·사용자 지정 정렬을 제공하지 않는다. 순회 중 레코드가 갱신되어 cursor 앞쪽으로 이동하면 현재 순회에 다시 나타나지 않을 수 있으므로 전체 스냅샷을 보장하지 않는다.
+이 계약은 두 지원 DB에서 동일하다. 정확한 전체 건수, 임의 페이지 번호 이동, 이전 cursor, 검색·필터·사용자 지정 정렬과 DB 제품 간 데이터 이전은 제공하지 않는다. 순회 중 레코드가 갱신되어 cursor 앞쪽으로 이동하면 현재 순회에 다시 나타나지 않을 수 있으므로 전체 스냅샷을 보장하지 않는다.
 
 ## 상세 조회
 
@@ -71,6 +71,6 @@ GET /api/v1/records/00000000-0000-4000-8000-000000000001
 | 400 | `INVALID_QUERY` | 필수 범위 누락, 허용되지 않은 limit 또는 잘못된 UUID |
 | 400 | `INVALID_CURSOR` | 잘못된 형식·버전 또는 현재 조건과 일치하지 않는 cursor |
 | 404 | `RECORD_NOT_FOUND` | 유효한 UUID에 해당하는 저장 레코드 없음 |
-| 503 | `QUERY_FAILED` | 플랫폼 DB 조회 실패 또는 지원하지 않는 DB 조회 adapter |
+| 503 | `QUERY_FAILED` | PostgreSQL 또는 MySQL 플랫폼 DB 조회 실패 |
 
 오류 응답은 안정된 코드와 메시지만 제공하며 SQL, 드라이버 오류, 접속 정보와 cursor 내부 값을 포함하지 않는다. 조회 실패를 원천 직접 조회로 대체하지 않는다.

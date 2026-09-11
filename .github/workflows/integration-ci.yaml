@@ -25,6 +25,8 @@ jobs:
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       - run: pnpm --filter @oss-scp/platform-db test
+      # sample1 동일 수집·가공·저장·재개·조회 계약을 MySQL에서도 검증
+      - run: pnpm test:integration:sample1:mysql
   postgres:
     name: PostgreSQL 17.6 연결 및 migration
     runs-on: ubuntu-24.04

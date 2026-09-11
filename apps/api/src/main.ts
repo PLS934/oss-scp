@@ -5,7 +5,7 @@ import { loadEnvFile } from 'node:process';
 import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module';
 import { readConfig } from './config';
-import { createPostgresRecordQuery, mysqlAdapter, postgresAdapter, readPlatformDbConfig, selectPlatformDbAdapter, type PostgresPlatformDbConnection } from '@oss-scp/platform-db';
+import { createPlatformRecordAdapters, mysqlAdapter, postgresAdapter, readPlatformDbConfig, selectPlatformDbAdapter } from '@oss-scp/platform-db';
 
 async function bootstrap() {
   const envFile = resolve(__dirname, '../../../.env');
@@ -14,7 +14,7 @@ async function bootstrap() {
   const adapters = [postgresAdapter, mysqlAdapter] as const;
   const dbConfig = readPlatformDbConfig(process.env, adapters);
   const connection = await selectPlatformDbAdapter(dbConfig.type, adapters).connect(dbConfig);
-  const query = dbConfig.type === 'postgres' ? createPostgresRecordQuery(connection as PostgresPlatformDbConnection) : undefined;
+  const { query } = createPlatformRecordAdapters(dbConfig.type, connection);
   const app = await NestFactory.create(AppModule.register(connection, query), { abortOnError: false });
   app.enableShutdownHooks();
   try {

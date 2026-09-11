@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import {
   collectionScope,
+  connectPlatformStorage,
   connectPostgresStorage,
   configRevision,
   executeManualCollection,
@@ -104,8 +105,8 @@ describe('실행 조립과 결과', () => {
 });
 
 describe('플랫폼 DB 저장 provider', () => {
-  it('MySQL RecordStorage 미지원과 잘못된 설정을 실행 전에 구분한다', async () => {
-    await expect(connectPostgresStorage({ PLATFORM_DB_TYPE: 'mysql' })).rejects.toMatchObject({ code: 'unsupported_db_storage', phase: 'config' });
+  it('PostgreSQL과 MySQL의 잘못된 설정을 같은 공통 오류로 구분한다', async () => {
+    await expect(connectPlatformStorage({ PLATFORM_DB_TYPE: 'mysql' })).rejects.toMatchObject({ code: 'platform_db_config', phase: 'config' });
     await expect(connectPostgresStorage({ PLATFORM_DB_TYPE: 'postgres' })).rejects.toMatchObject({ code: 'platform_db_config', phase: 'config' });
   });
 

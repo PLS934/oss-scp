@@ -5,11 +5,12 @@ import { runCollection, CollectionRunnerError, type CollectionCollector, type Co
 import { collectHttpOffset, collectHttpSingle } from '@oss-scp/http-collector';
 import { collectLocalCsv } from '@oss-scp/local-csv-source';
 import {
-  createPostgresRecordStorage,
+  createPlatformRecordAdapters,
+  mysqlAdapter,
   postgresAdapter,
   readPlatformDbConfig,
+  selectPlatformDbAdapter,
   type CollectionScope,
-  type PostgresPlatformDbConnection,
   type RecordStorage,
 } from '@oss-scp/platform-db';
 import { validateRepository, type CollectionDefinition, type ConfigurationResult, type OffsetCollectionDefinition, type SingleCollectionDefinition } from '@oss-scp/plugin-config';
@@ -167,19 +168,23 @@ export function idempotentClose(resource: Closeable): Closeable {
   return { close: () => closing ??= resource.close().catch(() => undefined) };
 }
 
-export async function connectPostgresStorage(env: Readonly<Record<string, string | undefined>>): Promise<{ storage: RecordStorage; resource: Closeable }> {
+export async function connectPlatformStorage(env: Readonly<Record<string, string | undefined>>): Promise<{ storage: RecordStorage; resource: Closeable }> {
+  const adapters = [postgresAdapter, mysqlAdapter] as const;
   let config;
-  try { config = readPlatformDbConfig(env, [postgresAdapter]); }
-  catch { throw new ManualCollectionError(env.PLATFORM_DB_TYPE === 'mysql' ? 'unsupported_db_storage' : 'platform_db_config', 'config'); }
-  let connection: PostgresPlatformDbConnection;
-  try { connection = await postgresAdapter.connect(config) as PostgresPlatformDbConnection; }
+  try { config = readPlatformDbConfig(env, adapters); }
+  catch { throw new ManualCollectionError('platform_db_config', 'config'); }
+  let connection;
+  try { connection = await selectPlatformDbAdapter(config.type, adapters).connect(config); }
   catch { throw new ManualCollectionError('platform_db_connection', 'runtime'); }
-  return { storage: createPostgresRecordStorage(connection), resource: idempotentClose(connection) };
+  return { storage: createPlatformRecordAdapters(config.type, connection).storage, resource: idempotentClose(connection) };
 }
+
+/** @deprecated connectPlatformStorage를 사용한다. */
+export const connectPostgresStorage = connectPlatformStorage;
 
 export const defaultDependencies: ManualCollectionDependencies = {
   validate: validateRepository,
-  connectStorage: connectPostgresStorage,
+  connectStorage: connectPlatformStorage,
   run: runCollection,
   now: () => new Date().toISOString(),
 };
