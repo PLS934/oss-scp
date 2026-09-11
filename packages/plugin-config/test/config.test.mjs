@@ -70,10 +70,10 @@ describe('validateRepository', () => {
     if (!result.ok) return;
     expect(result.definitions).toHaveLength(4);
     expect(result.menus).toEqual([
-      { title: '취약점', icon: 'shield', group: '보안 관리', order: 10, path: '/vulnerabilities', dataType: 'vulnerability', pluginId: 'vulnerabilities-local-csv', sourceId: 'fixtures/csv/vulnerabilities.csv' },
-      { title: 'HTTP 취약점', icon: 'shield', group: '보안 관리', order: 20, path: '/vulnerabilities/http', dataType: 'vulnerability', pluginId: 'vulnerabilities-http-csv', sourceId: 'mock-api-vulnerabilities-csv' },
-      { title: '서버 자산', icon: 'server', group: '자산 관리', order: 10, path: '/assets/servers', dataType: 'asset', pluginId: 'sample1-offset-api', sourceId: 'mock-api-sample1' },
-      { title: '저장소', icon: 'repository', group: '자산 관리', order: 20, path: '/assets/repositories', dataType: 'repository', pluginId: 'sample2-single-api', sourceId: 'mock-api-sample2' },
+      { title: '취약점', icon: 'shield', group: '보안 관리', order: 10, path: '/vulnerabilities', dataType: 'vulnerability', pluginId: 'vulnerabilities-local-csv', sourceId: 'fixtures/csv/vulnerabilities.csv', list: { columns: [{ key: 'cve', label: 'CVE', type: 'string' }, { key: 'name', label: '취약점명', type: 'string' }, { key: 'score', label: '점수', type: 'number' }, { key: 'affected', label: '영향 여부', type: 'boolean' }, { key: 'observedAt', label: '관측 시각', type: 'datetime' }] } },
+      { title: 'HTTP 취약점', icon: 'shield', group: '보안 관리', order: 20, path: '/vulnerabilities/http', dataType: 'vulnerability', pluginId: 'vulnerabilities-http-csv', sourceId: 'mock-api-vulnerabilities-csv', list: { columns: [{ key: 'cve', label: 'CVE', type: 'string' }, { key: 'name', label: '취약점명', type: 'string' }, { key: 'score', label: '점수', type: 'number' }, { key: 'affected', label: '영향 여부', type: 'boolean' }, { key: 'observedAt', label: '관측 시각', type: 'datetime' }] } },
+      { title: '서버 자산', icon: 'server', group: '자산 관리', order: 10, path: '/assets/servers', dataType: 'asset', pluginId: 'sample1-offset-api', sourceId: 'mock-api-sample1', list: { columns: [{ key: 'hostname', label: '호스트명', type: 'string' }, { key: 'environment', label: '환경', type: 'string' }, { key: 'ip', label: 'IP 주소', type: 'string' }, { key: 'enabled', label: '활성 상태', type: 'boolean' }] } },
+      { title: '저장소', icon: 'repository', group: '자산 관리', order: 20, path: '/assets/repositories', dataType: 'repository', pluginId: 'sample2-single-api', sourceId: 'mock-api-sample2', list: { columns: [{ key: 'fullName', label: '저장소 전체 이름', type: 'string' }, { key: 'active', label: '활성 상태', type: 'boolean' }, { key: 'feed', label: '피드', type: 'string' }] } },
     ]);
     expect(result.definitions[0]).toEqual(expect.objectContaining({
       plugin: expect.objectContaining({
@@ -183,6 +183,58 @@ describe('validateRepository', () => {
     const result = validateRepository(root);
     expect(result.ok).toBe(false);
     if (!result.ok) expect(result.errors.some(error => error.path === expectedPath)).toBe(true);
+  });
+
+  test.each([
+    ['필드 label 누락', (plugin) => delete plugin.data.types.asset.fields.hostname.label, '/data/types/asset/fields/hostname/label'],
+    ['목록 views 누락', (plugin) => delete plugin.data.types.asset.views, '/data/types/asset/views'],
+    ['빈 목록 columns', (plugin) => (plugin.data.types.asset.views.list.columns = []), '/data/types/asset/views/list/columns'],
+    ['중복 목록 column', (plugin) => (plugin.data.types.asset.views.list.columns = ['hostname', 'hostname']), '/data/types/asset/views/list/columns'],
+  ])('플러그인의 %s을 schema 오류로 거부한다', (_name, mutate, expectedPath) => {
+    const root = temporaryRepository();
+    const plugin = readJson(root, 'plugins/sample1-offset-api/plugin.json');
+    mutate(plugin);
+    writeJson(root, 'plugins/sample1-offset-api/plugin.json', plugin);
+    const result = validateRepository(root);
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.errors.some(error => error.path === expectedPath)).toBe(true);
+  });
+
+  test('재귀 필드의 label 누락을 거부한다', () => {
+    const root = temporaryRepository();
+    const plugin = readJson(root, 'plugins/sample2-single-api/plugin.json');
+    delete plugin.data.types.repository.fields.details.fields.observedAt.label;
+    writeJson(root, 'plugins/sample2-single-api/plugin.json', plugin);
+    const result = validateRepository(root);
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.errors.some(error => error.path === '/data/types/repository/fields/details/fields/observedAt/label')).toBe(true);
+  });
+
+  test('목록의 누락 필드와 object·array 참조를 정확한 위치에서 거부한다', () => {
+    const root = temporaryRepository();
+    const plugin = readJson(root, 'plugins/sample2-single-api/plugin.json');
+    plugin.data.types.repository.views.list.columns = ['missing', 'details', 'members'];
+    writeJson(root, 'plugins/sample2-single-api/plugin.json', plugin);
+    const result = validateRepository(root);
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.errors).toEqual(expect.arrayContaining([
+      expect.objectContaining({ path: '/data/types/repository/views/list/columns/0', message: 'unknown field: missing' }),
+      expect.objectContaining({ path: '/data/types/repository/views/list/columns/1', message: 'list column must reference a scalar field: details' }),
+      expect.objectContaining({ path: '/data/types/repository/views/list/columns/2', message: 'list column must reference a scalar field: members' }),
+    ]));
+  });
+
+  test('목록 산출물은 선택된 scalar 메타데이터만 포함한다', () => {
+    const result = validateRepository(repositoryRoot);
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    const menu = result.menus.find(item => item.pluginId === 'sample2-single-api');
+    expect(menu?.list).toEqual({ columns: [
+      { key: 'fullName', label: '저장소 전체 이름', type: 'string' },
+      { key: 'active', label: '활성 상태', type: 'boolean' },
+      { key: 'feed', label: '피드', type: 'string' },
+    ] });
+    expect(JSON.stringify(menu)).not.toMatch(/assetKey|details|members|baseUrl|connection|transformPath/);
   });
 
   test('메뉴 데이터 종류와 registry 전체 중복 경로를 거부한다', () => {

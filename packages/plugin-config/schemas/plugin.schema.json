@@ -63,12 +63,15 @@
     "id": { "type": "string", "pattern": "^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$", "maxLength": 100 },
     "field": {
       "oneOf": [
-        { "type": "object", "additionalProperties": false, "required": ["type"], "properties": { "type": { "enum": ["string", "number", "boolean", "datetime"] }, "required": { "type": "boolean", "default": false } } },
-        { "type": "object", "additionalProperties": false, "required": ["type", "fields"], "properties": { "type": { "const": "object" }, "required": { "type": "boolean", "default": false }, "fields": { "type": "object", "minProperties": 1, "additionalProperties": { "$ref": "#/$defs/field" } } } },
-        { "type": "object", "additionalProperties": false, "required": ["type", "items"], "properties": { "type": { "const": "array" }, "required": { "type": "boolean", "default": false }, "items": { "$ref": "#/$defs/field" } } }
+        { "type": "object", "additionalProperties": false, "required": ["type", "label"], "properties": { "type": { "enum": ["string", "number", "boolean", "datetime"] }, "label": { "$ref": "#/$defs/label" }, "required": { "type": "boolean", "default": false } } },
+        { "type": "object", "additionalProperties": false, "required": ["type", "label", "fields"], "properties": { "type": { "const": "object" }, "label": { "$ref": "#/$defs/label" }, "required": { "type": "boolean", "default": false }, "fields": { "type": "object", "minProperties": 1, "additionalProperties": { "$ref": "#/$defs/field" } } } },
+        { "type": "object", "additionalProperties": false, "required": ["type", "label", "items"], "properties": { "type": { "const": "array" }, "label": { "$ref": "#/$defs/label" }, "required": { "type": "boolean", "default": false }, "items": { "$ref": "#/$defs/field" } } }
       ]
     },
-    "dataType": { "type": "object", "additionalProperties": false, "required": ["uniqueKey", "fields"], "properties": { "uniqueKey": { "type": "string", "minLength": 1, "maxLength": 100 }, "fields": { "type": "object", "minProperties": 1, "additionalProperties": { "$ref": "#/$defs/field" } } } },
+    "label": { "type": "string", "minLength": 1, "maxLength": 100 },
+    "dataType": { "type": "object", "additionalProperties": false, "required": ["uniqueKey", "fields", "views"], "properties": { "uniqueKey": { "type": "string", "minLength": 1, "maxLength": 100 }, "fields": { "type": "object", "minProperties": 1, "additionalProperties": { "$ref": "#/$defs/field" } }, "views": { "$ref": "#/$defs/views" } } },
+    "views": { "type": "object", "additionalProperties": false, "required": ["list"], "properties": { "list": { "$ref": "#/$defs/listView" } } },
+    "listView": { "type": "object", "additionalProperties": false, "required": ["columns"], "properties": { "columns": { "type": "array", "minItems": 1, "uniqueItems": true, "items": { "type": "string", "minLength": 1, "maxLength": 100 } } } },
     "relationEnd": { "type": "object", "additionalProperties": false, "required": ["types"], "properties": { "types": { "type": "array", "minItems": 1, "uniqueItems": true, "items": { "$ref": "#/$defs/id" } } } },
     "relation": { "type": "object", "additionalProperties": false, "required": ["from", "to"], "properties": { "from": { "$ref": "#/$defs/relationEnd" }, "to": { "$ref": "#/$defs/relationEnd" } } }
   }

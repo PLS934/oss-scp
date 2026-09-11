@@ -61,14 +61,15 @@ describe('실행 설정', () => {
 describe('플러그인 메뉴 API', () => {
   it('검증된 비민감 메뉴만 반환한다', async () => {
     const connection = { checkReady: async () => true, close: async () => undefined };
-    const menus = [{ title: '서버', icon: 'server', group: '자산', order: 10, path: '/servers', dataType: 'asset', pluginId: 'sample', sourceId: 'source' }];
+    const menus = [{ title: '서버', icon: 'server', group: '자산', order: 10, path: '/servers', dataType: 'asset', pluginId: 'sample', sourceId: 'source', list: { columns: [{ key: 'hostname', label: '호스트명', type: 'string' }] } }];
     const module = await Test.createTestingModule({ imports: [AppModule.register(connection, undefined, menus)] }).compile();
     const app = module.createNestApplication(); await app.listen(0, '127.0.0.1');
     try {
       const response = await fetch(`${await app.getUrl()}/api/v1/plugin-menus`);
       expect(response.status).toBe(200);
       expect(await response.json()).toEqual(menus);
-      expect(JSON.stringify(await (await fetch(`${await app.getUrl()}/api/v1/plugin-menus`)).json())).not.toMatch(/baseUrl|transformPath|password/);
+      const serialized = JSON.stringify(await (await fetch(`${await app.getUrl()}/api/v1/plugin-menus`)).json());
+      expect(serialized).not.toMatch(/baseUrl|connection|sourceConfig|transformPath|password/);
     } finally { await app.close(); }
   });
 });

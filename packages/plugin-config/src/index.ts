@@ -7,6 +7,7 @@ import { loadLocalCsvSource } from './source-loaders/file';
 import { loadHttpCsvSource } from './source-loaders/http-csv';
 import type {
   CollectionDefinition,
+  ClientListDefinition,
   ClientMenuItem,
   CollectionDefinitionBase,
   ConfigurationIssue,
@@ -242,11 +243,29 @@ function loadPlugins(
       continue;
     }
     let invalidReference = false;
+    const clientLists = new Map<string, ClientListDefinition>();
     for (const [type, definition] of Object.entries(pluginValue.data.types)) {
       if (!(definition.uniqueKey in definition.fields)) {
         issue(errors, root, pluginFile, `/data/types/${type}/uniqueKey`, 'unique key must reference a declared field');
         invalidReference = true;
       }
+      const columns: ClientListDefinition['columns'] = [];
+      for (const [index, key] of definition.views.list.columns.entries()) {
+        const field = definition.fields[key];
+        const path = `/data/types/${type}/views/list/columns/${index}`;
+        if (!field) {
+          issue(errors, root, pluginFile, path, `unknown field: ${key}`);
+          invalidReference = true;
+          continue;
+        }
+        if (field.type === 'object' || field.type === 'array') {
+          issue(errors, root, pluginFile, path, `list column must reference a scalar field: ${key}`);
+          invalidReference = true;
+          continue;
+        }
+        columns.push({ key, label: field.label, type: field.type });
+      }
+      clientLists.set(type, { columns });
     }
     for (const [relation, definition] of Object.entries(pluginValue.data.relations ?? {})) {
       for (const [end, types] of [['from', definition.from.types], ['to', definition.to.types]] as const) {
@@ -306,7 +325,7 @@ function loadPlugins(
       );
       if (!csvPath) continue;
       definitions.push(loadLocalCsvSource(runtimePlugin, sourceValue, csvPath));
-      menus.push({ ...pluginValue.menu, pluginId: pluginValue.id, sourceId: sourceValue.path });
+      menus.push({ ...pluginValue.menu, pluginId: pluginValue.id, sourceId: sourceValue.path, list: clientLists.get(pluginValue.menu.dataType)! });
       continue;
     }
 
@@ -321,7 +340,7 @@ function loadPlugins(
         continue;
       }
       definitions.push(loadHttpCsvSource(runtimePlugin, sourceValue, connection.value));
-      menus.push({ ...pluginValue.menu, pluginId: pluginValue.id, sourceId: connection.value.id });
+      menus.push({ ...pluginValue.menu, pluginId: pluginValue.id, sourceId: connection.value.id, list: clientLists.get(pluginValue.menu.dataType)! });
       continue;
     }
 
@@ -360,7 +379,7 @@ function loadPlugins(
       },
     };
     definitions.push(loadSourceDefinition(commonDefinition, sourceValue));
-    menus.push({ ...pluginValue.menu, pluginId: pluginValue.id, sourceId: connection.value.id });
+    menus.push({ ...pluginValue.menu, pluginId: pluginValue.id, sourceId: connection.value.id, list: clientLists.get(pluginValue.menu.dataType)! });
   }
   return definitions;
 }

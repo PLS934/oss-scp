@@ -10,13 +10,14 @@
     "types": {
       "asset": {
         "uniqueKey": "hostname",
+        "views": { "list": { "columns": ["hostname", "environment", "ip", "enabled"] } },
         "fields": {
-          "hostname": { "type": "string", "required": true },
-          "environment": { "type": "string", "required": true },
-          "ip": { "type": "string", "required": true },
-          "integerValue": { "type": "number", "required": true },
-          "decimalValue": { "type": "number", "required": true },
-          "enabled": { "type": "boolean", "required": true }
+          "hostname": { "type": "string", "label": "호스트명", "required": true },
+          "environment": { "type": "string", "label": "환경", "required": true },
+          "ip": { "type": "string", "label": "IP 주소", "required": true },
+          "integerValue": { "type": "number", "label": "정수 값", "required": true },
+          "decimalValue": { "type": "number", "label": "소수 값", "required": true },
+          "enabled": { "type": "boolean", "label": "활성 상태", "required": true }
         }
       }
     }
