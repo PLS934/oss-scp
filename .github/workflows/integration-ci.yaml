@@ -38,6 +38,8 @@ jobs:
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       - run: pnpm --filter @oss-scp/platform-db test
+      # sample1 72건 수집·가공·저장, 재실행, 실패 재개, partial 및 원천 독립 조회 검증
+      - run: pnpm test:integration:sample1
   local:
     name: 로컬 개발 및 배포 빌드
     runs-on: ubuntu-24.04

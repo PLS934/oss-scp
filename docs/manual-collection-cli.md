@@ -28,6 +28,14 @@ pnpm build:plugin-transforms
 pnpm collect -- sample1-offset-api
 ```
 
+실제 PostgreSQL과 sample1 mock API를 연결한 전체 프로세스 검증은 Docker가 실행 중인 개발 환경에서 다음 명령으로 수행한다. 이 검사는 72건 offset 수집, 동일 원천 재실행, 저장 실패 후 checkpoint 재개, 가공 오류 격리와 원천 종료 후 저장 데이터 조회를 확인한다.
+
+```sh
+pnpm test:integration:sample1
+```
+
+완료된 `full` 실행을 다시 시작하면 원천의 처음부터 새 전체 수집을 수행한다. 실행이 실패하면 마지막으로 원자 저장된 checkpoint에서 재개하므로, 실패한 묶음은 다시 처리되지만 이미 확정된 묶음은 건너뛴다.
+
 배포 API 이미지에도 같은 CLI와 승인된 registry·transform이 포함된다. Compose 서비스 설정과 secret을 그대로 사용해 별도 일회성 프로세스로 실행한다.
 
 ```sh

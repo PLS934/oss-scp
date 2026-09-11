@@ -30,6 +30,7 @@
     "test:docker:external-db": "bash scripts/test-external-db.sh",
     "test:docker:mysql": "bash scripts/test-mysql-docker.sh",
     "test:http-collector": "pnpm --filter @oss-scp/http-collector test",
+    "test:integration:sample1": "pnpm build:plugin-transforms && pnpm --filter @oss-scp/mock-api build && pnpm --filter @oss-scp/collector-cli build && pnpm --filter @oss-scp/api build && node scripts/test-sample1-postgres.mjs",
     "collect": "pnpm --filter @oss-scp/collector-cli start"
   },
   "devDependencies": {
