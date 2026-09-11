@@ -38,12 +38,13 @@ describe('validateRepository', () => {
     expect(result.ok).toBe(true);
     if (!result.ok) return;
     expect(result.definitions).toHaveLength(3);
-    expect(result.definitions[0]).toEqual({
-      plugin: {
+    expect(result.definitions[0]).toEqual(expect.objectContaining({
+      plugin: expect.objectContaining({
         id: 'sample1-offset-api',
         name: 'Sample 1 Offset API',
         version: '0.1.0',
-      },
+        transformPath: join(repositoryRoot, 'plugins/sample1-offset-api/dist/transform.js'),
+      }),
       connection: { id: 'mock-api-sample1', baseUrl: 'http://127.0.0.1:3001' },
       request: { method: 'GET', path: '/sample1', format: 'json' },
       limits: {
@@ -59,13 +60,13 @@ describe('validateRepository', () => {
         start: 0,
         limit: 20,
       },
-    });
-    expect(result.definitions[1]).toEqual({
-      plugin: {
+    }));
+    expect(result.definitions[1]).toEqual(expect.objectContaining({
+      plugin: expect.objectContaining({
         id: 'vulnerabilities-local-csv',
         name: 'Vulnerabilities Local CSV',
         version: '0.1.0',
-      },
+      }),
       source: {
         transport: 'file',
         format: 'csv',
@@ -73,18 +74,18 @@ describe('validateRepository', () => {
       },
       batching: { size: 20 },
       limits: {},
-    });
-    expect(result.definitions[2]).toEqual({
-      plugin: {
+    }));
+    expect(result.definitions[2]).toEqual(expect.objectContaining({
+      plugin: expect.objectContaining({
         id: 'sample2-single-api',
         name: 'Sample 2 Single API',
         version: '0.1.0',
-      },
+      }),
       connection: { id: 'mock-api-sample2', baseUrl: 'http://127.0.0.1:3002' },
       request: { method: 'GET', path: '/sample2', format: 'json' },
-      response: { itemsPath: 'items' },
+      response: { itemsPath: 'items', metadataPaths: ['test_field6'] },
       pagination: { type: 'single' },
-    });
+    }));
   });
 
   test('로컬 CSV source의 옵션과 저장소 내부 경로를 해석한다', () => {
@@ -252,6 +253,16 @@ describe('validateRepository', () => {
     expect(result.errors.some((error) => error.path === expectedPath)).toBe(true);
   });
 
+  test('single source의 잘못된 metadata 경로를 거부한다', () => {
+    const root = temporaryRepository();
+    const source = readJson(root, 'plugins/sample2-single-api/source.json');
+    source.metadataPaths = ['../secret'];
+    writeJson(root, 'plugins/sample2-single-api/source.json', source);
+    const result = validateRepository(root);
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.errors.some((error) => error.path.startsWith('/metadataPaths'))).toBe(true);
+  });
+
   test('다른 single API 값도 코어 변경 없이 해석한다', () => {
     const root = temporaryRepository();
     const plugin = readJson(root, 'plugins/sample2-single-api/plugin.json');
@@ -263,6 +274,7 @@ describe('validateRepository', () => {
       connectionRef: 'other-source',
       path: '/inventory/all-hosts',
       itemsPath: 'payload.records',
+      metadataPaths: ['meta.feed'],
     });
     writeJson(root, 'plugins/sample2-single-api/source.json', source);
     writeJson(root, 'connections/other-source.json', {
@@ -283,13 +295,13 @@ describe('validateRepository', () => {
 
     expect(result.ok).toBe(true);
     if (!result.ok) return;
-    expect(result.definitions[2]).toEqual({
-      plugin: { id: 'other-single-api', name: 'Other Single API', version: '0.1.0' },
+    expect(result.definitions[2]).toEqual(expect.objectContaining({
+      plugin: expect.objectContaining({ id: 'other-single-api', name: 'Other Single API', version: '0.1.0' }),
       connection: { id: 'other-source', baseUrl: 'https://inventory.example.test' },
       request: { method: 'GET', path: '/inventory/all-hosts', format: 'json' },
-      response: { itemsPath: 'payload.records' },
+      response: { itemsPath: 'payload.records', metadataPaths: ['meta.feed'] },
       pagination: { type: 'single' },
-    });
+    }));
     expect(JSON.stringify(result.definitions[2])).not.toMatch(
       /153|test_field2|test_field3|test_field6/,
     );
@@ -329,6 +341,35 @@ describe('validateRepository', () => {
     expect(result.errors).toContainEqual(
       expect.objectContaining({ path: '/source', message: expect.stringContaining('inside') }),
     );
+  });
+
+  test.each([
+    ['가공 경로 이탈', (plugin) => (plugin.transform = './../outside.js'), '/transform'],
+    ['가공 필수값 누락', (plugin) => delete plugin.transform, '/transform'],
+    ['데이터 정의 누락', (plugin) => delete plugin.data, '/data'],
+    ['잘못된 재귀 필드', (plugin) => (plugin.data.types.asset.fields.details = { type: 'object' }), '/data/types/asset/fields/details'],
+  ])('플러그인의 %s을 거부한다', (_name, mutate, expectedPath) => {
+    const root = temporaryRepository();
+    const plugin = readJson(root, 'plugins/sample1-offset-api/plugin.json');
+    mutate(plugin);
+    writeJson(root, 'plugins/sample1-offset-api/plugin.json', plugin);
+    const result = validateRepository(root);
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.errors.some((error) => error.path.startsWith(expectedPath))).toBe(true);
+  });
+
+  test('유일키와 관계의 잘못된 데이터 참조를 거부한다', () => {
+    const root = temporaryRepository();
+    const plugin = readJson(root, 'plugins/sample1-offset-api/plugin.json');
+    plugin.data.types.asset.uniqueKey = 'missing';
+    plugin.data.relations = { owns: { from: { types: ['asset'] }, to: { types: ['missing-type'] } } };
+    writeJson(root, 'plugins/sample1-offset-api/plugin.json', plugin);
+    const result = validateRepository(root);
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.errors).toEqual(expect.arrayContaining([
+      expect.objectContaining({ path: '/data/types/asset/uniqueKey' }),
+      expect.objectContaining({ path: '/data/relations/owns/to/types' }),
+    ]));
   });
 
   test('누락된 source 파일과 Connection 참조를 명확히 보고한다', () => {

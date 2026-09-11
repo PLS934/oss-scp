@@ -28,6 +28,7 @@
             "maxRecordBytes": { "type": "integer", "minimum": 1, "maximum": 104857600 }
           }
         },
+        "metadataPaths": { "type": "array", "uniqueItems": true, "maxItems": 20, "items": { "$ref": "#/$defs/jsonPath" } },
         "pagination": {
           "oneOf": [
             { "$ref": "https://oss-scp.dev/schemas/source-offset-v1.json" },

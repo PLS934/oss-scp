@@ -3,5 +3,21 @@
   "id": "sample2-single-api",
   "name": "Sample 2 Single API",
   "version": "0.1.0",
-  "source": "./source.json"
+  "source": "./source.json",
+  "transform": "./dist/transform.js",
+  "data": {
+    "types": {
+      "repository": {
+        "uniqueKey": "assetKey",
+        "fields": {
+          "assetKey": { "type": "string", "required": true },
+          "fullName": { "type": "string", "required": true },
+          "active": { "type": "boolean", "required": true },
+          "details": { "type": "object", "required": true, "fields": { "label": { "type": "string", "required": true }, "observedAt": { "type": "datetime", "required": true } } },
+          "members": { "type": "array", "required": true, "items": { "type": "object", "fields": { "login": { "type": "string", "required": true } } } },
+          "feed": { "type": "string", "required": true }
+        }
+      }
+    }
+  }
 }

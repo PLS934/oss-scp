@@ -9,13 +9,19 @@ plugins/
 ├── registry.json
 ├── sample1-offset-api/
 │   ├── plugin.json
-│   └── source.json
+│   ├── source.json
+│   ├── transform.ts
+│   └── dist/transform.js
 ├── vulnerabilities-local-csv/
 │   ├── plugin.json
-│   └── source.json
+│   ├── source.json
+│   ├── transform.ts
+│   └── dist/transform.js
 └── sample2-single-api/
     ├── plugin.json
-    └── source.json
+    ├── source.json
+    ├── transform.ts
+    └── dist/transform.js
 connections/
 ├── registry.json
 ├── mock-api-sample1.json
@@ -35,7 +41,33 @@ packages/plugin-config/
         └── single.ts
 ```
 
-`plugin.json`은 플러그인 ID·이름·릴리스 버전과 같은 폴더의 source 파일을 가리킵니다. sample1의 `source.json`은 `/sample1` 경로, GET, `rows`·`total` 응답 경로와 offset·limit 설정을 정의합니다. sample2의 `source.json`은 `/sample2` 경로, GET, `items` 응답 경로와 `single` 방식을 정의합니다.
+`plugin.json`은 플러그인 ID·이름·릴리스 버전, 같은 폴더의 source와 빌드된 transform 파일, 데이터 종류·필드·유일키·관계를 정의합니다. sample1의 `source.json`은 `/sample1` 경로, GET, `rows`·`total` 응답 경로와 offset·limit 설정을 정의합니다. sample2의 `source.json`은 `/sample2` 경로, GET, `items` 응답 경로와 `single` 방식을 정의합니다.
+
+## 데이터 가공 코드
+
+가공 코드는 `@oss-scp/plugin-sdk`의 `Transform` 타입을 사용하고 원천 레코드 한 건마다 호출됩니다. TypeScript 원본은 빌드 시 `dist/transform.js`로 변환되며 런타임은 등록·검증된 JavaScript만 동적 import합니다.
+
+```ts
+import type { Transform } from '@oss-scp/plugin-sdk';
+
+export const transform: Transform = ({ record, context }) => ({
+  records: [{
+    type: 'asset',
+    values: { id: String((record as Record<string, unknown>).id) },
+  }],
+  relations: [],
+});
+```
+
+입력 context에는 플러그인·수집처 식별자, 수집 시각, 취소 신호와 source 계약이 허용한 제한된 응답 metadata만 있습니다. DB 세션, NestJS 객체, Connection 비밀과 원본 HTTP 응답 전체는 전달하지 않습니다. 가공 결과의 알 수 없는 필드, 필수 필드·타입 오류, 비어 있거나 중복된 유일키와 잘못된 관계는 공통 검증에서 거부됩니다.
+
+한 원천 레코드의 출력 일부가 실패하면 같은 호출의 레코드·관계 전체를 격리하지만 다른 원천 레코드는 계속 처리합니다. 이 경우 결과는 `success`가 아니라 `partial`입니다. 원천 레코드 전체나 transform이 던진 임의 메시지는 공개 오류에 포함하지 않습니다.
+
+- sample1: 기본 필드명 매핑과 number·boolean 결과를 검증합니다.
+- sample2: 중첩 object·array와 최상위 `test_field6`의 제한된 metadata 전달을 검증합니다.
+- 로컬 CSV: 문자열을 가공 코드에서 number·boolean·datetime으로 명시적으로 변환합니다. 코어는 원천 문자열을 암묵적으로 바꾸지 않습니다.
+
+한 원천 레코드 출력은 레코드 100개, 관계 200개, 중첩 깊이 8, 배열 요소 1,000개와 JSON 1 MiB로 제한됩니다. 저장 입력 묶음은 레코드 100개 또는 JSON 1 MiB 중 먼저 도달하는 기준으로 전달하며 소비 완료를 기다립니다. Git PR로 승인된 플러그인을 같은 Node.js 프로세스에서 실행하므로 비신뢰 코드 sandbox와 동기 무한 루프 강제 종료는 지원하지 않습니다.
 
 CSV source는 설정 루트 기준 상대 파일 경로와 묶음 크기를 정의하며 Connection을 사용하지 않습니다.
 
@@ -63,6 +95,7 @@ Node.js 24.19.0과 pnpm 10.34.5를 준비하고 저장소 루트에서 실행합
 
 ```sh
 pnpm install --frozen-lockfile
+pnpm build
 pnpm validate:plugins
 ```
 
@@ -90,6 +123,7 @@ sample2 내부 수집 정의에는 다음 값이 포함됩니다.
 
 ```sh
 pnpm --filter @oss-scp/plugin-config test
+pnpm --filter @oss-scp/collection-engine test
 pnpm --filter @oss-scp/local-csv-source test
 pnpm test:process:plugin-config
 pnpm typecheck
@@ -100,11 +134,13 @@ pnpm lint
 
 현재 유효한 source 계약은 `json + offset HTTP`, `json + single HTTP`, `csv + file`입니다. source 설정 파일은 플러그인 폴더 안의 상대 JSON 파일이어야 합니다. HTTP 메서드는 GET이고 offset의 묶음 크기는 1~1000입니다. 로컬 CSV의 데이터 파일은 저장소 설정 루트 안의 상대 `.csv` 경로만 허용하고 묶음 크기는 1~1000입니다.
 
-설정 검증은 `itemsPath`가 가리키는 목록의 업무 필드나 응답 건수를 스키마에 고정하지 않습니다. 후속 single HTTP 수집·가공 단계는 sample2 항목의 `test_field2` 배열과 `test_field3` 객체뿐 아니라 목록 밖 최상위 `test_field6`에도 원천 구조대로 접근할 수 있어야 합니다. 이 문서의 검증 명령은 네트워크 응답을 읽지 않으므로 실제 전달 동작은 후속 single 수집 실행 작업에서 검증합니다.
+설정·가공 코어는 `itemsPath`가 가리키는 목록의 업무 필드나 응답 건수를 고정하지 않습니다. sample2 fixture 통합 검증은 `test_field2` 배열과 `test_field3` 객체를 보존하고 목록 밖 최상위 `test_field6`만 제한된 metadata로 전달합니다. 실제 single HTTP 호출은 #35에서 연결합니다.
 
 `vulnerabilities.csv` HTTP 다운로드는 아직 유효한 지원값이 아닙니다. 로컬 CSV source의 실행 API와 완료·오류 의미는 [로컬 CSV source 가이드](local-csv-source.md)를 따릅니다.
 
-이 설정을 사용한 offset HTTP 호출, 응답 스트리밍·크기 제한, timeout·취소와 처리 완료 대기는 구현되어 있습니다. single HTTP 호출, 가공, DB 저장과 영속 checkpoint는 후속 수집 작업에서 구현합니다. 로컬과 Docker처럼 실행 환경마다 Connection의 base URL을 선택하는 형식도 후속 배포 계약에서 확정합니다.
+이 설정을 사용한 offset HTTP 호출, 응답 스트리밍·크기 제한, timeout·취소와 처리 완료 대기 및 가공 실행·검증은 구현되어 있습니다. single HTTP 호출, HTTP CSV 다운로드, DB 저장과 영속 checkpoint는 후속 수집·저장 작업에서 구현합니다. 가공 실행·검증은 fixture와 로컬 CSV로 외부 자격증명 없이 확인합니다. 로컬과 Docker처럼 실행 환경마다 Connection의 base URL을 선택하는 형식도 후속 배포 계약에서 확정합니다.
+
+10,000건을 100건씩 반복 처리하는 기준에서는 실행기가 완료된 출력 전체를 보관하지 않고 소비자 완료 후 다음 묶음으로 진행해야 합니다. 자동화 테스트는 250건 입력에서 소비 묶음이 `100, 100, 50`으로 제한되는지 확인하며, 실제 메모리 수치는 Node.js·OS에 따라 달라져 절대 RSS 값 대신 묶음 상한과 전체 결과 비누적을 회귀 기준으로 사용합니다.
 
 두 mock API를 로컬에서 직접 확인하려면 각각 다른 터미널에서 실행합니다.
 
