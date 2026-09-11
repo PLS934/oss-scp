@@ -23,6 +23,20 @@ const output = JSON.parse(valid.stdout);
 if (output.definitions?.[0]?.plugin?.id !== 'sample1-offset-api') {
   throw new Error('CLI did not return the sample1 definition');
 }
+const sample1Menu = output.menus?.find(menu => menu.pluginId === 'sample1-offset-api');
+if (
+  JSON.stringify(sample1Menu?.list?.columns) !== JSON.stringify([
+    { key: 'hostname', label: '호스트명', type: 'string' },
+    { key: 'environment', label: '환경', type: 'string' },
+    { key: 'ip', label: 'IP 주소', type: 'string' },
+    { key: 'enabled', label: '활성 상태', type: 'boolean' },
+  ])
+) {
+  throw new Error('CLI did not return the validated sample1 list definition');
+}
+if (/baseUrl|transformPath|connection/.test(JSON.stringify(sample1Menu))) {
+  throw new Error('CLI exposed server-only values in the client menu definition');
+}
 const envValid = runWithEnv(repositoryRoot);
 if (envValid.status !== 0) throw new Error(`environment configuration failed: ${envValid.stderr}`);
 const missingRoot = spawnSync(process.execPath, [cli], { cwd: tmpdir(), encoding: 'utf8', env: { ...process.env, OSS_SCP_CONFIG_ROOT: '' } });

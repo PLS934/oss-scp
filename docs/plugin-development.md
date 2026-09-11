@@ -47,7 +47,7 @@ packages/plugin-config/
         └── single.ts
 ```
 
-`plugin.json`은 플러그인 ID·이름·릴리스 버전, 같은 폴더의 source와 빌드된 transform 파일, 데이터 종류·필드·유일키·관계 및 메뉴를 정의합니다. sample1의 `source.json`은 `/sample1` 경로, GET, `rows`·`total` 응답 경로와 offset·limit 설정을 정의합니다. sample2의 `source.json`은 `/sample2` 경로, GET, `items` 응답 경로와 `single` 방식을 정의합니다.
+`plugin.json`은 플러그인 ID·이름·릴리스 버전, 같은 폴더의 source와 빌드된 transform 파일, 데이터 종류·필드·유일키·관계, 메뉴와 기본 목록을 정의합니다. sample1의 `source.json`은 `/sample1` 경로, GET, `rows`·`total` 응답 경로와 offset·limit 설정을 정의합니다. sample2의 `source.json`은 `/sample2` 경로, GET, `items` 응답 경로와 `single` 방식을 정의합니다.
 
 ## 메뉴와 라우팅
 
@@ -69,6 +69,52 @@ packages/plugin-config/
 지원 아이콘은 `server`, `shield`, `repository`입니다. 서로 다른 플러그인이 같은 경로를 선언하거나 존재하지 않는 데이터 종류·아이콘을 참조하면 배포 전 검증이 실패합니다. 메뉴는 registry의 등록 순서가 아니라 그룹 이름, 숫자 `order`, 제목, 경로 순으로 정렬됩니다.
 
 운영자 Git revision의 `plugins/`, `connections/`와 각 `registry.json`이 구조의 유일한 원본입니다. 운영 환경에는 TypeScript 원본이 아니라 사전 빌드된 JavaScript 가공 모듈을 배포하고, 대상 플랫폼 이미지의 검증 명령으로 전체 설정과 모듈 export를 확인합니다. 브라우저는 API가 기동 시 검증한 `/api/v1/plugin-menus` 결과만 읽으며 메뉴 구조를 생성하거나 수정하지 않습니다.
+
+## 필드 표시명과 기본 목록
+
+모든 scalar·object·array 필드와 중첩된 `items`·`fields`에는 비어 있지 않은 `label`을 선언합니다. 각 데이터 종류의 `views.list.columns`에는 기본 목록에 표시할 최상위 scalar 필드 key를 원하는 순서대로 하나 이상 선언합니다.
+
+```json
+{
+  "uniqueKey": "hostname",
+  "views": {
+    "list": {
+      "columns": ["hostname", "environment", "enabled"]
+    }
+  },
+  "fields": {
+    "hostname": { "type": "string", "label": "호스트명", "required": true },
+    "environment": { "type": "string", "label": "환경", "required": true },
+    "enabled": { "type": "boolean", "label": "활성 상태", "required": true },
+    "details": {
+      "type": "object",
+      "label": "상세 정보",
+      "fields": {
+        "observedAt": { "type": "datetime", "label": "관측 시각" }
+      }
+    }
+  }
+}
+```
+
+목록 column은 같은 데이터 종류에 존재하는 `string`, `number`, `boolean`, `datetime` 필드만 참조할 수 있습니다. 존재하지 않는 key나 `details` 같은 object·array를 참조하면 해당 `columns` 배열 위치와 원인을 포함한 오류가 발생합니다. 빈 배열과 중복 key는 JSON Schema 검증에서 거부됩니다. object·array를 기본 목록에 표시하는 계약은 중첩 렌더링 작업에서 별도로 정의합니다.
+
+검증된 `/api/v1/plugin-menus` 응답은 각 메뉴에 다음처럼 선택된 column의 `key`, `label`, `type`만 포함합니다. 전체 필드 정의, source 요청, Connection과 transform 경로는 브라우저에 전달하지 않습니다.
+
+```json
+{
+  "pluginId": "sample1-offset-api",
+  "sourceId": "mock-api-sample1",
+  "dataType": "asset",
+  "list": {
+    "columns": [
+      { "key": "hostname", "label": "호스트명", "type": "string" },
+      { "key": "environment", "label": "환경", "type": "string" },
+      { "key": "enabled", "label": "활성 상태", "type": "boolean" }
+    ]
+  }
+}
+```
 
 ```bash
 pnpm build:plugin-transforms

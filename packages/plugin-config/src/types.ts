@@ -11,14 +11,20 @@ export interface PluginConfig {
 
 export type PluginMenuIcon = 'server' | 'shield' | 'repository';
 export interface PluginMenuDefinition { title: string; icon: PluginMenuIcon; group: string; order: number; path: string; dataType: string; }
-export interface ClientMenuItem extends PluginMenuDefinition { pluginId: string; sourceId: string; }
+export interface ClientListColumn { key: string; label: string; type: ScalarFieldType; }
+export interface ClientListDefinition { columns: ClientListColumn[]; }
+export interface ClientMenuItem extends PluginMenuDefinition { pluginId: string; sourceId: string; list: ClientListDefinition; }
 
 export type ScalarFieldType = 'string' | 'number' | 'boolean' | 'datetime';
 export type FieldDefinition =
-  | { type: ScalarFieldType; required?: boolean }
-  | { type: 'object'; required?: boolean; fields: Record<string, FieldDefinition> }
-  | { type: 'array'; required?: boolean; items: FieldDefinition };
-export interface DataTypeDefinition { uniqueKey: string; fields: Record<string, FieldDefinition>; }
+  | { type: ScalarFieldType; label: string; required?: boolean }
+  | { type: 'object'; label: string; required?: boolean; fields: Record<string, FieldDefinition> }
+  | { type: 'array'; label: string; required?: boolean; items: FieldDefinition };
+export interface DataTypeDefinition {
+  uniqueKey: string;
+  fields: Record<string, FieldDefinition>;
+  views: { list: { columns: string[] } };
+}
 export interface RelationDefinition { from: { types: string[] }; to: { types: string[] }; }
 export interface PluginDataDefinition { types: Record<string, DataTypeDefinition>; relations?: Record<string, RelationDefinition>; }
 export interface PluginRuntimeDefinition { id: string; name: string; version: string; transformPath: string; data: PluginDataDefinition; menu: PluginMenuDefinition; }

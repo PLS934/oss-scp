@@ -1,3 +1,9 @@
+export interface ListColumn {
+  key: string;
+  label: string;
+  type: 'string' | 'number' | 'boolean' | 'datetime';
+}
+
 export interface MenuItem {
   title: string;
   icon: 'server' | 'shield' | 'repository';
@@ -7,6 +13,7 @@ export interface MenuItem {
   dataType: string;
   pluginId: string;
   sourceId: string;
+  list: { columns: ListColumn[] };
 }
 
 export function groupMenus(menus: readonly MenuItem[]) {
