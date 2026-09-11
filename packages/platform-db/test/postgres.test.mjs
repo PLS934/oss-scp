@@ -6,7 +6,7 @@ import { GenericContainer, Wait } from 'testcontainers';
 import { spawnSync } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
 import {
-  createPostgresRecordStorage, defaultMigrationsDirectory,
+  createPostgresRecordQuery, createPostgresRecordStorage, defaultMigrationsDirectory,
   discoverMigrations, MigrationError,
   postgresAdapter, postgresPoolConfig, runMigrations,
 } from '../dist/index.js';
@@ -102,11 +102,13 @@ describe('migration', () => {
 describe('PostgreSQL 공통 레코드 저장 계약', () => {
   let connection;
   let storage;
+  let query;
 
   beforeAll(async () => {
     connection = await postgresAdapter.connect(config());
     await runMigrations(connection, discoverMigrations(defaultMigrationsDirectory('postgres')), 5000);
     storage = createPostgresRecordStorage(connection);
+    query = createPostgresRecordQuery(connection);
   });
   afterAll(async () => { await connection?.close(); });
 
@@ -236,5 +238,64 @@ describe('PostgreSQL 공통 레코드 저장 계약', () => {
     const preserved = await connection.withClient(client => client.query(`SELECT p.id, p.source_values, a.assignee
       FROM platform_records p JOIN test_platform_assignments a ON a.record_id=p.id WHERE p.id=$1`, [record.rows[0].id]));
     expect(preserved.rows[0]).toEqual({ id: record.rows[0].id, source_values: { hostname: 'new-source-value' }, assignee: 'security-team' });
+  });
+
+  it('저장 범위만 제한·정렬 조회하고 큰 필드는 목록에서 제외하되 상세에 유지한다', async () => {
+    const scope = testScope('query-list');
+    const runId = await start(scope);
+    const largeBody = 'x'.repeat(8193);
+    await commit(runId, scope, { processedCount: 3, acceptedCount: 3, records: [
+      { type: 'asset', key: 'old', values: { hostname: 'old' } },
+      { type: 'asset', key: 2, values: { hostname: 'new', body: largeBody } },
+      { type: 'finding', key: 'ignored-type', values: { title: 'finding' } },
+    ] });
+    await connection.withClient(client => client.query("UPDATE platform_records SET last_seen_at='2026-09-10T00:00:00Z' WHERE plugin_id=$1 AND external_key='old'", [scope.pluginId]));
+    await storage.finishRun({ runId, status: 'success', finishedAt: '2026-09-11T01:02:00Z' });
+
+    const result = await query.listRecords({ pluginId: scope.pluginId, sourceId: scope.sourceId, dataType: 'asset', limit: 1 });
+    expect(result.records).toHaveLength(1);
+    expect(result.records[0]).toMatchObject({ externalKey: 2, sourceValues: { hostname: 'new' }, omittedFields: ['body'] });
+    expect(result.lastStoredAt).toBe('2026-09-11T01:01:00.000Z');
+    expect(result.collection).toMatchObject({ scope: 'source', status: 'success', runId });
+    const detail = await query.getRecord(result.records[0].id);
+    expect(detail.sourceValues).toEqual({ hostname: 'new', body: largeBody });
+    expect((await query.listRecords({ pluginId: scope.pluginId, sourceId: 'other', dataType: 'asset' })).records).toEqual([]);
+
+    await connection.withClient(client => client.query(`INSERT INTO platform_records
+      (plugin_id, data_type, source_id, external_key_type, external_key, source_values, first_seen_at, last_seen_at)
+      SELECT $1, 'asset', $2, 'string', 'bulk-' || value, jsonb_build_object('value', value),
+        '2026-09-11T02:00:00Z', '2026-09-11T02:00:00Z' FROM generate_series(1, 205) value`, [scope.pluginId, scope.sourceId]));
+    const defaultList = await query.listRecords({ pluginId: scope.pluginId, sourceId: scope.sourceId, dataType: 'asset' });
+    const maximumList = await query.listRecords({ pluginId: scope.pluginId, sourceId: scope.sourceId, dataType: 'asset', limit: 200 });
+    expect(defaultList.records).toHaveLength(50); expect(maximumList.records).toHaveLength(200);
+    expect(defaultList.records.map(item => item.id)).toEqual([...defaultList.records.map(item => item.id)].sort());
+  });
+
+  it('미수집과 running·partial·failed 최신 전체 수집 상태를 구분한다', async () => {
+    const empty = testScope('query-state-empty');
+    expect((await query.listRecords({ pluginId: empty.pluginId, sourceId: empty.sourceId, dataType: 'asset' })).collection).toEqual({ scope: 'source', status: 'never_collected', runId: null, startedAt: null, finishedAt: null });
+
+    for (const status of ['running', 'partial', 'failed']) {
+      const scope = testScope(`query-state-${status}`);
+      const runId = await start(scope);
+      if (status === 'partial') {
+        await commit(runId, scope, { processedCount: 1, acceptedCount: 0, records: [], issues: [{ sourceIndex: 0, code: 'INVALID', path: '/0', message: 'invalid' }] });
+        await storage.finishRun({ runId, status, finishedAt: '2026-09-11T01:02:00Z' });
+      } else if (status === 'failed') await storage.finishRun({ runId, status, finishedAt: '2026-09-11T01:02:00Z' });
+      expect((await query.listRecords({ pluginId: scope.pluginId, sourceId: scope.sourceId, dataType: 'asset' })).collection).toMatchObject({ status, runId });
+    }
+  });
+
+  it('원천과 독립적으로 읽고 DB 실패를 민감정보 없는 오류로 변환한다', async () => {
+    let sourceCalls = 0;
+    const source = async () => { sourceCalls += 1; throw new Error('source unavailable'); };
+    void source;
+    await query.listRecords({ pluginId: 'no-source-call', sourceId: 'source', dataType: 'asset' });
+    expect(sourceCalls).toBe(0);
+    const marker = 'sensitive-query-password';
+    const failed = createPostgresRecordQuery({ withClient: async () => { throw new Error(marker); } });
+    const error = await failed.listRecords({ pluginId: 'p', sourceId: 's', dataType: 'asset' }).catch(value => value);
+    expect(error).toMatchObject({ code: 'QUERY_FAILED', message: '플랫폼 데이터 조회에 실패했습니다.' });
+    expect(error.message).not.toContain(marker);
   });
 });

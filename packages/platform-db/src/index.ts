@@ -16,3 +16,6 @@ export type {
   StorageIssue, StorageRecord, StorageRecordReference, StorageRelation,
 } from './storage';
 export { createPostgresRecordStorage } from './postgres-storage';
+export { QUERY_LIMITS, QueryError, summarizeSourceValues, validateListRecordsInput, validateRecordId } from './query';
+export type { CollectionStatus, ListRecordsInput, ListRecordsResult, QueryErrorCode, QueryRecord, QueryRecordSummary, RecordQuery } from './query';
+export { createPostgresRecordQuery } from './postgres-query';
