@@ -83,6 +83,11 @@ describe('validateRepository', () => {
       }),
       connection: { id: 'mock-api-sample2', baseUrl: 'http://127.0.0.1:3002' },
       request: { method: 'GET', path: '/sample2', format: 'json' },
+      limits: {
+        timeoutMs: 5000,
+        maxResponseBytes: 2097152,
+        maxRecordBytes: 262144,
+      },
       response: { itemsPath: 'items', metadataPaths: ['test_field6'] },
       pagination: { type: 'single' },
     }));
@@ -253,6 +258,34 @@ describe('validateRepository', () => {
     expect(result.errors.some((error) => error.path === expectedPath)).toBe(true);
   });
 
+  test.each([
+    ['한도 누락', (source) => delete source.limits, '/limits'],
+    ['timeout 하한 미만', (source) => (source.limits.timeoutMs = 99), '/limits/timeoutMs'],
+    ['timeout 상한 초과', (source) => (source.limits.timeoutMs = 300001), '/limits/timeoutMs'],
+    ['응답 하한 미만', (source) => (source.limits.maxResponseBytes = 1023), '/limits/maxResponseBytes'],
+    ['레코드가 응답보다 큼', (source) => (source.limits.maxRecordBytes = source.limits.maxResponseBytes + 1), '/limits/maxRecordBytes'],
+  ])('single source의 %s을 거부한다', (_name, mutate, expectedPath) => {
+    const root = temporaryRepository();
+    const source = readJson(root, 'plugins/sample2-single-api/source.json');
+    mutate(source);
+    writeJson(root, 'plugins/sample2-single-api/source.json', source);
+    const result = validateRepository(root);
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.errors.some((error) => error.path === expectedPath)).toBe(true);
+  });
+
+  test.each([
+    { timeoutMs: 100, maxResponseBytes: 1024, maxRecordBytes: 1 },
+    { timeoutMs: 300000, maxResponseBytes: 104857600, maxRecordBytes: 104857600 },
+  ])('single source 한도 경계값을 허용한다: %j', (limits) => {
+    const root = temporaryRepository();
+    const source = readJson(root, 'plugins/sample2-single-api/source.json');
+    source.limits = limits;
+    writeJson(root, 'plugins/sample2-single-api/source.json', source);
+    const result = validateRepository(root);
+    expect(result.ok).toBe(true);
+  });
+
   test('single source의 잘못된 metadata 경로를 거부한다', () => {
     const root = temporaryRepository();
     const source = readJson(root, 'plugins/sample2-single-api/source.json');
@@ -299,6 +332,7 @@ describe('validateRepository', () => {
       plugin: expect.objectContaining({ id: 'other-single-api', name: 'Other Single API', version: '0.1.0' }),
       connection: { id: 'other-source', baseUrl: 'https://inventory.example.test' },
       request: { method: 'GET', path: '/inventory/all-hosts', format: 'json' },
+      limits: source.limits,
       response: { itemsPath: 'payload.records', metadataPaths: ['meta.feed'] },
       pagination: { type: 'single' },
     }));

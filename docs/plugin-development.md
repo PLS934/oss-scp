@@ -1,6 +1,6 @@
 # 샘플 플러그인 설정과 검증
 
-`sample1-offset-api`와 `sample2-single-api`는 원천 mock API의 두 JSON 반환 방식을 설명하고, `vulnerabilities-local-csv`는 로컬 CSV 파일을 행 묶음으로 읽는 샘플 플러그인입니다. sample1은 offset·limit으로 나눠 받고, sample2는 전체 목록을 한 번에 받습니다. sample1의 실제 HTTP 수집은 [HTTP offset 수집 가이드](http-offset-collection.md)의 독립 수집 패키지로 실행할 수 있고, 로컬 CSV source는 공통 파서를 사용하는 수집 입력 실행까지 제공합니다.
+`sample1-offset-api`와 `sample2-single-api`는 원천 mock API의 두 JSON 반환 방식을 설명하고, `vulnerabilities-local-csv`는 로컬 CSV 파일을 행 묶음으로 읽는 샘플 플러그인입니다. sample1은 offset·limit으로 나눠 받고, sample2는 전체 목록을 한 번에 받습니다. 두 JSON 방식의 실제 HTTP 수집은 [HTTP JSON 수집 가이드](http-offset-collection.md)의 독립 수집 패키지로 실행할 수 있고, 로컬 CSV source는 공통 파서를 사용하는 수집 입력 실행까지 제공합니다.
 
 ## 파일 구성
 
@@ -134,11 +134,11 @@ pnpm lint
 
 현재 유효한 source 계약은 `json + offset HTTP`, `json + single HTTP`, `csv + file`입니다. source 설정 파일은 플러그인 폴더 안의 상대 JSON 파일이어야 합니다. HTTP 메서드는 GET이고 offset의 묶음 크기는 1~1000입니다. 로컬 CSV의 데이터 파일은 저장소 설정 루트 안의 상대 `.csv` 경로만 허용하고 묶음 크기는 1~1000입니다.
 
-설정·가공 코어는 `itemsPath`가 가리키는 목록의 업무 필드나 응답 건수를 고정하지 않습니다. sample2 fixture 통합 검증은 `test_field2` 배열과 `test_field3` 객체를 보존하고 목록 밖 최상위 `test_field6`만 제한된 metadata로 전달합니다. 실제 single HTTP 호출은 #35에서 연결합니다.
+설정·가공 코어는 `itemsPath`가 가리키는 목록의 업무 필드나 응답 건수를 고정하지 않습니다. sample2 HTTP 통합 검증은 `test_field2` 배열과 `test_field3` 객체를 보존하고 목록 밖 최상위 `test_field6`만 제한된 metadata로 전달합니다.
 
 `vulnerabilities.csv` HTTP 다운로드는 아직 유효한 지원값이 아닙니다. 로컬 CSV source의 실행 API와 완료·오류 의미는 [로컬 CSV source 가이드](local-csv-source.md)를 따릅니다.
 
-이 설정을 사용한 offset HTTP 호출, 응답 스트리밍·크기 제한, timeout·취소와 처리 완료 대기 및 가공 실행·검증은 구현되어 있습니다. single HTTP 호출, HTTP CSV 다운로드, DB 저장과 영속 checkpoint는 후속 수집·저장 작업에서 구현합니다. 가공 실행·검증은 fixture와 로컬 CSV로 외부 자격증명 없이 확인합니다. 로컬과 Docker처럼 실행 환경마다 Connection의 base URL을 선택하는 형식도 후속 배포 계약에서 확정합니다.
+이 설정을 사용한 offset·single HTTP 호출, 응답 수신·크기 제한, timeout·취소와 처리 완료 대기 및 가공 실행·검증은 구현되어 있습니다. HTTP CSV 다운로드, DB 저장과 영속 checkpoint는 후속 수집·저장 작업에서 구현합니다. 가공 실행·검증은 fixture와 로컬 CSV로 외부 자격증명 없이 확인합니다. 로컬과 Docker처럼 실행 환경마다 Connection의 base URL을 선택하는 형식도 후속 배포 계약에서 확정합니다.
 
 10,000건을 100건씩 반복 처리하는 기준에서는 실행기가 완료된 출력 전체를 보관하지 않고 소비자 완료 후 다음 묶음으로 진행해야 합니다. 자동화 테스트는 250건 입력에서 소비 묶음이 `100, 100, 50`으로 제한되는지 확인하며, 실제 메모리 수치는 Node.js·OS에 따라 달라져 절대 RSS 값 대신 묶음 상한과 전체 결과 비누적을 회귀 기준으로 사용합니다.
 

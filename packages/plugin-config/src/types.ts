@@ -47,6 +47,7 @@ export interface HttpCollectionLimits {
 }
 
 export type SingleSourceConfig = SourceConfigBase & {
+  limits: HttpCollectionLimits;
   pagination: { type: 'single' };
 };
 
@@ -91,6 +92,7 @@ export type OffsetCollectionDefinition = CollectionDefinitionBase & {
 };
 
 export type SingleCollectionDefinition = CollectionDefinitionBase & {
+  limits: HttpCollectionLimits;
   response: { itemsPath: string; metadataPaths?: string[] };
   pagination: { type: 'single' };
 };
