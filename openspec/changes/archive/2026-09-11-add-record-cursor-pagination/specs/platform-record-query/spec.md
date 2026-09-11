@@ -1,10 +1,4 @@
-# Platform Record Query Specification
-
-## Purpose
-
-원천 시스템의 가용성과 무관하게 플랫폼 DB에 저장된 공통 레코드의 제한된 목록·상세와 관련 수집 상태를 DB 제품에 종속되지 않은 계약으로 조회하게 한다.
-
-## Requirements
+## MODIFIED Requirements
 
 ### Requirement: Stored record lists are bounded and stably ordered
 플랫폼은 plugin ID, source ID와 data type이 모두 지정된 범위에서 저장 레코드 목록을 SHALL 반환해야 한다. 묶음 크기는 20·50·100·200 중 하나이고 기본값은 20이어야 한다. 첫 묶음과 후속 묶음은 `lastSeenAt` 내림차순과 내부 `id` 오름차순의 동일한 안정적 순서를 사용해야 하며 정확한 전체 건수를 계산해서는 안 된다.
@@ -35,21 +29,6 @@
 #### Scenario: Detail retains stored content
 - **WHEN** 조회자가 목록에서 필드가 제외된 레코드의 내부 ID로 상세를 조회한다
 - **THEN** 플랫폼은 저장 한도 안에서 영속화된 전체 원천 값을 반환한다
-
-### Requirement: Record details use platform identity
-플랫폼은 유효한 내부 UUID로 저장된 레코드 상세를 SHALL 조회해야 하며, DB 제품별 타입이나 드라이버 값을 공개 계약에 노출해서는 안 된다.
-
-#### Scenario: Existing detail is returned
-- **WHEN** 조회자가 존재하는 레코드의 내부 UUID로 상세를 조회한다
-- **THEN** 플랫폼은 그 레코드의 범위, 외부 키, 전체 원천 값과 관측 시각을 반환한다
-
-#### Scenario: Missing detail is distinguished
-- **WHEN** 유효한 내부 UUID에 해당하는 저장 레코드가 없다
-- **THEN** 플랫폼은 명시적인 찾을 수 없음 결과를 반환한다
-
-#### Scenario: Malformed identity is rejected
-- **WHEN** 상세 식별자가 UUID 형식이 아니다
-- **THEN** 플랫폼은 DB 쿼리를 실행하지 않고 안정된 잘못된 입력 오류를 반환한다
 
 ### Requirement: Query responses distinguish collection state
 범위 목록 조회는 같은 plugin ID와 source ID의 가장 최근 전체 수집 실행을 기준으로 `never_collected`, `running`, `success`, `partial`, `failed` 상태를 SHALL 구분해야 한다. 상태에는 실행 식별자와 시작·종료 시각을 가능한 경우 포함하고, 목록의 마지막 저장 시각은 반환된 묶음이 아니라 해당 조회 범위 전체의 가장 최근 `lastSeenAt`으로 제공해야 한다.

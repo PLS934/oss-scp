@@ -16,6 +16,6 @@ export type {
   StorageIssue, StorageRecord, StorageRecordReference, StorageRelation,
 } from './storage';
 export { createPostgresRecordStorage } from './postgres-storage';
-export { QUERY_LIMITS, QueryError, summarizeSourceValues, validateListRecordsInput, validateRecordId } from './query';
-export type { CollectionStatus, ListRecordsInput, ListRecordsResult, QueryErrorCode, QueryRecord, QueryRecordSummary, RecordQuery } from './query';
+export { encodeRecordCursor, QUERY_LIMITS, QueryError, RECORD_LIST_SORT, summarizeSourceValues, validateListRecordsInput, validateRecordId } from './query';
+export type { CollectionStatus, ListRecordsInput, ListRecordsResult, NormalizedListRecordsInput, QueryErrorCode, QueryRecord, QueryRecordSummary, RecordCursorBoundary, RecordPageInfo, RecordQuery } from './query';
 export { createPostgresRecordQuery } from './postgres-query';

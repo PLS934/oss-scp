@@ -252,14 +252,14 @@ describe('PostgreSQL 공통 레코드 저장 계약', () => {
     await connection.withClient(client => client.query("UPDATE platform_records SET last_seen_at='2026-09-10T00:00:00Z' WHERE plugin_id=$1 AND external_key='old'", [scope.pluginId]));
     await storage.finishRun({ runId, status: 'success', finishedAt: '2026-09-11T01:02:00Z' });
 
-    const result = await query.listRecords({ pluginId: scope.pluginId, sourceId: scope.sourceId, dataType: 'asset', limit: 1 });
-    expect(result.records).toHaveLength(1);
-    expect(result.records[0]).toMatchObject({ externalKey: 2, sourceValues: { hostname: 'new' }, omittedFields: ['body'] });
+    const result = await query.listRecords({ pluginId: scope.pluginId, sourceId: scope.sourceId, dataType: 'asset', limit: 20 });
+    expect(result.items).toHaveLength(2);
+    expect(result.items[0]).toMatchObject({ externalKey: 2, sourceValues: { hostname: 'new' }, omittedFields: ['body'] });
     expect(result.lastStoredAt).toBe('2026-09-11T01:01:00.000Z');
     expect(result.collection).toMatchObject({ scope: 'source', status: 'success', runId });
-    const detail = await query.getRecord(result.records[0].id);
+    const detail = await query.getRecord(result.items[0].id);
     expect(detail.sourceValues).toEqual({ hostname: 'new', body: largeBody });
-    expect((await query.listRecords({ pluginId: scope.pluginId, sourceId: 'other', dataType: 'asset' })).records).toEqual([]);
+    expect((await query.listRecords({ pluginId: scope.pluginId, sourceId: 'other', dataType: 'asset' })).items).toEqual([]);
 
     await connection.withClient(client => client.query(`INSERT INTO platform_records
       (plugin_id, data_type, source_id, external_key_type, external_key, source_values, first_seen_at, last_seen_at)
@@ -267,8 +267,23 @@ describe('PostgreSQL 공통 레코드 저장 계약', () => {
         '2026-09-11T02:00:00Z', '2026-09-11T02:00:00Z' FROM generate_series(1, 205) value`, [scope.pluginId, scope.sourceId]));
     const defaultList = await query.listRecords({ pluginId: scope.pluginId, sourceId: scope.sourceId, dataType: 'asset' });
     const maximumList = await query.listRecords({ pluginId: scope.pluginId, sourceId: scope.sourceId, dataType: 'asset', limit: 200 });
-    expect(defaultList.records).toHaveLength(50); expect(maximumList.records).toHaveLength(200);
-    expect(defaultList.records.map(item => item.id)).toEqual([...defaultList.records.map(item => item.id)].sort());
+    expect(defaultList.items).toHaveLength(20); expect(maximumList.items).toHaveLength(200);
+    expect(defaultList.items.map(item => item.id)).toEqual([...defaultList.items.map(item => item.id)].sort());
+    expect(defaultList.pageInfo).toMatchObject({ hasNextPage: true }); expect(defaultList.pageInfo.nextCursor).toEqual(expect.any(String));
+
+    const visited = []; let cursor;
+    do {
+      const page = await query.listRecords({ pluginId: scope.pluginId, sourceId: scope.sourceId, dataType: 'asset', limit: 20, ...(cursor ? { cursor } : {}) });
+      visited.push(...page.items.map(item => item.id)); cursor = page.pageInfo.nextCursor ?? undefined;
+      if (!page.pageInfo.hasNextPage) expect(cursor).toBeUndefined();
+    } while (cursor);
+    expect(visited).toHaveLength(207); expect(new Set(visited).size).toBe(207);
+    expect(defaultList.lastStoredAt).toBe('2026-09-11T02:00:00.000Z');
+
+    const plan = await connection.withClient(client => client.query(`EXPLAIN (COSTS OFF)
+      SELECT id FROM platform_records WHERE plugin_id=$1 AND source_id=$2 AND data_type='asset'
+      ORDER BY last_seen_at DESC, id ASC LIMIT 21`, [scope.pluginId, scope.sourceId]));
+    expect(plan.rows.map(row => row['QUERY PLAN']).join('\n')).toContain('platform_records_cursor_index');
   });
 
   it('미수집과 running·partial·failed 최신 전체 수집 상태를 구분한다', async () => {
@@ -284,6 +299,42 @@ describe('PostgreSQL 공통 레코드 저장 계약', () => {
       } else if (status === 'failed') await storage.finishRun({ runId, status, finishedAt: '2026-09-11T01:02:00Z' });
       expect((await query.listRecords({ pluginId: scope.pluginId, sourceId: scope.sourceId, dataType: 'asset' })).collection).toMatchObject({ status, runId });
     }
+  });
+
+  it('응답 크기 한도에서 cursor로 중단하고 다음 묶음에서 이어 읽는다', async () => {
+    const scope = testScope('query-page-bytes');
+    await connection.withClient(client => client.query(`INSERT INTO platform_records
+      (plugin_id, data_type, source_id, external_key_type, external_key, source_values, first_seen_at, last_seen_at)
+      SELECT $1, 'asset', $2, 'string', 'large-' || value,
+        jsonb_build_object('a', repeat('x', 8000), 'b', repeat('x', 8000), 'c', repeat('x', 8000), 'd', repeat('x', 8000),
+          'e', repeat('x', 8000), 'f', repeat('x', 8000), 'g', repeat('x', 8000), 'h', repeat('x', 8000)),
+        '2026-09-11T02:00:00Z', '2026-09-11T02:00:00Z' FROM generate_series(1, 80) value`, [scope.pluginId, scope.sourceId]));
+    const first = await query.listRecords({ pluginId: scope.pluginId, sourceId: scope.sourceId, dataType: 'asset', limit: 200 });
+    expect(first.items.length).toBeGreaterThan(0); expect(first.items.length).toBeLessThan(80);
+    expect(first.pageInfo).toMatchObject({ hasNextPage: true });
+    expect(first.items.every(item => Buffer.byteLength(JSON.stringify(item)) <= 64 * 1024)).toBe(true);
+    expect(Buffer.byteLength(JSON.stringify(first.items))).toBeLessThanOrEqual(4 * 1024 * 1024);
+    const second = await query.listRecords({ pluginId: scope.pluginId, sourceId: scope.sourceId, dataType: 'asset', limit: 200, cursor: first.pageInfo.nextCursor });
+    expect([...first.items, ...second.items]).toHaveLength(80);
+    expect(second.pageInfo).toEqual({ nextCursor: null, hasNextPage: false });
+  });
+
+  it('순회 중 경계 앞뒤 변경에도 cursor 경계를 유지한다', async () => {
+    const scope = testScope('query-concurrent');
+    await connection.withClient(client => client.query(`INSERT INTO platform_records
+      (plugin_id, data_type, source_id, external_key_type, external_key, source_values, first_seen_at, last_seen_at)
+      SELECT $1, 'asset', $2, 'string', 'row-' || value, jsonb_build_object('value', value),
+        '2026-09-11T02:00:00Z', '2026-09-11T02:00:00Z' FROM generate_series(1, 25) value`, [scope.pluginId, scope.sourceId]));
+    const first = await query.listRecords({ pluginId: scope.pluginId, sourceId: scope.sourceId, dataType: 'asset', limit: 20 });
+    await connection.withClient(client => client.query(`INSERT INTO platform_records
+      (plugin_id, data_type, source_id, external_key_type, external_key, source_values, first_seen_at, last_seen_at)
+      VALUES ($1, 'asset', $2, 'string', 'newer', '{}', '2026-09-11T03:00:00Z', '2026-09-11T03:00:00Z'),
+             ($1, 'asset', $2, 'string', 'older', '{}', '2026-09-11T01:00:00Z', '2026-09-11T01:00:00Z')`, [scope.pluginId, scope.sourceId]));
+    const second = await query.listRecords({ pluginId: scope.pluginId, sourceId: scope.sourceId, dataType: 'asset', limit: 20, cursor: first.pageInfo.nextCursor });
+    expect(second.items.map(item => item.externalKey)).toContain('older');
+    expect(second.items.map(item => item.externalKey)).not.toContain('newer');
+    expect(new Set([...first.items, ...second.items].map(item => item.id)).size).toBe(first.items.length + second.items.length);
+    expect(second.lastStoredAt).toBe('2026-09-11T03:00:00.000Z');
   });
 
   it('원천과 독립적으로 읽고 DB 실패를 민감정보 없는 오류로 변환한다', async () => {
