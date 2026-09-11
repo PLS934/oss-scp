@@ -13,4 +13,17 @@ main section { background: white; border: 1px solid #dce2e7; border-radius: 12px
 .success { color: #71d6a8; } .failure { color: #ff9a96; }
 .route-context div { display: grid; grid-template-columns: 110px 1fr; gap: 16px; }
 .route-context dt { font-weight: 700; } .route-context dd { margin: 0; overflow-wrap: anywhere; }
+.list-heading { display: flex; align-items: baseline; justify-content: space-between; gap: 20px; }
+.list-heading label { color: #516372; font-size: 14px; white-space: nowrap; }
+.list-heading select { margin-left: 6px; padding: 5px 8px; }
+.list-message { border-radius: 8px; padding: 12px 14px; background: #eef4f8; }
+.list-message.partial, .list-message.failed, .list-message.error { background: #fff0ef; color: #7d2420; }
+.list-message p { margin-top: 0; }
+.list-message button, .pagination button { padding: 7px 12px; cursor: pointer; }
+.empty-state { color: #516372; padding: 30px 0; text-align: center; }
+.record-table-wrap { overflow-x: auto; margin-top: 18px; }
+table { border-collapse: collapse; min-width: 100%; }
+th, td { border-bottom: 1px solid #dce2e7; padding: 11px 12px; text-align: left; white-space: nowrap; }
+th { background: #f4f6f8; }
+.pagination { display: flex; justify-content: flex-end; align-items: center; gap: 16px; margin-top: 18px; color: #516372; }
 @media (max-width: 700px) { .app-shell { grid-template-columns: 1fr; } main { margin: 24px auto; } }

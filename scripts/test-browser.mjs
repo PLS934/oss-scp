@@ -62,14 +62,75 @@ try {
   }
   browser = await chromium.launch();
   const page = await browser.newPage();
+  const browserMenus = [
+    { title: '서버 자산', icon: 'server', group: '자산 관리', order: 10, path: '/assets/servers', dataType: 'asset', pluginId: 'sample1-offset-api', sourceId: 'mock-api-sample1', list: { columns: [{ key: 'hostname', label: '호스트명', type: 'string' }, { key: 'score', label: '점수', type: 'number' }, { key: 'enabled', label: '활성', type: 'boolean' }, { key: 'observedAt', label: '관측 시각', type: 'datetime' }] } },
+    { title: '저장소', icon: 'repository', group: '자산 관리', order: 20, path: '/assets/repositories', dataType: 'repository', pluginId: 'sample2-single-api', sourceId: 'mock-api-sample2', list: { columns: [{ key: 'fullName', label: '저장소 전체 이름', type: 'string' }] } },
+  ];
+  const recordRequests = [];
+  let sourceRequests = 0;
+  page.on('request', request => {
+    const requestUrl = new URL(request.url());
+    if (['/sample1', '/sample2', '/vulnerabilities.csv'].includes(requestUrl.pathname)) sourceRequests += 1;
+  });
+  await page.route('**/api/v1/plugin-menus', route => route.fulfill({ json: browserMenus }));
+  await page.route('**/api/v1/records?*', async route => {
+    const requestUrl = new URL(route.request().url());
+    const pluginId = requestUrl.searchParams.get('pluginId');
+    const limit = Number(requestUrl.searchParams.get('limit') ?? 20);
+    const cursor = requestUrl.searchParams.get('cursor');
+    recordRequests.push({ pluginId, limit, cursor });
+    if (cursor === 'cursor-50') await delay(300);
+    const start = cursor ? Number(cursor.slice('cursor-'.length)) : 0;
+    const total = pluginId === 'sample1-offset-api' ? 72 : 1;
+    const rows = Array.from({ length: Math.min(limit, total - start) }, (_, index) => {
+      const number = start + index + 1;
+      return {
+        id: `00000000-0000-4000-8000-${String(number).padStart(12, '0')}`,
+        pluginId, sourceId: pluginId === 'sample1-offset-api' ? 'mock-api-sample1' : 'mock-api-sample2',
+        dataType: pluginId === 'sample1-offset-api' ? 'asset' : 'repository', externalKey: `key-${number}`,
+        sourceValues: pluginId === 'sample1-offset-api'
+          ? { hostname: `test-host-${number}`, score: number * 1000, enabled: number % 2 === 1, observedAt: '2026-09-11T01:00:00.000Z', secret: 'never-render' }
+          : { fullName: 'example/another-repository', secret: 'never-render' },
+        firstSeenAt: '2026-09-11T01:00:00.000Z', lastSeenAt: '2026-09-11T01:01:00.000Z', omittedFields: ['details'],
+      };
+    });
+    const hasNextPage = start + rows.length < total;
+    await route.fulfill({ json: {
+      items: rows, pageInfo: { nextCursor: hasNextPage ? `cursor-${start + rows.length}` : null, hasNextPage },
+      collection: { scope: 'source', status: 'success', runId: '00000000-0000-4000-8000-000000009999', startedAt: '2026-09-11T01:00:00.000Z', finishedAt: '2026-09-11T01:02:00.000Z' },
+      lastStoredAt: '2026-09-11T01:01:00.000Z',
+    } });
+  });
   await page.goto(url);
   await expect(page.getByRole('heading', { name: 'OSS-SCP', exact: true })).toBeVisible();
   await expect(page.getByRole('status')).toHaveText('서버 연결 성공');
+  await page.getByRole('link', { name: /서버 자산/ }).click();
+  await expect(page.getByRole('heading', { name: '서버 자산', exact: true })).toBeVisible();
+  await expect(page.getByRole('columnheader', { name: '호스트명' })).toBeVisible();
+  await expect(page.getByRole('cell', { name: 'test-host-1', exact: true })).toBeVisible();
+  await expect(page.getByText('20개 항목')).toBeVisible();
+  await page.getByRole('button', { name: '다음 묶음' }).click();
+  await expect(page.getByRole('cell', { name: 'test-host-21', exact: true })).toBeVisible();
+  await expect(page.getByRole('cell', { name: 'test-host-1', exact: true })).toHaveCount(0);
+  await page.getByRole('button', { name: '다음 묶음' }).click();
+  await page.getByRole('button', { name: '다음 묶음' }).click();
+  await expect(page.getByRole('cell', { name: 'test-host-72', exact: true })).toBeVisible();
+  await expect(page.getByText('마지막 묶음입니다.')).toBeVisible();
+  await page.getByLabel('묶음 크기').selectOption('50');
+  await expect(page.getByRole('cell', { name: 'test-host-1', exact: true })).toBeVisible();
+  assert.deepEqual(recordRequests.at(-1), { pluginId: 'sample1-offset-api', limit: 50, cursor: null });
+  await page.getByRole('button', { name: '다음 묶음' }).click();
   await page.getByRole('link', { name: /저장소/ }).click();
   await expect(page.getByRole('heading', { name: '저장소', exact: true })).toBeVisible();
-  await expect(page.getByLabel('조회 범위')).toContainText('sample2-single-api');
+  await expect(page.getByRole('columnheader', { name: '저장소 전체 이름' })).toBeVisible();
+  await expect(page.getByRole('cell', { name: 'example/another-repository' })).toBeVisible();
+  await page.waitForTimeout(400);
+  await expect(page.getByRole('cell', { name: 'example/another-repository' })).toBeVisible();
+  await expect(page.getByText('test-host-51')).toHaveCount(0);
+  await expect(page.getByText('never-render')).toHaveCount(0);
   await page.reload();
-  await expect(page.getByLabel('조회 범위')).toContainText('mock-api-sample2');
+  await expect(page.getByRole('cell', { name: 'example/another-repository' })).toBeVisible();
+  assert.equal(sourceRequests, 0, '브라우저 목록이 원천 API를 호출했습니다.');
   await page.goto(`${url}/removed-plugin`);
   await expect(page.getByRole('heading', { name: '페이지를 찾을 수 없습니다' })).toBeVisible();
   await page.goto(url);
@@ -99,7 +160,7 @@ try {
   await page.reload();
   await expect(page.getByRole('status')).toHaveText('서버 연결 실패');
   await expect(page.getByRole('heading', { name: 'OSS-SCP HMR 확인', exact: true })).toBeVisible();
-  console.log('브라우저: 메뉴·직접 경로·새로고침·not-found·로딩·성공·5초 실패·복구·API 404·포트 충돌·HMR 통과');
+  console.log('브라우저: 선언형 목록·cursor·묶음 크기·플러그인 재사용·원천 미호출·직접 경로·새로고침·not-found·health·API 404·포트 충돌·HMR 통과');
 } catch (error) {
   console.error(api.output(), web?.output());
   throw error;

@@ -46,9 +46,11 @@ try {
   await expect(page.getByRole('status')).toHaveText('서버 연결 성공');
   assert.equal((await fetch(`${url}/api/unknown`)).status, 404);
   await page.goto(`${url}/assets/servers`);
-  await expect(page.getByLabel('조회 범위')).toContainText('sample1-offset-api');
+  await expect(page.getByRole('heading', { name: '서버 자산', exact: true })).toBeVisible();
+  await expect(page.getByRole('alert')).toContainText('플랫폼 데이터를 조회할 수 없습니다');
   await page.reload();
-  await expect(page.getByLabel('조회 범위')).toContainText('mock-api-sample1');
+  await expect(page.getByRole('heading', { name: '서버 자산', exact: true })).toBeVisible();
+  await expect(page.getByRole('alert')).toContainText('플랫폼 데이터를 조회할 수 없습니다');
   await page.goto(`${url}/unknown-menu`);
   await expect(page.getByRole('heading', { name: '페이지를 찾을 수 없습니다' })).toBeVisible();
   await page.goto(url);
