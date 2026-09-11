@@ -6,7 +6,13 @@
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "files": ["dist"],
-  "scripts": { "build": "tsc", "typecheck": "tsc --noEmit", "test": "pnpm build && vitest run" },
+  "scripts": {
+    "prebuild": "pnpm --filter @oss-scp/plugin-config build && pnpm --filter @oss-scp/plugin-sdk build",
+    "build": "tsc",
+    "pretypecheck": "pnpm --filter @oss-scp/plugin-config build && pnpm --filter @oss-scp/plugin-sdk build",
+    "typecheck": "tsc --noEmit",
+    "test": "pnpm build && vitest run"
+  },
   "dependencies": { "@oss-scp/plugin-config": "workspace:*", "@oss-scp/plugin-sdk": "workspace:*" },
   "devDependencies": { "@oss-scp/csv-reader": "workspace:*", "@types/node": "24.13.3", "typescript": "5.9.3", "vitest": "4.1.11" }
 }
