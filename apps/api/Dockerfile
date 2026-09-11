@@ -14,6 +14,7 @@ COPY packages/plugin-sdk/package.json ./packages/plugin-sdk/package.json
 COPY plugins/sample1-offset-api/package.json ./plugins/sample1-offset-api/package.json
 COPY plugins/sample2-single-api/package.json ./plugins/sample2-single-api/package.json
 COPY plugins/vulnerabilities-local-csv/package.json ./plugins/vulnerabilities-local-csv/package.json
+COPY plugins/vulnerabilities-http-csv/package.json ./plugins/vulnerabilities-http-csv/package.json
 RUN pnpm install --frozen-lockfile
 COPY apps/api ./apps/api
 COPY apps/collector-cli ./apps/collector-cli
@@ -37,7 +38,9 @@ COPY --from=build --chown=node:node /workspace/plugins/sample2-single-api/plugin
 COPY --from=build --chown=node:node /workspace/plugins/sample2-single-api/dist/transform.js ./plugins/sample2-single-api/dist/transform.js
 COPY --from=build --chown=node:node /workspace/plugins/vulnerabilities-local-csv/plugin.json /workspace/plugins/vulnerabilities-local-csv/source.json /workspace/plugins/vulnerabilities-local-csv/package.json ./plugins/vulnerabilities-local-csv/
 COPY --from=build --chown=node:node /workspace/plugins/vulnerabilities-local-csv/dist/transform.js ./plugins/vulnerabilities-local-csv/dist/transform.js
-COPY --from=build --chown=node:node /workspace/connections/registry.json /workspace/connections/mock-api-sample1.json /workspace/connections/mock-api-sample2.json ./connections/
+COPY --from=build --chown=node:node /workspace/plugins/vulnerabilities-http-csv/plugin.json /workspace/plugins/vulnerabilities-http-csv/source.json /workspace/plugins/vulnerabilities-http-csv/package.json ./plugins/vulnerabilities-http-csv/
+COPY --from=build --chown=node:node /workspace/plugins/vulnerabilities-http-csv/dist/transform.js ./plugins/vulnerabilities-http-csv/dist/transform.js
+COPY --from=build --chown=node:node /workspace/connections/registry.json /workspace/connections/mock-api-sample1.json /workspace/connections/mock-api-sample2.json /workspace/connections/mock-api-vulnerabilities-csv.json ./connections/
 COPY --from=build --chown=node:node /workspace/fixtures/csv ./fixtures/csv
 USER node
 EXPOSE 3000
