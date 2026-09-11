@@ -29,7 +29,8 @@
     "db:migrate": "pnpm --filter @oss-scp/platform-db migrate",
     "test:docker:external-db": "bash scripts/test-external-db.sh",
     "test:docker:mysql": "bash scripts/test-mysql-docker.sh",
-    "test:http-collector": "pnpm --filter @oss-scp/http-collector test"
+    "test:http-collector": "pnpm --filter @oss-scp/http-collector test",
+    "collect": "pnpm --filter @oss-scp/collector-cli start"
   },
   "devDependencies": {
     "@eslint/js": "10.0.1",

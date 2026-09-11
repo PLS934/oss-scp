@@ -42,6 +42,8 @@ docker compose -p "$project" up --build -d --wait --wait-timeout 90 api
 check_response "http://127.0.0.1:${API_PORT}"
 docker compose -p "$project" run --rm api node node_modules/@oss-scp/platform-db/dist/migrate-cli.js | grep -q '3개 적용'
 docker compose -p "$project" run --rm api node node_modules/@oss-scp/platform-db/dist/migrate-cli.js | grep -q '0개 적용'
+docker compose -p "$project" run --rm api node node_modules/@oss-scp/collector-cli/dist/process.js vulnerabilities-local-csv \
+  | node -e 'let value=""; process.stdin.on("data", chunk => value += chunk); process.stdin.on("end", () => { const event=JSON.parse(value); if (event.status !== "success" || event.pluginId !== "vulnerabilities-local-csv") process.exit(1); });'
 docker compose -p "$project" stop postgres
 docker compose -p "$project" rm -f postgres
 docker compose -p "$project" up -d --wait --wait-timeout 90 postgres api
@@ -60,6 +62,12 @@ const fs = require("node:fs");
 if (process.getuid() === 0) throw new Error("루트 사용자 실행");
 for (const p of ["src", ".env", ".git", "node_modules/typescript", "node_modules/@nestjs/cli"]) {
   if (fs.existsSync(p)) throw new Error(`런타임 제외 파일 포함: ${p}`);
+}
+for (const p of ["apps", "plugins/sample1-offset-api/transform.ts", "plugins/sample1-offset-api/test"]) {
+  if (fs.existsSync(p)) throw new Error(`런타임 개발 파일 포함: ${p}`);
+}
+for (const p of ["node_modules/@oss-scp/collector-cli/dist/process.js", "plugins/registry.json", "plugins/sample1-offset-api/dist/transform.js", "connections/registry.json", "fixtures/csv/vulnerabilities.csv"]) {
+  if (!fs.existsSync(p)) throw new Error(`CLI 런타임 파일 누락: ${p}`);
 }
 '
 # HTTP 연결은 받지만 응답을 끝내지 않는 서버로 healthcheck timeout을 검증합니다.
