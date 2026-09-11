@@ -2,7 +2,7 @@
 
 `@oss-scp/platform-db`는 운영자가 입력한 DB 주소·포트·계정·비밀번호를 읽고 검사하는 공통 패키지입니다. 정상 입력은 연결 코드가 사용할 설정으로 반환하고, 잘못된 입력은 수정할 항목을 알리는 `PlatformDbConfigError`를 반환합니다.
 
-PostgreSQL과 MySQL 어댑터는 API 시작 시 같은 설정으로 선택한 DB에 연결하며 `/api/v1/ready`에서 준비 상태를 확인합니다. 업무 테이블·저장·조회는 #29~#31에서 추가합니다. 별도의 웹 설정 화면은 제공하지 않습니다.
+PostgreSQL과 MySQL 어댑터는 API 시작 시 같은 설정으로 선택한 DB에 연결하며 `/api/v1/ready`에서 준비 상태를 확인합니다. PostgreSQL은 가공·검증된 플러그인 데이터를 위한 공통 저장 계약을 제공하며, MySQL 저장과 조회 API는 후속 작업입니다. 별도의 웹 설정 화면은 제공하지 않습니다.
 
 ## 내장 PostgreSQL로 빠르게 시작
 
@@ -169,6 +169,42 @@ function readSettings(adapters: readonly PlatformDbAdapterFactory[]) {
 `connect`가 반환하는 연결은 `checkReady(): Promise<boolean>`와 `close(): Promise<void>`를 제공합니다. 어댑터는 대기 시간·연결 풀·TLS 검증을 집행하고, 준비 상태 검사는 `connectTimeoutMs` 안에 반환하며 DB 장애는 false로 표현합니다. 종료는 반복 호출 가능해야 합니다. 연결 도중 실패한 자원은 연결 코드가 정리하고, 외부로 공개하는 연결 오류에도 비밀정보를 포함하지 않아야 합니다.
 
 설정/최초 연결 실패는 API 시작 실패입니다. 실행 중 DB 장애는 `/api/v1/ready`의 HTTP 503이며 `/api/v1/health` liveness는 성공을 유지합니다. migration은 앱 시작 시 자동 실행하지 않고 `pnpm db:migrate` 또는 위 Compose 명령으로 명시적으로 실행합니다.
+
+## PostgreSQL 공통 레코드 저장
+
+`createPostgresRecordStorage(connection)`은 DB driver 타입을 호출자에게 노출하지 않는 `RecordStorage` 구현을 반환합니다. 이 저장소는 #41의 가공·검증 결과를 받을 수 있지만, 현재 수집 CLI나 worker에 자동 연결되지는 않습니다.
+
+### 데이터와 식별 범위
+
+가공된 `asset`, `finding` 및 후속 데이터 종류는 `platform_records`에 함께 저장합니다. 공통 식별 정보는 일반 컬럼에, 플러그인이 선언하고 검증한 원천 필드는 `source_values` JSONB에 둡니다.
+
+```text
+pluginId + dataType + sourceId + externalKeyType + externalKey
+```
+
+위 조합이 레코드의 유일 범위입니다. 숫자 `1`과 문자열 `"1"`은 다른 키이며, 같은 범위의 재전달은 내부 UUID를 유지하고 `source_values`와 마지막 관측 시각만 갱신합니다. 관계는 `platform_record_relations`가 내부 UUID를 참조합니다. 새 데이터 종류를 추가해도 종류별 테이블이나 repository를 추가하지 않습니다.
+
+단일 레코드 JSON은 직렬화 기준 1 MiB, checkpoint는 64 KiB로 제한합니다. 저장된 checkpoint가 없다는 상태는 `null`로 나타내므로 다음 checkpoint에는 `null`이 아닌 JSON 값을 사용합니다. 외부 키는 최대 2,048자이며 숫자 키와 JSON 안의 숫자는 유한한 값만 허용합니다. undefined, 함수, 순환 참조처럼 JSON으로 손실 없이 보존할 수 없는 값은 저장 전에 거부합니다.
+
+### 실행, checkpoint와 오류
+
+`collection_runs`는 플러그인·수집처·실행 범위·설정 revision, 상태와 처리 집계를 기록합니다. `collection_checkpoints`는 같은 범위의 마지막 저장 완료 위치를 보관합니다. `collection_issues`에는 격리된 원천 레코드의 위치, 오류 코드·경로·제한된 메시지와 key hint만 기록하며 원천 레코드 전체와 응답 메타데이터는 복제하지 않습니다.
+
+`commitBatch`는 다음 항목을 하나의 PostgreSQL 트랜잭션으로 확정합니다.
+
+1. 레코드 upsert와 내부 ID 유지
+2. 관계 참조 확인과 멱등 저장
+3. 격리 오류 기록
+4. checkpoint 갱신
+5. 실행 처리 건수 갱신
+
+관계 끝점을 찾을 수 없거나 입력한 시작 checkpoint가 현재 값과 다르거나 DB 저장이 실패하면 묶음 전체를 rollback합니다. 호출자는 이전 checkpoint부터 같은 묶음을 다시 전달할 수 있으며, 이미 확정된 동일 키는 중복 생성되지 않습니다.
+
+### 원천 데이터와 플랫폼 업무 정보의 경계
+
+공통 저장 경로가 소유하는 값은 `platform_records.source_values`와 원천 관측 시각입니다. 담당자, 수동 상태와 감사 정보는 후속 별도 테이블이 레코드 내부 UUID를 참조해야 합니다. 공통 upsert는 그러한 플랫폼 소유 행을 생성·수정·삭제하지 않습니다.
+
+현재 PostgreSQL 저장 범위에는 MySQL 구현, JSON 내부 필드 검색·정렬 인덱스, 조회 API, 전체 수집 완료에 따른 보관·복원, 담당자 기능과 수집 실행 오케스트레이션이 포함되지 않습니다.
 
 ## 개발·검증
 
