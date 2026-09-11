@@ -1,23 +1,23 @@
 #!/usr/bin/env node
 import { resolve } from 'node:path';
-import { validateRepository } from './index';
+import { preflightConfiguration } from './index';
 
-function rootFromArgs(args: string[]): string {
-  if (args.length === 0) return process.cwd();
+export function rootFromArgs(args: string[], env: NodeJS.ProcessEnv = process.env): string {
+  if (args.length === 0 && env.OSS_SCP_CONFIG_ROOT) return resolve(env.OSS_SCP_CONFIG_ROOT);
   if (args.length === 2 && args[0] === '--root') return resolve(args[1]);
-  throw new Error('usage: plugin-config --root <repository>');
+  throw new Error('usage: plugin-config --root <config-root>');
 }
 
-export function run(args = process.argv.slice(2)): number {
+export async function run(args = process.argv.slice(2), env = process.env): Promise<number> {
   let root: string;
   try {
-    root = rootFromArgs(args);
+    root = rootFromArgs(args, env);
   } catch (error) {
     console.error(error instanceof Error ? error.message : 'invalid arguments');
     return 2;
   }
 
-  const result = validateRepository(root);
+  const result = await preflightConfiguration(root);
   if (!result.ok) {
     for (const error of result.errors) {
       console.error(`${error.file}${error.path}: ${error.message}`);
@@ -28,4 +28,4 @@ export function run(args = process.argv.slice(2)): number {
   return 0;
 }
 
-if (require.main === module) process.exitCode = run();
+if (require.main === module) void run().then((code) => { process.exitCode = code; });

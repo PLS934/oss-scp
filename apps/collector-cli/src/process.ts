@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-import { executeManualCollection, findRepositoryRoot, publicEvent, type CliOutcome } from './index.js';
+import { configRoot, executeManualCollection, publicEvent, type CliOutcome } from './index.js';
 
 const controller = new AbortController();
 const abort = (): void => controller.abort();
@@ -10,7 +10,7 @@ let outcome: CliOutcome;
 try {
   outcome = await executeManualCollection({
     args: process.argv.slice(2),
-    root: findRepositoryRoot(process.cwd()),
+    root: configRoot(process.env),
     env: process.env,
     signal: controller.signal,
   });

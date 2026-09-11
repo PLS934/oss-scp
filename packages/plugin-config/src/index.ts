@@ -1,5 +1,6 @@
 import Ajv2020, { type ErrorObject, type ValidateFunction } from 'ajv/dist/2020';
-import { existsSync, readFileSync } from 'node:fs';
+import { existsSync, readFileSync, realpathSync } from 'node:fs';
+import { createRequire } from 'node:module';
 import { isAbsolute, join, relative, resolve, sep } from 'node:path';
 import { loadSourceDefinition } from './source-loader';
 import { loadLocalCsvSource } from './source-loaders/file';
@@ -126,6 +127,14 @@ function safeResolve(
   if (resolved !== base && !resolved.startsWith(`${base}${sep}`)) {
     issue(errors, root, file, path, 'path must stay inside its configuration root');
     return undefined;
+  }
+  if (existsSync(resolved)) {
+    const realRoot = realpathSync(root);
+    const realResolved = realpathSync(resolved);
+    if (realResolved !== realRoot && !realResolved.startsWith(`${realRoot}${sep}`)) {
+      issue(errors, root, file, path, 'resolved path must stay inside its configuration root');
+      return undefined;
+    }
   }
   return resolved;
 }
@@ -348,4 +357,23 @@ export function validateRepository(rootDirectory: string): ConfigurationResult {
   const definitions = loadPlugins(root, connections, errors, menus);
   menus.sort((a, b) => a.group < b.group ? -1 : a.group > b.group ? 1 : a.order - b.order || (a.title < b.title ? -1 : a.title > b.title ? 1 : a.path < b.path ? -1 : a.path > b.path ? 1 : 0));
   return errors.length > 0 ? { ok: false, errors } : { ok: true, definitions, menus };
+}
+
+const loadModule = createRequire(__filename);
+
+export async function preflightConfiguration(rootDirectory: string): Promise<ConfigurationResult> {
+  const result = validateRepository(rootDirectory);
+  if (!result.ok) return result;
+  const errors: ConfigurationIssue[] = [];
+  for (const definition of result.definitions) {
+    try {
+      const loaded = loadModule(definition.plugin.transformPath) as { transform?: unknown };
+      if (typeof loaded.transform !== 'function') {
+        issue(errors, resolve(rootDirectory), definition.plugin.transformPath, '/transform', `plugin ${definition.plugin.id} must export transform`);
+      }
+    } catch {
+      issue(errors, resolve(rootDirectory), definition.plugin.transformPath, '/transform', `plugin ${definition.plugin.id} module cannot be loaded`);
+    }
+  }
+  return errors.length > 0 ? { ok: false, errors } : result;
 }

@@ -7,6 +7,7 @@ export API_PORT="${API_PORT:-18430}"
 export PLATFORM_DB_HOST=host.docker.internal
 export PLATFORM_DB_NAME=oss_scp
 export PLATFORM_DB_USER=oss_scp_app
+export OSS_SCP_CONFIG_PATH="$PWD"
 database_password=external-test-password
 export PLATFORM_DB_PASSWORD_FILE_HOST="$(mktemp /tmp/oss-scp-external-secret.XXXXXX)"
 printf '%s' "$database_password" > "$PLATFORM_DB_PASSWORD_FILE_HOST"

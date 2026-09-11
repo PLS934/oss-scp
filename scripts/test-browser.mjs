@@ -45,7 +45,7 @@ const databaseEnv = {
   PLATFORM_DB_TLS_MODE: 'disable',
 };
 const api = start(process.execPath, [path.join(root, 'apps/api/dist/main.js')], {
-  env: { ...process.env, ...databaseEnv, PORT: String(apiPort), HOST: '127.0.0.1' },
+  env: { ...process.env, ...databaseEnv, OSS_SCP_CONFIG_ROOT: root, PORT: String(apiPort), HOST: '127.0.0.1' },
 });
 let web;
 let browser;

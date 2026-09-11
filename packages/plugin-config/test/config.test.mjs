@@ -1,8 +1,8 @@
-import { cpSync, mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { cpSync, mkdtempSync, mkdirSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { afterEach, describe, expect, test } from 'vitest';
-import { validateRepository } from '../dist/index.js';
+import { preflightConfiguration, validateRepository } from '../dist/index.js';
 
 const repositoryRoot = resolve(import.meta.dirname, '../../..');
 const temporaryRoots = [];
@@ -32,6 +32,37 @@ afterEach(() => {
 });
 
 describe('validateRepository', () => {
+  test('명시적 외부 설정 루트에서 전체 registry를 검증한다', () => {
+    const root = temporaryRepository();
+    const result = validateRepository(root);
+    expect(result.ok).toBe(true);
+    if (result.ok) expect(result.definitions.map(item => item.plugin.id)).toEqual(['sample1-offset-api', 'vulnerabilities-local-csv', 'sample2-single-api']);
+  });
+
+  test('심볼릭 링크를 통한 설정 루트 이탈을 거부한다', () => {
+    const root = temporaryRepository();
+    const outside = mkdtempSync(join(tmpdir(), 'oss-scp-outside-'));
+    temporaryRoots.push(outside);
+    writeFileSync(join(outside, 'transform.js'), 'exports.transform = () => ({ records: [] });\n');
+    const target = join(root, 'plugins/sample1-offset-api/dist/transform.js');
+    rmSync(target);
+    symlinkSync(join(outside, 'transform.js'), target);
+    const result = validateRepository(root);
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.errors).toContainEqual(expect.objectContaining({ path: '/transform', message: expect.stringContaining('configuration root') }));
+  });
+
+  test('preflight가 transform export와 모듈 로딩을 검증하고 원본 오류를 숨긴다', async () => {
+    const root = temporaryRepository();
+    const target = join(root, 'plugins/sample1-offset-api/dist/transform.js');
+    writeFileSync(target, 'exports.other = true;\n');
+    let result = await preflightConfiguration(root);
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.errors).toContainEqual(expect.objectContaining({ path: '/transform', message: expect.stringContaining('sample1-offset-api') }));
+    writeFileSync(target, 'throw new Error("DO_NOT_PRINT_SECRET");\n');
+    result = await preflightConfiguration(root);
+    expect(JSON.stringify(result)).not.toContain('DO_NOT_PRINT_SECRET');
+  });
   test('sample1과 sample2 설정을 내부 수집 정의로 해석한다', () => {
     const result = validateRepository(repositoryRoot);
 

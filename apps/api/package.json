@@ -8,10 +8,10 @@
   ],
   "scripts": {
     "dev": "nest start --watch",
-    "prebuild": "pnpm --filter @oss-scp/platform-db build",
+    "prebuild": "pnpm --filter @oss-scp/platform-db build && pnpm --filter @oss-scp/plugin-config build",
     "build": "nest build",
     "start": "node dist/main.js",
-    "pretypecheck": "pnpm --filter @oss-scp/platform-db build",
+    "pretypecheck": "pnpm --filter @oss-scp/platform-db build && pnpm --filter @oss-scp/plugin-config build",
     "typecheck": "tsc --noEmit",
     "test": "pnpm build && vitest run"
   },
@@ -21,6 +21,7 @@
     "@nestjs/platform-express": "11.2.3",
     "@oss-scp/collector-cli": "workspace:*",
     "@oss-scp/platform-db": "workspace:*",
+    "@oss-scp/plugin-config": "workspace:*",
     "reflect-metadata": "0.2.2",
     "rxjs": "7.8.2"
   },

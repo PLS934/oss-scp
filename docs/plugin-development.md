@@ -62,7 +62,15 @@ packages/plugin-config/
 
 지원 아이콘은 `server`, `shield`, `repository`입니다. 서로 다른 플러그인이 같은 경로를 선언하거나 존재하지 않는 데이터 종류·아이콘을 참조하면 배포 전 검증이 실패합니다. 메뉴는 registry의 등록 순서가 아니라 그룹 이름, 숫자 `order`, 제목, 경로 순으로 정렬됩니다.
 
-`plugins/`와 `registry.json`이 구조의 유일한 원본입니다. `pnpm generate:web-menu`는 전체 설정을 검증한 뒤 base URL·비밀·절대 파일 경로를 제외한 웹용 `apps/web/src/generated/plugin-menu.ts`를 생성합니다. 브라우저는 이 빌드 산출물만 읽으며 메뉴 구조를 생성하거나 수정하지 않습니다. `pnpm check:web-menu`는 Git 설정과 생성 파일이 다르면 실패합니다.
+운영자 Git revision의 `plugins/`, `connections/`와 각 `registry.json`이 구조의 유일한 원본입니다. 운영 환경에는 TypeScript 원본이 아니라 사전 빌드된 JavaScript 가공 모듈을 배포하고, 대상 플랫폼 이미지의 검증 명령으로 전체 설정과 모듈 export를 확인합니다. 브라우저는 API가 기동 시 검증한 `/api/v1/plugin-menus` 결과만 읽으며 메뉴 구조를 생성하거나 수정하지 않습니다.
+
+```bash
+pnpm build:plugin-transforms
+pnpm --filter @oss-scp/plugin-config build
+OSS_SCP_CONFIG_ROOT="$PWD" node packages/plugin-config/dist/cli.js
+```
+
+플랫폼은 운영 중 TypeScript를 변환하거나 플러그인별 패키지를 설치하지 않습니다. 외부 플러그인은 선언형 메뉴·목록·상세만 제공하며 `List.tsx`·`Detail.tsx` 같은 사용자 정의 화면은 플랫폼과 함께 빌드합니다.
 
 ## 데이터 가공 코드
 

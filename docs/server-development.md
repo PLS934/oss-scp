@@ -39,16 +39,17 @@ HTTP 200, JSON 콘텐츠 유형, 본문 `{"status":"ok"}`를 반환합니다. �
 
 ## 환경변수
 
-`.env` 없이도 기본값으로 동작합니다. 변경하려면 루트에서 `cp .env.example .env` 후 편집합니다. 로컬 개발·빌드 실행 모두 루트 `.env`를 읽으며 이미 설정된 프로세스 환경변수가 우선합니다. 비밀정보는 커밋하거나 이미지에 포함하지 않습니다.
+API 실행에는 `OSS_SCP_CONFIG_ROOT`가 필요합니다. 루트에서 `cp .env.example .env` 후 편집합니다. 로컬 개발·빌드 실행 모두 루트 `.env`를 읽으며 이미 설정된 프로세스 환경변수가 우선합니다. 비밀정보는 커밋하거나 이미지에 포함하지 않습니다.
 
 | 변수 | 기본값 | 용도 |
 |---|---|---|
 | HOST | 127.0.0.1 | 로컬 서버의 수신 주소 |
 | PORT | 3000 | 로컬 서버 포트, 정수 1–65535 |
 | API_PORT | 3000 | Compose가 호스트에 공개하는 포트 |
+| OSS_SCP_CONFIG_ROOT | 없음 | plugin·Connection registry와 빌드된 서버 모듈을 포함한 설정 루트 |
 
 ```sh
-PORT=3100 pnpm dev
+OSS_SCP_CONFIG_ROOT="$PWD" PORT=3100 pnpm dev
 curl http://127.0.0.1:3100/api/v1/health
 ```
 
@@ -121,3 +122,14 @@ pnpm test:docker
 ## 검증 범위
 
 자동 검증 항목은 [서버·클라이언트 통합 CI](../.github/workflows/integration-ci.yaml)에서 관리하고, 실행 결과는 GitHub Actions와 PR에서 확인합니다. 로컬에서는 macOS arm64와 Docker linux/arm64를 확인했으며, CI는 Ubuntu linux/amd64에서 실행합니다. Windows·다른 OS/CPU·공개 멀티 플랫폼 릴리스 이미지는 미검증 범위입니다.
+
+## 외부 플러그인 설정
+
+API와 수동 수집 CLI는 `OSS_SCP_CONFIG_ROOT`가 가리키는 운영자 설정 revision을 사용합니다. 이 디렉터리에는 `plugins/registry.json`, `connections/registry.json`, 각 선언 파일과 사전 빌드된 JavaScript 가공 모듈이 있어야 합니다. API는 DB 연결과 listen 전에 전체 설정 및 모듈 export를 검증하며 일부만 유효한 상태로 시작하지 않습니다.
+
+로컬 실행 예시:
+
+```bash
+pnpm build:plugin-transforms
+OSS_SCP_CONFIG_ROOT="$PWD" pnpm start
+```

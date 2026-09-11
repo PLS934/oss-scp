@@ -15,6 +15,7 @@ services:
       NODE_ENV: development
       HOST: 0.0.0.0
       PORT: "3000"
+      OSS_SCP_CONFIG_ROOT: /workspace
       TSC_WATCHFILE: ${TSC_WATCHFILE:-UseFsEvents}
       PLATFORM_DB_TYPE: postgres
       PLATFORM_DB_HOST: postgres
@@ -23,7 +24,7 @@ services:
       PLATFORM_DB_USER: ${PLATFORM_DB_USER:-oss_scp_app}
       PLATFORM_DB_PASSWORD: ${PLATFORM_DB_PASSWORD:?PLATFORM_DB_PASSWORD must be set}
       PLATFORM_DB_TLS_MODE: disable
-    command: ["sh", "-c", "pnpm install --frozen-lockfile && pnpm --filter @oss-scp/platform-db build && exec pnpm --filter @oss-scp/api exec nest start --watch --path tsconfig.dev.json"]
+    command: ["sh", "-c", "pnpm install --frozen-lockfile && pnpm --filter @oss-scp/platform-db build && pnpm --filter @oss-scp/plugin-config build && exec pnpm --filter @oss-scp/api exec nest start --watch --path tsconfig.dev.json"]
     volumes:
       - .:/workspace
       - api_root_modules:/workspace/node_modules
@@ -32,6 +33,7 @@ services:
       - api_web_modules:/workspace/apps/web/node_modules
       - api_mock_modules:/workspace/apps/mock-api/node_modules
       - api_plugin_config_modules:/workspace/packages/plugin-config/node_modules
+      - api_plugin_config_dist:/workspace/packages/plugin-config/dist
       - api_plugin_sdk_modules:/workspace/packages/plugin-sdk/node_modules
       - api_collection_engine_modules:/workspace/packages/collection-engine/node_modules
       - api_http_collector_modules:/workspace/packages/http-collector/node_modules
@@ -158,6 +160,7 @@ volumes:
   api_mock_modules:
   api_csv_reader_modules:
   api_plugin_config_modules:
+  api_plugin_config_dist:
   api_platform_db_modules:
   web_mock_modules:
   web_csv_reader_modules:

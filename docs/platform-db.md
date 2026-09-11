@@ -220,3 +220,15 @@ pnpm build
 ```
 
 패키지 테스트는 Docker의 `postgres:17.6-bookworm`과 `mysql:8.4.6` 실제 DB를 사용합니다. PostgreSQL 17.6/`pg` 8.23.0과 MySQL 8.4.6/`mysql2` 3.24.4 조합에서 정상 연결, 인증·접속·TLS 실패, 종료 및 migration 재실행·실패 처리를 검증합니다. `pnpm test:docker:mysql`은 MySQL 내장/외부 설치와 영속성을 추가 검증합니다. 검증하지 않은 버전의 호환성을 주장하지 않습니다.
+
+## 외부 플러그인과 이미지 배포
+
+Compose 실행 전 운영자 플러그인 Git checkout의 절대 경로를 지정합니다.
+
+```bash
+export OSS_SCP_CONFIG_PATH=/absolute/path/to/oss-scp-plugin-config
+docker compose -f compose.external-db.yaml config --quiet
+docker compose -f compose.external-db.yaml up -d
+```
+
+Compose는 이 경로를 `/config:ro`로 주입합니다. 배포 시 플랫폼 이미지는 정확한 tag 또는 digest로, 플러그인은 Git SHA로 고정하고 해당 이미지의 preflight 명령으로 조합을 먼저 검증합니다. DB migration은 이미지·플러그인 교체와 분리해 명시적으로 실행합니다. 롤백은 DB를 자동 역행시키지 않고 이전에 검증한 image digest와 plugin SHA 조합으로 재기동하며, 데이터 변경은 별도 백업·역이관 절차를 따릅니다.

@@ -22,6 +22,7 @@ services:
       NODE_ENV: production
       HOST: 0.0.0.0
       PORT: "3000"
+      OSS_SCP_CONFIG_ROOT: /config
       PLATFORM_DB_TYPE: mysql
       PLATFORM_DB_HOST: mysql
       PLATFORM_DB_PORT: "3306"
@@ -34,6 +35,8 @@ services:
         condition: service_healthy
     ports:
       - "127.0.0.1:${API_PORT:-3000}:3000"
+    volumes:
+      - ${OSS_SCP_CONFIG_PATH:?OSS_SCP_CONFIG_PATH must be set}:/config:ro
   web:
     image: oss-scp-web:local
     build:

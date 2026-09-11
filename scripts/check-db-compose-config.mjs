@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
 
-const env = { ...process.env, PLATFORM_DB_PASSWORD: 'compose-config-check' };
+const env = { ...process.env, PLATFORM_DB_PASSWORD: 'compose-config-check', OSS_SCP_CONFIG_PATH: process.cwd() };
 function config(files, extraEnv = {}) {
   const args = ['compose', ...files.flatMap(file => ['-f', file]), 'config', '--format', 'json'];
   return JSON.parse(execFileSync('docker', args, { encoding: 'utf8', env: { ...env, ...extraEnv } }));
@@ -28,6 +28,10 @@ assert.equal(mysqlExternal.volumes, undefined);
 assert.equal(mysqlExternal.services.api.environment.PLATFORM_DB_TYPE, 'mysql');
 assert.deepEqual(common(mysqlExternal.services.api), common(bundled.services.api));
 assert.deepEqual(common(mysqlExternal.services.web), common(bundled.services.web));
+for (const current of [bundled, external, mysql, mysqlExternal]) {
+  assert.equal(current.services.api.environment.OSS_SCP_CONFIG_ROOT, '/config');
+  assert.ok(current.services.api.volumes.some(value => value.type === 'bind' && value.target === '/config' && value.read_only === true));
+}
 
 const secret = config(['compose.external-db.yaml', 'compose.external-db.secret.yaml'], {
   PLATFORM_DB_PASSWORD: undefined,

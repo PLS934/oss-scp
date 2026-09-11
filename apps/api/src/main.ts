@@ -6,16 +6,19 @@ import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module';
 import { readConfig } from './config';
 import { createPostgresRecordQuery, mysqlAdapter, postgresAdapter, readPlatformDbConfig, selectPlatformDbAdapter, type PostgresPlatformDbConnection } from '@oss-scp/platform-db';
+import { preflightConfiguration } from '@oss-scp/plugin-config';
 
 async function bootstrap() {
   const envFile = resolve(__dirname, '../../../.env');
   if (existsSync(envFile)) loadEnvFile(envFile);
-  const { host, port } = readConfig();
+  const { host, port, configRoot } = readConfig();
+  const configuration = await preflightConfiguration(configRoot);
+  if (!configuration.ok) throw new Error('플러그인 설정 검증 실패');
   const adapters = [postgresAdapter, mysqlAdapter] as const;
   const dbConfig = readPlatformDbConfig(process.env, adapters);
   const connection = await selectPlatformDbAdapter(dbConfig.type, adapters).connect(dbConfig);
   const query = dbConfig.type === 'postgres' ? createPostgresRecordQuery(connection as PostgresPlatformDbConnection) : undefined;
-  const app = await NestFactory.create(AppModule.register(connection, query), { abortOnError: false });
+  const app = await NestFactory.create(AppModule.register(connection, query, configuration.menus), { abortOnError: false });
   app.enableShutdownHooks();
   try {
     await app.listen(port, host);

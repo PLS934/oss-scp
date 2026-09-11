@@ -13,12 +13,20 @@ function run(root) {
   });
 }
 
+function runWithEnv(root) {
+  return spawnSync(process.execPath, [cli], { cwd: tmpdir(), encoding: 'utf8', env: { ...process.env, OSS_SCP_CONFIG_ROOT: root } });
+}
+
 const valid = run(repositoryRoot);
 if (valid.status !== 0) throw new Error(`valid configuration failed: ${valid.stderr}`);
 const output = JSON.parse(valid.stdout);
 if (output.definitions?.[0]?.plugin?.id !== 'sample1-offset-api') {
   throw new Error('CLI did not return the sample1 definition');
 }
+const envValid = runWithEnv(repositoryRoot);
+if (envValid.status !== 0) throw new Error(`environment configuration failed: ${envValid.stderr}`);
+const missingRoot = spawnSync(process.execPath, [cli], { cwd: tmpdir(), encoding: 'utf8', env: { ...process.env, OSS_SCP_CONFIG_ROOT: '' } });
+if (missingRoot.status !== 2 || !missingRoot.stderr.includes('usage:')) throw new Error('missing root did not fail with usage');
 const csvDefinition = output.definitions?.find(
   definition => definition.plugin?.id === 'vulnerabilities-local-csv',
 );

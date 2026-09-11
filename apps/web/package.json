@@ -4,9 +4,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "predev": "pnpm -w generate:web-menu",
     "dev": "vite",
-    "prebuild": "pnpm -w generate:web-menu",
     "build": "tsc --noEmit && vite build",
     "typecheck": "tsc --noEmit",
     "test": "vitest run"
