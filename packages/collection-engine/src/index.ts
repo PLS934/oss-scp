@@ -183,3 +183,14 @@ export async function processRecords(options: {
 }
 
 export type { Transform, TransformOutput, TransformRecord, TransformRelation } from '@oss-scp/plugin-sdk';
+export {
+  CollectionRunnerError,
+  runCollection,
+  type CollectionCollector,
+  type CollectionRunResult,
+  type CollectionRunnerErrorCode,
+  type CollectorBatch,
+  type CollectorBatchHandler,
+  type CollectorContext,
+  type RunCollectionOptions,
+} from './runner.js';
