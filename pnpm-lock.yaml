@@ -33,6 +33,9 @@ importers:
       '@nestjs/platform-express':
         specifier: 11.2.3
         version: 11.2.3(@nestjs/common@11.2.3(reflect-metadata@0.2.2)(rxjs@7.8.2))(@nestjs/core@11.2.3)
+      '@oss-scp/collector-cli':
+        specifier: workspace:*
+        version: link:../collector-cli
       '@oss-scp/platform-db':
         specifier: workspace:*
         version: link:../../packages/platform-db
@@ -49,6 +52,34 @@ importers:
       '@nestjs/testing':
         specifier: 11.2.3
         version: 11.2.3(@nestjs/common@11.2.3(reflect-metadata@0.2.2)(rxjs@7.8.2))(@nestjs/core@11.2.3)(@nestjs/platform-express@11.2.3)
+      '@types/node':
+        specifier: 24.13.3
+        version: 24.13.3
+      typescript:
+        specifier: 5.9.3
+        version: 5.9.3
+      vitest:
+        specifier: 4.1.11
+        version: 4.1.11(@types/node@24.13.3)(vite@8.2.2(@types/node@24.13.3)(terser@5.51.2)(yaml@2.9.0))
+
+  apps/collector-cli:
+    dependencies:
+      '@oss-scp/collection-engine':
+        specifier: workspace:*
+        version: link:../../packages/collection-engine
+      '@oss-scp/http-collector':
+        specifier: workspace:*
+        version: link:../../packages/http-collector
+      '@oss-scp/local-csv-source':
+        specifier: workspace:*
+        version: link:../../packages/local-csv-source
+      '@oss-scp/platform-db':
+        specifier: workspace:*
+        version: link:../../packages/platform-db
+      '@oss-scp/plugin-config':
+        specifier: workspace:*
+        version: link:../../packages/plugin-config
+    devDependencies:
       '@types/node':
         specifier: 24.13.3
         version: 24.13.3

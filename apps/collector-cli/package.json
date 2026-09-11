@@ -1,0 +1,29 @@
+{
+  "name": "@oss-scp/collector-cli",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "dist/index.js",
+  "bin": { "oss-scp-collect": "dist/process.js" },
+  "files": ["dist"],
+  "scripts": {
+    "prebuild": "pnpm --filter @oss-scp/plugin-config build && pnpm --filter @oss-scp/csv-reader build && pnpm --filter @oss-scp/http-collector build && pnpm --filter @oss-scp/local-csv-source build && pnpm --filter @oss-scp/collection-engine build && pnpm --filter @oss-scp/platform-db build",
+    "build": "tsc",
+    "start": "node dist/process.js",
+    "pretypecheck": "pnpm run prebuild",
+    "typecheck": "tsc --noEmit",
+    "test": "pnpm build && vitest run"
+  },
+  "dependencies": {
+    "@oss-scp/collection-engine": "workspace:*",
+    "@oss-scp/http-collector": "workspace:*",
+    "@oss-scp/local-csv-source": "workspace:*",
+    "@oss-scp/platform-db": "workspace:*",
+    "@oss-scp/plugin-config": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/node": "24.13.3",
+    "typescript": "5.9.3",
+    "vitest": "4.1.11"
+  }
+}
