@@ -64,8 +64,10 @@ export async function fixture(linkModules = false) {
     for (const relative of [
       'node_modules', 'apps/api/node_modules', 'apps/web/node_modules', 'apps/mock-api/node_modules',
       'packages/plugin-config/node_modules', 'packages/plugin-sdk/node_modules',
+      'packages/http-csv-source/node_modules',
       'plugins/sample1-offset-api/node_modules', 'plugins/sample2-single-api/node_modules',
       'plugins/vulnerabilities-local-csv/node_modules',
+      'plugins/vulnerabilities-http-csv/node_modules',
     ]) {
       await symlink(path.join(root, relative), path.join(dir, relative), 'dir');
     }

@@ -3,6 +3,7 @@ import { existsSync, readFileSync } from 'node:fs';
 import { isAbsolute, join, relative, resolve, sep } from 'node:path';
 import { loadSourceDefinition } from './source-loader';
 import { loadLocalCsvSource } from './source-loaders/file';
+import { loadHttpCsvSource } from './source-loaders/http-csv';
 import type {
   CollectionDefinition,
   ClientMenuItem,
@@ -285,7 +286,7 @@ function loadPlugins(
     ) {
       continue;
     }
-    if (sourceValue.format === 'csv') {
+    if (sourceValue.format === 'csv' && sourceValue.transport === 'file') {
       const csvPath = safeResolve(
         root,
         root,
@@ -297,6 +298,21 @@ function loadPlugins(
       if (!csvPath) continue;
       definitions.push(loadLocalCsvSource(runtimePlugin, sourceValue, csvPath));
       menus.push({ ...pluginValue.menu, pluginId: pluginValue.id, sourceId: sourceValue.path });
+      continue;
+    }
+
+    if (sourceValue.format === 'csv') {
+      if (sourceValue.limits.maxRecordSize > sourceValue.limits.maxCsvBytes) {
+        issue(errors, root, sourceFile, '/limits/maxRecordSize', 'must be less than or equal to maxCsvBytes');
+        continue;
+      }
+      const connection = connections.get(sourceValue.connectionRef);
+      if (!connection) {
+        issue(errors, root, sourceFile, '/connectionRef', `unknown connection id: ${sourceValue.connectionRef}`);
+        continue;
+      }
+      definitions.push(loadHttpCsvSource(runtimePlugin, sourceValue, connection.value));
+      menus.push({ ...pluginValue.menu, pluginId: pluginValue.id, sourceId: connection.value.id });
       continue;
     }
 

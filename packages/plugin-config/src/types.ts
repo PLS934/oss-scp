@@ -66,10 +66,27 @@ export interface LocalCsvSourceConfig {
   maxRecordSize?: number;
 }
 
+export interface HttpCsvSourceConfig {
+  apiVersion: 'oss-scp/source-v1';
+  transport: 'http';
+  connectionRef: string;
+  path: string;
+  method: 'GET';
+  format: 'csv';
+  batchSize: number;
+  limits: {
+    timeoutMs: number;
+    maxDownloadBytes: number;
+    maxCsvBytes: number;
+    maxRecordSize: number;
+  };
+}
+
 export type SourceConfig =
   | OffsetSourceConfig
   | SingleSourceConfig
-  | LocalCsvSourceConfig;
+  | LocalCsvSourceConfig
+  | HttpCsvSourceConfig;
 
 export interface HttpConnectionConfig {
   apiVersion: 'oss-scp/connection-v1';
@@ -109,10 +126,19 @@ export interface LocalCsvCollectionDefinition {
   limits: { maxBytes?: number; maxRecordSize?: number };
 }
 
+export interface HttpCsvCollectionDefinition {
+  plugin: PluginRuntimeDefinition;
+  connection: { id: string; baseUrl: string };
+  request: { transport: 'http'; method: 'GET'; path: string; format: 'csv' };
+  batching: { size: number };
+  limits: HttpCsvSourceConfig['limits'];
+}
+
 export type CollectionDefinition =
   | OffsetCollectionDefinition
   | SingleCollectionDefinition
-  | LocalCsvCollectionDefinition;
+  | LocalCsvCollectionDefinition
+  | HttpCsvCollectionDefinition;
 
 export interface ConfigurationIssue {
   file: string;

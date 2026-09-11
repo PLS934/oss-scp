@@ -8,6 +8,7 @@ COPY packages/plugin-sdk/package.json ./packages/plugin-sdk/package.json
 COPY plugins/sample1-offset-api/package.json ./plugins/sample1-offset-api/package.json
 COPY plugins/sample2-single-api/package.json ./plugins/sample2-single-api/package.json
 COPY plugins/vulnerabilities-local-csv/package.json ./plugins/vulnerabilities-local-csv/package.json
+COPY plugins/vulnerabilities-http-csv/package.json ./plugins/vulnerabilities-http-csv/package.json
 RUN pnpm install --frozen-lockfile
 COPY apps/web ./apps/web
 COPY packages/plugin-config ./packages/plugin-config

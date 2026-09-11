@@ -37,9 +37,10 @@ describe('validateRepository', () => {
 
     expect(result.ok).toBe(true);
     if (!result.ok) return;
-    expect(result.definitions).toHaveLength(3);
+    expect(result.definitions).toHaveLength(4);
     expect(result.menus).toEqual([
       { title: '취약점', icon: 'shield', group: '보안 관리', order: 10, path: '/vulnerabilities', dataType: 'vulnerability', pluginId: 'vulnerabilities-local-csv', sourceId: 'fixtures/csv/vulnerabilities.csv' },
+      { title: 'HTTP 취약점', icon: 'shield', group: '보안 관리', order: 20, path: '/vulnerabilities/http', dataType: 'vulnerability', pluginId: 'vulnerabilities-http-csv', sourceId: 'mock-api-vulnerabilities-csv' },
       { title: '서버 자산', icon: 'server', group: '자산 관리', order: 10, path: '/assets/servers', dataType: 'asset', pluginId: 'sample1-offset-api', sourceId: 'mock-api-sample1' },
       { title: '저장소', icon: 'repository', group: '자산 관리', order: 20, path: '/assets/repositories', dataType: 'repository', pluginId: 'sample2-single-api', sourceId: 'mock-api-sample2' },
     ]);
@@ -80,7 +81,7 @@ describe('validateRepository', () => {
       batching: { size: 20 },
       limits: {},
     }));
-    expect(result.definitions[2]).toEqual(expect.objectContaining({
+    expect(result.definitions[3]).toEqual(expect.objectContaining({
       plugin: expect.objectContaining({
         id: 'sample2-single-api',
         name: 'Sample 2 Single API',
@@ -95,6 +96,47 @@ describe('validateRepository', () => {
       },
       response: { itemsPath: 'items', metadataPaths: ['test_field6'] },
       pagination: { type: 'single' },
+    }));
+  });
+
+  test('HTTP CSV 설정을 Connection과 결합한 전용 정의로 해석한다', () => {
+    const result = validateRepository(repositoryRoot);
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.definitions[2]).toEqual(expect.objectContaining({
+      plugin: expect.objectContaining({ id: 'vulnerabilities-http-csv' }),
+      connection: { id: 'mock-api-vulnerabilities-csv', baseUrl: 'http://127.0.0.1:3001' },
+      request: { transport: 'http', method: 'GET', path: '/vulnerabilities.csv', format: 'csv' },
+      batching: { size: 20 },
+      limits: { timeoutMs: 5000, maxDownloadBytes: 2097152, maxCsvBytes: 2097152, maxRecordSize: 262144 },
+    }));
+  });
+
+  test.each([
+    ['필수 Connection 누락', (source) => delete source.connectionRef, '/connectionRef'],
+    ['로컬 속성 혼용', (source) => (source.maxBytes = 100), '/maxBytes'],
+    ['JSON 속성 혼용', (source) => (source.itemsPath = 'rows'), '/itemsPath'],
+    ['묶음 크기 초과', (source) => (source.batchSize = 1001), '/batchSize'],
+    ['레코드가 CSV보다 큼', (source) => (source.limits.maxRecordSize = source.limits.maxCsvBytes + 1), '/limits/maxRecordSize'],
+  ])('HTTP CSV의 %s을 거부한다', (_name, mutate, expectedPath) => {
+    const root = temporaryRepository();
+    const source = readJson(root, 'plugins/vulnerabilities-http-csv/source.json');
+    mutate(source);
+    writeJson(root, 'plugins/vulnerabilities-http-csv/source.json', source);
+    const result = validateRepository(root);
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.errors.some((error) => error.path === expectedPath)).toBe(true);
+  });
+
+  test('HTTP CSV의 미등록 Connection을 요청 전에 거부한다', () => {
+    const root = temporaryRepository();
+    const source = readJson(root, 'plugins/vulnerabilities-http-csv/source.json');
+    source.connectionRef = 'missing-http-csv';
+    writeJson(root, 'plugins/vulnerabilities-http-csv/source.json', source);
+    const result = validateRepository(root);
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.errors).toContainEqual(expect.objectContaining({
+      path: '/connectionRef', message: 'unknown connection id: missing-http-csv',
     }));
   });
 
@@ -130,10 +172,10 @@ describe('validateRepository', () => {
 
   test('registry 순서와 무관하게 메뉴를 결정적으로 정렬한다', () => {
     const root = temporaryRepository();
-    writeJson(root, 'plugins/registry.json', { plugins: ['./sample2-single-api', './sample1-offset-api', './vulnerabilities-local-csv'] });
+    writeJson(root, 'plugins/registry.json', { plugins: ['./sample2-single-api', './sample1-offset-api', './vulnerabilities-http-csv', './vulnerabilities-local-csv'] });
     const result = validateRepository(root);
     expect(result.ok).toBe(true);
-    if (result.ok) expect(result.menus.map(menu => menu.path)).toEqual(['/vulnerabilities', '/assets/servers', '/assets/repositories']);
+    if (result.ok) expect(result.menus.map(menu => menu.path)).toEqual(['/vulnerabilities', '/vulnerabilities/http', '/assets/servers', '/assets/repositories']);
   });
 
   test('로컬 CSV source의 옵션과 저장소 내부 경로를 해석한다', () => {
@@ -215,6 +257,7 @@ describe('validateRepository', () => {
       connections: [
         './mock-api-sample1.json',
         './mock-api-sample2.json',
+        './mock-api-vulnerabilities-csv.json',
         './other-source.json',
       ],
     });
@@ -363,6 +406,7 @@ describe('validateRepository', () => {
       connections: [
         './mock-api-sample1.json',
         './mock-api-sample2.json',
+        './mock-api-vulnerabilities-csv.json',
         './other-source.json',
       ],
     });
@@ -371,7 +415,7 @@ describe('validateRepository', () => {
 
     expect(result.ok).toBe(true);
     if (!result.ok) return;
-    expect(result.definitions[2]).toEqual(expect.objectContaining({
+    expect(result.definitions[3]).toEqual(expect.objectContaining({
       plugin: expect.objectContaining({ id: 'other-single-api', name: 'Other Single API', version: '0.1.0' }),
       connection: { id: 'other-source', baseUrl: 'https://inventory.example.test' },
       request: { method: 'GET', path: '/inventory/all-hosts', format: 'json' },
@@ -379,7 +423,7 @@ describe('validateRepository', () => {
       response: { itemsPath: 'payload.records', metadataPaths: ['meta.feed'] },
       pagination: { type: 'single' },
     }));
-    expect(JSON.stringify(result.definitions[2])).not.toMatch(
+    expect(JSON.stringify(result.definitions[3])).not.toMatch(
       /153|test_field2|test_field3|test_field6/,
     );
   });
@@ -398,7 +442,7 @@ describe('validateRepository', () => {
       id: 'mock-api-sample1',
       baseUrl: 'http://127.0.0.1:3001',
     });
-    expect(result.definitions[2].connection).toEqual({
+    expect(result.definitions[3].connection).toEqual({
       id: 'mock-api-sample2',
       baseUrl: 'http://127.0.0.1:4302',
     });
@@ -495,6 +539,7 @@ describe('validateRepository', () => {
       connections: [
         './mock-api-sample1.json',
         './mock-api-sample2.json',
+        './mock-api-vulnerabilities-csv.json',
         './duplicate.json',
       ],
     });
@@ -524,6 +569,7 @@ describe('validateRepository', () => {
       connections: [
         './mock-api-sample1.json',
         './mock-api-sample2.json',
+        './mock-api-vulnerabilities-csv.json',
         './duplicate.json',
       ],
     });

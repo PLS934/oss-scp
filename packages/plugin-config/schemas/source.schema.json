@@ -4,7 +4,8 @@
   "title": "oss-scp source",
   "oneOf": [
     { "$ref": "#/$defs/jsonSource" },
-    { "$ref": "#/$defs/localCsvSource" }
+    { "$ref": "#/$defs/localCsvSource" },
+    { "$ref": "#/$defs/httpCsvSource" }
   ],
   "$defs": {
     "jsonSource": {
@@ -49,6 +50,31 @@
         "batchSize": { "type": "integer", "minimum": 1, "maximum": 1000 },
         "maxBytes": { "type": "integer", "minimum": 1, "maximum": 9007199254740991 },
         "maxRecordSize": { "type": "integer", "minimum": 1, "maximum": 9007199254740991 }
+      }
+    },
+    "httpCsvSource": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["apiVersion", "transport", "connectionRef", "path", "method", "format", "batchSize", "limits"],
+      "properties": {
+        "apiVersion": { "const": "oss-scp/source-v1" },
+        "transport": { "const": "http" },
+        "connectionRef": { "type": "string", "pattern": "^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$", "maxLength": 100 },
+        "path": { "type": "string", "pattern": "^/(?!/)[^?#\\u0000]*$", "maxLength": 2048 },
+        "method": { "const": "GET" },
+        "format": { "const": "csv" },
+        "batchSize": { "type": "integer", "minimum": 1, "maximum": 1000 },
+        "limits": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["timeoutMs", "maxDownloadBytes", "maxCsvBytes", "maxRecordSize"],
+          "properties": {
+            "timeoutMs": { "type": "integer", "minimum": 100, "maximum": 300000 },
+            "maxDownloadBytes": { "type": "integer", "minimum": 1, "maximum": 104857600 },
+            "maxCsvBytes": { "type": "integer", "minimum": 1, "maximum": 104857600 },
+            "maxRecordSize": { "type": "integer", "minimum": 1, "maximum": 104857600 }
+          }
+        }
       }
     },
     "jsonPath": {

@@ -69,4 +69,4 @@ pnpm --filter @oss-scp/local-csv-source test
 
 ## 제외 범위
 
-브라우저 업로드, HTTP CSV 다운로드, 사용자 지정 구분자·비 UTF-8 인코딩, 가공 코드 실행, DB 저장, checkpoint 영속화, 메뉴·화면은 이 source 구현에 포함하지 않습니다. HTTP 다운로드는 추후 획득 계층만 추가하고 같은 공통 CSV 파서를 재사용합니다.
+브라우저 업로드, 사용자 지정 구분자·비 UTF-8 인코딩, 가공 코드 실행, DB 저장, checkpoint 영속화, 메뉴·화면은 이 source 구현에 포함하지 않습니다. HTTP 다운로드는 별도 [HTTP CSV source](http-csv-source.md)가 같은 공통 CSV 파서를 재사용합니다.

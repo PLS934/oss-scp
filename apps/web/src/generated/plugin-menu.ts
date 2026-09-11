@@ -11,6 +11,16 @@ export const pluginMenus = [
     "sourceId": "fixtures/csv/vulnerabilities.csv"
   },
   {
+    "title": "HTTP 취약점",
+    "icon": "shield",
+    "group": "보안 관리",
+    "order": 20,
+    "path": "/vulnerabilities/http",
+    "dataType": "vulnerability",
+    "pluginId": "vulnerabilities-http-csv",
+    "sourceId": "mock-api-vulnerabilities-csv"
+  },
+  {
     "title": "서버 자산",
     "icon": "server",
     "group": "자산 관리",
