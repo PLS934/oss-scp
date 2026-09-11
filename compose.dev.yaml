@@ -35,6 +35,7 @@ services:
       - api_plugin_sdk_modules:/workspace/packages/plugin-sdk/node_modules
       - api_collection_engine_modules:/workspace/packages/collection-engine/node_modules
       - api_http_collector_modules:/workspace/packages/http-collector/node_modules
+      - api_http_csv_source_modules:/workspace/packages/http-csv-source/node_modules
       - api_platform_db_modules:/workspace/packages/platform-db/node_modules
       - api_platform_db_dist:/workspace/packages/platform-db/dist
       - api_csv_reader_modules:/workspace/packages/csv-reader/node_modules
@@ -42,6 +43,7 @@ services:
       - api_sample1_plugin_modules:/workspace/plugins/sample1-offset-api/node_modules
       - api_sample2_plugin_modules:/workspace/plugins/sample2-single-api/node_modules
       - api_csv_plugin_modules:/workspace/plugins/vulnerabilities-local-csv/node_modules
+      - api_http_csv_plugin_modules:/workspace/plugins/vulnerabilities-http-csv/node_modules
     healthcheck:
       test: ["CMD", "node", "apps/api/healthcheck.mjs"]
       interval: 5s
@@ -73,6 +75,7 @@ services:
       - web_plugin_sdk_dist:/workspace/packages/plugin-sdk/dist
       - web_collection_engine_modules:/workspace/packages/collection-engine/node_modules
       - web_http_collector_modules:/workspace/packages/http-collector/node_modules
+      - web_http_csv_source_modules:/workspace/packages/http-csv-source/node_modules
       - web_platform_db_modules:/workspace/packages/platform-db/node_modules
       - web_csv_reader_modules:/workspace/packages/csv-reader/node_modules
       - web_local_csv_source_modules:/workspace/packages/local-csv-source/node_modules
@@ -82,6 +85,8 @@ services:
       - web_sample2_plugin_dist:/workspace/plugins/sample2-single-api/dist
       - web_csv_plugin_modules:/workspace/plugins/vulnerabilities-local-csv/node_modules
       - web_csv_plugin_dist:/workspace/plugins/vulnerabilities-local-csv/dist
+      - web_http_csv_plugin_modules:/workspace/plugins/vulnerabilities-http-csv/node_modules
+      - web_http_csv_plugin_dist:/workspace/plugins/vulnerabilities-http-csv/dist
     healthcheck:
       test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:8080/', {signal: AbortSignal.timeout(3000)}).then(r => process.exit(r.ok ? 0 : 1)).catch(() => process.exit(1))"]
       interval: 5s
@@ -111,12 +116,14 @@ services:
       - mock_plugin_sdk_modules:/workspace/packages/plugin-sdk/node_modules
       - mock_collection_engine_modules:/workspace/packages/collection-engine/node_modules
       - mock_http_collector_modules:/workspace/packages/http-collector/node_modules
+      - mock_http_csv_source_modules:/workspace/packages/http-csv-source/node_modules
       - mock_platform_db_modules:/workspace/packages/platform-db/node_modules
       - mock_csv_reader_modules:/workspace/packages/csv-reader/node_modules
       - mock_local_csv_source_modules:/workspace/packages/local-csv-source/node_modules
       - mock_sample1_plugin_modules:/workspace/plugins/sample1-offset-api/node_modules
       - mock_sample2_plugin_modules:/workspace/plugins/sample2-single-api/node_modules
       - mock_csv_plugin_modules:/workspace/plugins/vulnerabilities-local-csv/node_modules
+      - mock_http_csv_plugin_modules:/workspace/plugins/vulnerabilities-http-csv/node_modules
     healthcheck:
       test: ["CMD", "node", "apps/mock-api/healthcheck.mjs"]
       interval: 5s
@@ -130,6 +137,7 @@ volumes:
   web_sample1_plugin_dist:
   web_sample2_plugin_dist:
   web_csv_plugin_dist:
+  web_http_csv_plugin_dist:
   api_collector_cli_modules:
   web_collector_cli_modules:
   mock_collector_cli_modules:
@@ -148,9 +156,15 @@ volumes:
   api_csv_plugin_modules:
   web_csv_plugin_modules:
   mock_csv_plugin_modules:
+  api_http_csv_plugin_modules:
+  web_http_csv_plugin_modules:
+  mock_http_csv_plugin_modules:
   api_http_collector_modules:
   web_http_collector_modules:
   mock_http_collector_modules:
+  api_http_csv_source_modules:
+  web_http_csv_source_modules:
+  mock_http_csv_source_modules:
   api_platform_db_dist:
   api_local_csv_source_modules:
   web_local_csv_source_modules:
