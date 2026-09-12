@@ -24,7 +24,7 @@ services:
       PLATFORM_DB_USER: ${PLATFORM_DB_USER:-oss_scp_app}
       PLATFORM_DB_PASSWORD: ${PLATFORM_DB_PASSWORD:?PLATFORM_DB_PASSWORD must be set}
       PLATFORM_DB_TLS_MODE: disable
-    command: ["sh", "-c", "pnpm install --frozen-lockfile && pnpm --filter @oss-scp/platform-db build && pnpm --filter @oss-scp/plugin-config build && exec pnpm --filter @oss-scp/api exec nest start --watch --path tsconfig.dev.json"]
+    command: ["sh", "-c", "pnpm install --frozen-lockfile && pnpm --filter @oss-scp/collector-cli build && exec pnpm --filter @oss-scp/api exec nest start --watch --path tsconfig.dev.json"]
     volumes:
       - .:/workspace
       - api_root_modules:/workspace/node_modules

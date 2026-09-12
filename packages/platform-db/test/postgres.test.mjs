@@ -384,4 +384,15 @@ describe('PostgreSQL 공통 레코드 저장 계약', () => {
     expect(error).toMatchObject({ code: 'QUERY_FAILED', message: '플랫폼 데이터 조회에 실패했습니다.' });
     expect(error.message).not.toContain(marker);
   });
+
+  it('조정 실행은 동일 범위 중복을 막고 만료된 실행의 저장을 fencing한다', async () => {
+    const scope = testScope('exclusive-run');
+    const first = await storage.startRun({ ...scope, startedAt: new Date().toISOString(), exclusive: true });
+    await expect(storage.startRun({ ...scope, startedAt: new Date().toISOString(), exclusive: true })).rejects.toMatchObject({ code: 'RUN_ALREADY_ACTIVE' });
+    await connection.withClient(client => client.query("UPDATE collection_runs SET heartbeat_at=now() - interval '3 minutes' WHERE id=$1", [first]));
+    const second = await storage.startRun({ ...scope, startedAt: new Date().toISOString(), exclusive: true });
+    await expect(commit(first, scope)).rejects.toMatchObject({ code: 'RUN_NOT_ACTIVE' });
+    await storage.renewRun(second);
+    await commit(second, scope);
+  });
 });

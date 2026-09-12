@@ -81,7 +81,7 @@ describe('MySQL 어댑터', () => {
 describe('MySQL migration', () => {
   it('제품별 기본 디렉터리만 선택한다', () => {
     expect(defaultMigrationsDirectory('mysql')).toMatch(/migrations\/mysql$/);
-    expect(discoverMigrations(defaultMigrationsDirectory('mysql')).map(item => item.version)).toEqual([1, 2, 3, 4, 5, 6]);
+    expect(discoverMigrations(defaultMigrationsDirectory('mysql')).map(item => item.version)).toEqual([1, 2, 3, 4, 5, 6, 7]);
   });
   it('최초 적용·재실행·checksum과 실패 버전 미기록을 검증한다', async () => {
     const connection = await mysqlAdapter.connect(config());
@@ -235,5 +235,16 @@ describe('MySQL 공통 레코드 저장·조회 계약', () => {
     const error = await failed.listRecords({ pluginId: 'p', sourceId: 's', dataType: 'asset' }).catch(value => value);
     expect(error).toMatchObject({ code: 'QUERY_FAILED', message: '플랫폼 데이터 조회에 실패했습니다.' });
     expect(error.message).not.toContain('secret-password');
+  });
+
+  it('조정 실행은 동일 범위 중복을 막고 만료된 실행의 저장을 fencing한다', async () => {
+    const scope = scopeFor('exclusive-run');
+    const first = await storage.startRun({ ...scope, startedAt: new Date().toISOString(), exclusive: true });
+    await expect(storage.startRun({ ...scope, startedAt: new Date().toISOString(), exclusive: true })).rejects.toMatchObject({ code: 'RUN_ALREADY_ACTIVE' });
+    await connection.withClient(client => client.query("UPDATE collection_runs SET heartbeat_at=UTC_TIMESTAMP(3) - INTERVAL 3 MINUTE WHERE id=?", [first]));
+    const second = await storage.startRun({ ...scope, startedAt: new Date().toISOString(), exclusive: true });
+    await expect(commit(first, scope)).rejects.toMatchObject({ code: 'RUN_NOT_ACTIVE' });
+    await storage.renewRun(second);
+    await commit(second, scope);
   });
 });

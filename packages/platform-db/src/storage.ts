@@ -36,7 +36,7 @@ export interface StorageIssue {
   keyHint?: string;
 }
 
-export interface StartCollectionRun extends CollectionScope { startedAt: string }
+export interface StartCollectionRun extends CollectionScope { startedAt: string; exclusive?: boolean }
 export interface FinishCollectionRun { runId: string; status: 'success' | 'partial' | 'failed'; finishedAt: string }
 
 export interface CommitStorageBatch {
@@ -54,6 +54,7 @@ export interface CommitStorageBatch {
 
 export interface RecordStorage {
   startRun(input: StartCollectionRun): Promise<string>;
+  renewRun?(runId: string): Promise<void>;
   finishRun(input: FinishCollectionRun): Promise<void>;
   getCheckpoint(scope: CollectionScope): Promise<JsonValue | null>;
   commitBatch(input: CommitStorageBatch): Promise<void>;
@@ -61,7 +62,7 @@ export interface RecordStorage {
 
 export type StorageErrorCode =
   | 'INVALID_INPUT' | 'DUPLICATE_KEY' | 'RECORD_TOO_LARGE' | 'CHECKPOINT_TOO_LARGE'
-  | 'RUN_NOT_FOUND' | 'RUN_NOT_ACTIVE' | 'SCOPE_MISMATCH' | 'CHECKPOINT_CONFLICT'
+  | 'RUN_NOT_FOUND' | 'RUN_NOT_ACTIVE' | 'RUN_ALREADY_ACTIVE' | 'SCOPE_MISMATCH' | 'CHECKPOINT_CONFLICT'
   | 'RELATION_NOT_FOUND' | 'PERSIST_FAILED';
 
 const storageMessages: Record<StorageErrorCode, string> = {
@@ -71,6 +72,7 @@ const storageMessages: Record<StorageErrorCode, string> = {
   CHECKPOINT_TOO_LARGE: 'checkpoint가 저장 크기 제한을 초과했습니다.',
   RUN_NOT_FOUND: '수집 실행을 찾을 수 없습니다.',
   RUN_NOT_ACTIVE: '진행 중인 수집 실행만 변경할 수 있습니다.',
+  RUN_ALREADY_ACTIVE: '같은 대상과 범위의 수집이 이미 진행 중입니다.',
   SCOPE_MISMATCH: '수집 실행과 저장 묶음의 범위가 다릅니다.',
   CHECKPOINT_CONFLICT: '저장된 checkpoint와 묶음의 시작 checkpoint가 다릅니다.',
   RELATION_NOT_FOUND: '관계가 참조하는 레코드를 찾을 수 없습니다.',

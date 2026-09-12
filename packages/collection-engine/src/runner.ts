@@ -103,7 +103,7 @@ export async function runCollection(options: RunCollectionOptions): Promise<Coll
 
   let runId: string;
   try {
-    runId = await options.storage.startRun({ ...options.scope, startedAt: now() });
+    runId = await options.storage.startRun({ ...options.scope, startedAt: now(), exclusive: true });
   } catch {
     throw new CollectionRunnerError('storage');
   }
@@ -112,6 +112,10 @@ export async function runCollection(options: RunCollectionOptions): Promise<Coll
   let processed = 0;
   let accepted = 0;
   let rejected = 0;
+  const heartbeat = options.storage.renewRun
+    ? setInterval(() => { void options.storage.renewRun!(runId).catch(() => undefined); }, 30_000)
+    : undefined;
+  heartbeat?.unref();
 
   try {
     await options.collector({ checkpoint, signal }, async (sourceBatch) => {
@@ -171,6 +175,8 @@ export async function runCollection(options: RunCollectionOptions): Promise<Coll
       // Preserve the original stable failure instead of exposing a secondary storage error.
     }
     throw normalized;
+  } finally {
+    if (heartbeat) clearInterval(heartbeat);
   }
 
   const status = rejected > 0 ? 'partial' : 'success';

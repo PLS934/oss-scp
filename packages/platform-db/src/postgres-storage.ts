@@ -8,7 +8,7 @@ import {
 
 interface RunRow {
   plugin_id: string; source_id: string; scope_type: CollectionScope['scopeType'];
-  scope_key: string; config_revision: string; status: string; isolated_count: string;
+  scope_key: string; config_revision: string; status: string; isolated_count: string; coordinated?: boolean; lease_valid?: boolean;
 }
 
 interface RunStatusRow { status: string }
@@ -56,11 +56,33 @@ export function createPostgresRecordStorage(connection: PostgresPlatformDbConnec
     async startRun(input: StartCollectionRun): Promise<string> {
       validateStartRun(input);
       try {
-        const result = await connection.withClient(client => client.query<{ id: string }>(`INSERT INTO collection_runs
-          (plugin_id, source_id, scope_type, scope_key, config_revision, started_at)
-          VALUES ($1,$2,$3,$4,$5,$6) RETURNING id`, [...scopeValues(input), input.startedAt]));
-        if (!result.rows[0]) throw new StorageError('PERSIST_FAILED');
-        return result.rows[0].id;
+        return await connection.withClient(async client => {
+          await client.query('BEGIN');
+          try {
+            await client.query('SELECT pg_advisory_xact_lock(hashtextextended($1, 0))', [scopeLockKey(input)]);
+            const active = await client.query(`SELECT id FROM collection_runs WHERE plugin_id=$1 AND source_id=$2
+              AND scope_type=$3 AND scope_key=$4 AND status='running'
+              AND coordinated AND heartbeat_at > now() - interval '2 minutes' LIMIT 1`, scopeValues(input).slice(0, 4));
+            if (input.exclusive && active.rows[0]) throw new StorageError('RUN_ALREADY_ACTIVE');
+            await client.query(`UPDATE collection_runs SET status='failed', finished_at=now()
+              WHERE plugin_id=$1 AND source_id=$2 AND scope_type=$3 AND scope_key=$4 AND status='running' AND coordinated AND $5::boolean`, [...scopeValues(input).slice(0, 4), input.exclusive === true]);
+            const result = await client.query<{ id: string }>(`INSERT INTO collection_runs
+              (plugin_id, source_id, scope_type, scope_key, config_revision, started_at, heartbeat_at, coordinated)
+              VALUES ($1,$2,$3,$4,$5,$6,now(),$7) RETURNING id`, [...scopeValues(input), input.startedAt, input.exclusive === true]);
+            await client.query('COMMIT');
+            if (!result.rows[0]) throw new StorageError('PERSIST_FAILED');
+            return result.rows[0].id;
+          } catch (error) { await rollback(client); throw error; }
+        });
+      } catch (error) { throw publicFailure(error); }
+    },
+
+    async renewRun(runId: string): Promise<void> {
+      if (!runId) throw new StorageError('INVALID_INPUT');
+      try {
+        const result = await connection.withClient(client => client.query(
+          "UPDATE collection_runs SET heartbeat_at=now() WHERE id=$1 AND status='running'", [runId]));
+        if (result.rowCount !== 1) throw new StorageError('RUN_NOT_ACTIVE');
       } catch (error) { throw publicFailure(error); }
     },
 
@@ -68,10 +90,12 @@ export function createPostgresRecordStorage(connection: PostgresPlatformDbConnec
       if (!input.runId || Number.isNaN(Date.parse(input.finishedAt)) || !['success', 'partial', 'failed'].includes(input.status)) throw new StorageError('INVALID_INPUT');
       try {
         await connection.withClient(async client => {
-          const found = await client.query<{ status: string; isolated_count: string }>('SELECT status, isolated_count FROM collection_runs WHERE id=$1', [input.runId]);
+          const found = await client.query<{ status: string; isolated_count: string; coordinated: boolean; lease_valid: boolean }>(`SELECT status, isolated_count, coordinated,
+            heartbeat_at > now() - interval '2 minutes' AS lease_valid FROM collection_runs WHERE id=$1`, [input.runId]);
           const run = found.rows[0];
           if (!run) throw new StorageError('RUN_NOT_FOUND');
           if (run.status !== 'running') throw new StorageError('RUN_NOT_ACTIVE');
+          if (run.coordinated && !run.lease_valid) throw new StorageError('RUN_NOT_ACTIVE');
           if ((input.status === 'success' && Number(run.isolated_count) > 0) || (input.status === 'partial' && Number(run.isolated_count) === 0)) throw new StorageError('INVALID_INPUT');
           await client.query('UPDATE collection_runs SET status=$2, finished_at=$3 WHERE id=$1', [input.runId, input.status, input.finishedAt]);
         });
@@ -99,11 +123,13 @@ export function createPostgresRecordStorage(connection: PostgresPlatformDbConnec
         await client.query('BEGIN');
         try {
           await client.query('SELECT pg_advisory_xact_lock(hashtextextended($1, 0))', [scopeLockKey(input.scope)]);
-          const runResult = await client.query<RunRow>(`SELECT plugin_id, source_id, scope_type, scope_key, config_revision, status, isolated_count
+          const runResult = await client.query<RunRow>(`SELECT plugin_id, source_id, scope_type, scope_key, config_revision, status, isolated_count, coordinated,
+              heartbeat_at > now() - interval '2 minutes' AS lease_valid
             FROM collection_runs WHERE id=$1 FOR UPDATE`, [input.runId]);
           const run = runResult.rows[0];
           if (!run) throw new StorageError('RUN_NOT_FOUND');
           if (run.status !== 'running') throw new StorageError('RUN_NOT_ACTIVE');
+          if (run.coordinated && !run.lease_valid) throw new StorageError('RUN_NOT_ACTIVE');
           if (!sameScope(run, input.scope)) throw new StorageError('SCOPE_MISMATCH');
 
           const checkpointResult = await client.query<{ checkpoint: JsonValue }>(`SELECT checkpoint FROM collection_checkpoints
@@ -150,7 +176,7 @@ export function createPostgresRecordStorage(connection: PostgresPlatformDbConnec
             ON CONFLICT (plugin_id, source_id, scope_type, scope_key, config_revision) DO UPDATE
             SET checkpoint=EXCLUDED.checkpoint, updated_at=now()`, [...scopeValues(input.scope), JSON.stringify(input.nextCheckpoint)]);
           await client.query(`UPDATE collection_runs SET processed_count=processed_count+$2,
-            accepted_count=accepted_count+$3, isolated_count=isolated_count+$4 WHERE id=$1`,
+            accepted_count=accepted_count+$3, isolated_count=isolated_count+$4, heartbeat_at=now() WHERE id=$1`,
           [input.runId, input.processedCount, input.acceptedCount, input.issues.length]);
           await client.query('COMMIT');
         } catch (error) {

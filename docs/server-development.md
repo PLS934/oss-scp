@@ -33,9 +33,12 @@ pnpm dev
 
 ```sh
 curl -i http://127.0.0.1:3000/api/v1/health
+curl -i http://127.0.0.1:3000/api/v1/collection-status
 ```
 
 HTTP 200, JSON 콘텐츠 유형, 본문 `{"status":"ok"}`를 반환합니다. 인증은 필요하지 않으며 DB나 수집처 상태·데이터 최신성을 보장하는 API는 아닙니다. 정의되지 않은 경로는 404를 반환합니다.
+
+API는 기동할 때 검증된 registry의 모든 수집 정의를 수동 CLI와 같은 공통 실행 경로로 비동기 실행합니다. HTTP 수신은 장시간 수집 완료를 기다리지 않으며 `/api/v1/collection-status`에서 대상별 `uncollected`, `running`, `success`, `partial`, `failed` 상태와 설정 revision·시작·종료 시각을 조회할 수 있습니다. 등록 대상이 없으면 실행을 만들지 않습니다. 같은 대상의 API 기동이나 수동 수집이 겹치면 DB 실행권을 얻은 하나만 저장하며, 중단된 실행권은 2분 후 회수됩니다. 정상 종료 시 API가 실행 중인 자식 수집 프로세스에 종료 신호를 전달합니다.
 
 ## 환경변수
 

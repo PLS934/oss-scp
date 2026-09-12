@@ -359,7 +359,7 @@ function loadPlugins(
       );
       if (!csvPath) continue;
       definitions.push(loadLocalCsvSource(runtimePlugin, sourceValue, csvPath));
-      menus.push({ ...pluginValue.menu, pluginId: pluginValue.id, sourceId: sourceValue.path, list: clientLists.get(pluginValue.menu.dataType)!, detail: clientDetails.get(pluginValue.menu.dataType)! });
+      menus.push({ ...pluginValue.menu, pluginId: pluginValue.id, sourceId: `file:${sourceValue.path}`, list: clientLists.get(pluginValue.menu.dataType)!, detail: clientDetails.get(pluginValue.menu.dataType)! });
       continue;
     }
 
