@@ -15,6 +15,14 @@ test('검증된 메뉴를 그룹과 선언 순서대로 표시한다', () => {
   expect([...groupMenus(pluginMenus)].map(([group, entries]) => [group, entries.map(item => item.title)])).toEqual([['보안 관리', ['취약점', 'HTTP 취약점']], ['자산 관리', ['서버 자산', '저장소']]]);
   const html = render('/'); expect(html.indexOf('취약점')).toBeLessThan(html.indexOf('서버 자산')); expect(html.indexOf('서버 자산')).toBeLessThan(html.indexOf('저장소'));
 });
+test('아이콘 렌더러가 없으면 아이콘 영역 없이 메뉴 제목만 표시한다', () => {
+  const html = render('/');
+  expect(html).toMatch(/href="\/assets\/servers"[^>]*>서버 자산<\/a>/);
+  expect(html).toMatch(/href="\/assets\/repositories"[^>]*>저장소<\/a>/);
+  expect(html).not.toContain('aria-hidden="true"');
+  expect(html).not.toContain('서버 서버 자산');
+  expect(html).not.toContain('저장소 저장소');
+});
 test('직접 경로에서 해당 플러그인 목록을 복원한다', () => { const html = render('/assets/repositories'); expect(html).toContain('id="record-list-title">저장소'); expect(html).toContain('저장된 목록을 불러오는 중입니다'); expect(html).toContain('aria-current="page"'); });
 test('직접 상세 경로에서 같은 플러그인 범위를 복원한다', () => { const html = render('/assets/repositories/00000000-0000-4000-8000-000000000001'); expect(html).toContain('상세 정보를 불러오는 중입니다'); expect(html).toContain('aria-current="page"'); });
 test('알 수 없는 경로에는 목록을 만들지 않는다', () => { const html = render('/removed-plugin'); expect(html).toContain('페이지를 찾을 수 없습니다'); expect(html).not.toContain('record-list-title'); });
