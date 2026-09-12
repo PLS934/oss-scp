@@ -6,6 +6,17 @@
 
 ## Requirements
 
+### Requirement: 메뉴 상세 경로를 같은 조회 범위로 해석한다
+클라이언트는 등록 메뉴의 내부 UUID 하위 경로를 해당 메뉴와 동일한 `pluginId`, `sourceId`, `dataType` context에 SHALL 연결해야 한다. 목록 이동, 직접 접근과 새로고침은 동일한 context를 만들어야 한다(MUST).
+
+#### Scenario: 목록에서 상세 이동
+- **WHEN** 사용자가 내부 UUID 레코드의 상세 링크를 선택한다
+- **THEN** 같은 메뉴의 UUID 하위 경로와 조회 context가 상세 영역에 제공된다
+
+#### Scenario: 직접 상세 URL 접근과 새로고침
+- **WHEN** 사용자가 상세 경로를 직접 열거나 새로고침한다
+- **THEN** 메뉴 선택 때와 동일한 context와 선택 상태를 복원한다
+
 ### Requirement: 검증된 registry로 메뉴를 생성한다
 클라이언트는 서버가 기동 시 외부 설정 루트에서 검증한 플러그인 registry의 메뉴 산출물만 사용하여 메뉴 제목, 아이콘, 그룹, 순서와 경로를 표시해야 한다(SHALL). 같은 산출물은 메뉴 조회 범위에 대응하는 검증된 기본 목록 columns의 `key`, `label`, `type`과 기본 상세 sections의 제목 및 필드 `key`, `label`, `type`을 제공해야 한다(SHALL). 브라우저에서 플러그인 구조를 생성·수정하거나 원시 Git 설정을 다시 검증하지 않아야 한다(MUST).
 
