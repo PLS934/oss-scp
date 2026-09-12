@@ -10,7 +10,13 @@
     "types": {
       "vulnerability": {
         "uniqueKey": "cve",
-        "views": { "list": { "columns": ["cve", "name", "score", "affected", "observedAt"] } },
+        "views": {
+          "list": { "columns": ["cve", "name", "score", "affected", "observedAt"] },
+          "detail": { "sections": [
+            { "title": "취약점 정보", "fields": ["cve", "name", "score"] },
+            { "title": "영향 및 관측", "fields": ["affected", "observedAt"] }
+          ] }
+        },
         "fields": {
           "cve": { "type": "string", "label": "CVE", "required": true },
           "name": { "type": "string", "label": "취약점명", "required": true },

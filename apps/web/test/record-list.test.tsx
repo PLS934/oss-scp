@@ -13,6 +13,7 @@ const menu: MenuItem = {
     { key: 'enabled', label: '활성', type: 'boolean' },
     { key: 'observedAt', label: '관측 시각', type: 'datetime' },
   ] },
+  detail: { sections: [{ title: '기본 정보', fields: [{ key: 'hostname', label: '호스트명', type: 'string' }] }] },
 };
 const id = '00000000-0000-4000-8000-000000000001';
 const status = (value: CollectionStatus['status']): CollectionStatus => ({ scope: 'source', status: value, runId: value === 'never_collected' ? null : id, startedAt: value === 'never_collected' ? null : '2026-09-11T01:00:00.000Z', finishedAt: value === 'running' || value === 'never_collected' ? null : '2026-09-11T01:02:00.000Z' });

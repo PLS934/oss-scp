@@ -5,10 +5,10 @@ import App from '../src/App';
 import { groupMenus } from '../src/menu';
 
 const pluginMenus = [
-  { title: '취약점', icon: 'shield' as const, group: '보안 관리', order: 10, path: '/vulnerabilities', dataType: 'vulnerability', pluginId: 'vulnerabilities-local-csv', sourceId: 'fixtures/csv/vulnerabilities.csv', list: { columns: [{ key: 'cve', label: 'CVE', type: 'string' as const }] } },
-  { title: 'HTTP 취약점', icon: 'shield' as const, group: '보안 관리', order: 20, path: '/vulnerabilities/http', dataType: 'vulnerability', pluginId: 'vulnerabilities-http-csv', sourceId: 'mock-api-vulnerabilities-csv', list: { columns: [{ key: 'cve', label: 'CVE', type: 'string' as const }] } },
-  { title: '서버 자산', icon: 'server' as const, group: '자산 관리', order: 10, path: '/assets/servers', dataType: 'asset', pluginId: 'sample1-offset-api', sourceId: 'mock-api-sample1', list: { columns: [{ key: 'hostname', label: '호스트명', type: 'string' as const }] } },
-  { title: '저장소', icon: 'repository' as const, group: '자산 관리', order: 20, path: '/assets/repositories', dataType: 'repository', pluginId: 'sample2-single-api', sourceId: 'mock-api-sample2', list: { columns: [{ key: 'fullName', label: '저장소 전체 이름', type: 'string' as const }] } },
+  { title: '취약점', icon: 'shield' as const, group: '보안 관리', order: 10, path: '/vulnerabilities', dataType: 'vulnerability', pluginId: 'vulnerabilities-local-csv', sourceId: 'fixtures/csv/vulnerabilities.csv', list: { columns: [{ key: 'cve', label: 'CVE', type: 'string' as const }] }, detail: { sections: [{ title: '기본', fields: [{ key: 'cve', label: 'CVE', type: 'string' as const }] }] } },
+  { title: 'HTTP 취약점', icon: 'shield' as const, group: '보안 관리', order: 20, path: '/vulnerabilities/http', dataType: 'vulnerability', pluginId: 'vulnerabilities-http-csv', sourceId: 'mock-api-vulnerabilities-csv', list: { columns: [{ key: 'cve', label: 'CVE', type: 'string' as const }] }, detail: { sections: [{ title: '기본', fields: [{ key: 'cve', label: 'CVE', type: 'string' as const }] }] } },
+  { title: '서버 자산', icon: 'server' as const, group: '자산 관리', order: 10, path: '/assets/servers', dataType: 'asset', pluginId: 'sample1-offset-api', sourceId: 'mock-api-sample1', list: { columns: [{ key: 'hostname', label: '호스트명', type: 'string' as const }] }, detail: { sections: [{ title: '기본', fields: [{ key: 'hostname', label: '호스트명', type: 'string' as const }] }] } },
+  { title: '저장소', icon: 'repository' as const, group: '자산 관리', order: 20, path: '/assets/repositories', dataType: 'repository', pluginId: 'sample2-single-api', sourceId: 'mock-api-sample2', list: { columns: [{ key: 'fullName', label: '저장소 전체 이름', type: 'string' as const }] }, detail: { sections: [{ title: '기본', fields: [{ key: 'fullName', label: '저장소 전체 이름', type: 'string' as const }] }] } },
 ];
 const render = (path: string) => renderToStaticMarkup(<MemoryRouter initialEntries={[path]}><App menus={pluginMenus} /></MemoryRouter>);
 test('검증된 메뉴를 그룹과 선언 순서대로 표시한다', () => {

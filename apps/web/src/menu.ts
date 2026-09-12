@@ -4,6 +4,17 @@ export interface ListColumn {
   type: 'string' | 'number' | 'boolean' | 'datetime';
 }
 
+export interface DetailField {
+  key: string;
+  label: string;
+  type: ListColumn['type'] | 'object' | 'array';
+}
+
+export interface DetailSection {
+  title: string;
+  fields: DetailField[];
+}
+
 export interface MenuItem {
   title: string;
   icon: 'server' | 'shield' | 'repository';
@@ -14,6 +25,7 @@ export interface MenuItem {
   pluginId: string;
   sourceId: string;
   list: { columns: ListColumn[] };
+  detail: { sections: DetailSection[] };
 }
 
 export function groupMenus(menus: readonly MenuItem[]) {
