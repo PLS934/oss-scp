@@ -19,8 +19,10 @@ Docker와 Compose가 설치되어 있다면 Node.js·pnpm 없이 실행할 수 �
 
 ```sh
 export PLATFORM_DB_PASSWORD='무작위로-생성한-로컬-비밀번호'
-docker compose up --build -d --wait
+docker compose build
+docker compose up -d --wait postgres
 docker compose run --rm api node node_modules/@oss-scp/platform-db/dist/migrate-cli.js
+docker compose up -d --wait api web
 # 브라우저: http://localhost:8080
 curl http://127.0.0.1:3000/api/v1/health
 docker compose down

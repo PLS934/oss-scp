@@ -25,7 +25,24 @@ docker compose --profile mock down --volumes
 | api 컨테이너에서 mock API | `http://mock-api:3001` |
 | 웹 | `http://localhost:8080` |
 
-호스트 포트 충돌 시 `MOCK_PUBLISHED_PORT=4301 docker compose --profile mock up -d mock-api`로 바꿉니다. 컨테이너 내부 주소의 3001은 그대로입니다. API 컨테이너에서 호출할 수 있지만 자동 수집은 아직 구현하지 않았습니다.
+호스트 포트 충돌 시 `MOCK_PUBLISHED_PORT=4301 docker compose --profile mock up -d mock-api`로 바꿉니다. 컨테이너 내부 주소의 3001은 그대로입니다.
+
+API 기동 전체 수집에서 JSON·HTTP CSV 샘플을 사용하려면 API가 읽는 Connection의 `config.baseUrl`도 실행 위치에 맞아야 합니다. 저장소의 기본 Connection은 호스트에서 `pnpm`으로 실행하는 예시라 `127.0.0.1`을 사용합니다. API를 컨테이너에서 실행할 때는 운영자 설정 복사본에서 sample1, sample2, HTTP CSV Connection을 `http://mock-api:3001`로 지정하고 그 디렉터리를 `OSS_SCP_CONFIG_PATH`로 마운트해야 합니다. 컨테이너의 `127.0.0.1`은 mock이 아니라 API 컨테이너 자신을 가리키므로 그대로 사용하면 해당 대상의 기동 수집이 `failed`가 됩니다.
+
+기동 순서는 DB 준비와 migration, mock, API 순서입니다. migration 전에 API를 먼저 시작하면 최초 기동 수집은 테이블이 없는 DB에서 실패하며 자동 재시도하지 않습니다. 원천 또는 설정을 준비한 뒤 API를 재시작하면 등록 대상을 다시 전체 수집합니다.
+
+```sh
+export PLATFORM_DB_PASSWORD='무작위로-생성한-로컬-비밀번호'
+export OSS_SCP_CONFIG_PATH='/path/to/docker-config'
+docker compose build
+docker compose up -d --wait postgres
+docker compose run --rm api node node_modules/@oss-scp/platform-db/dist/migrate-cli.js
+docker compose --profile mock up -d --wait mock-api
+docker compose up -d --wait api web
+curl http://127.0.0.1:3000/api/v1/collection-status
+```
+
+`sample1-offset-api`와 `sample2-single-api`가 `success`면 자산 관리의 서버·저장소 샘플 수집이 완료된 상태입니다. mock을 사용하지 않는 운영 배포에서는 각 Connection을 실제 원천 주소로 설정합니다.
 
 ```sh
 docker compose --profile mock exec api node -e "fetch('http://mock-api:3001/sample1?limit=1').then(r => r.json()).then(console.log)"
