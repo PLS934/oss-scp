@@ -1,14 +1,13 @@
 import { Controller, Get, Inject } from '@nestjs/common';
 import type { ClientMenuItem } from '@oss-scp/plugin-config';
-
-export const PLUGIN_MENUS = Symbol('PLUGIN_MENUS');
+import { PLUGIN_RUNTIME_REGISTRY, type PluginRuntimeRegistry } from './plugin-runtime-registry';
 
 @Controller('api/v1/plugin-menus')
 export class PluginMenuController {
-  constructor(@Inject(PLUGIN_MENUS) private readonly menus: readonly ClientMenuItem[]) {}
+  constructor(@Inject(PLUGIN_RUNTIME_REGISTRY) private readonly registry: PluginRuntimeRegistry) {}
 
   @Get()
   list(): readonly ClientMenuItem[] {
-    return this.menus;
+    return this.registry.menus;
   }
 }

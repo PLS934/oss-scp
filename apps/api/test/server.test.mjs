@@ -3,6 +3,8 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { Test } from '@nestjs/testing';
 import { AppModule } from '../dist/app.module.js';
 import { readConfig } from '../dist/config.js';
+import { createPluginRuntimeRegistry } from '../dist/plugin-runtime-registry.js';
+import { formatConfigurationIssues } from '../dist/configuration-errors.js';
 
 describe('HTTP 계약과 Nest 의존성 주입', () => {
   let app;
@@ -62,7 +64,10 @@ describe('플러그인 메뉴 API', () => {
   it('검증된 비민감 메뉴만 반환한다', async () => {
     const connection = { checkReady: async () => true, close: async () => undefined };
     const menus = [{ title: '서버', icon: 'server', group: '자산', order: 10, path: '/servers', dataType: 'asset', pluginId: 'sample', sourceId: 'source', list: { columns: [{ key: 'hostname', label: '호스트명', type: 'string' }] }, detail: { sections: [{ title: '기본 정보', fields: [{ key: 'hostname', label: '호스트명', type: 'string' }] }] } }];
-    const module = await Test.createTestingModule({ imports: [AppModule.register(connection, undefined, menus)] }).compile();
+    const registry = createPluginRuntimeRegistry({ definitions: [], menus });
+    const registered = AppModule.register(connection, undefined, registry);
+    expect(registered.providers.find(provider => provider.provide?.description === 'PLUGIN_RUNTIME_REGISTRY').useValue).toBe(registry);
+    const module = await Test.createTestingModule({ imports: [registered] }).compile();
     const app = module.createNestApplication(); await app.listen(0, '127.0.0.1');
     try {
       const response = await fetch(`${await app.getUrl()}/api/v1/plugin-menus`);
@@ -71,6 +76,40 @@ describe('플러그인 메뉴 API', () => {
       const serialized = JSON.stringify(await (await fetch(`${await app.getUrl()}/api/v1/plugin-menus`)).json());
       expect(serialized).not.toMatch(/baseUrl|connection|sourceConfig|transformPath|password|nestedSchema/);
     } finally { await app.close(); }
+  });
+});
+
+describe('플러그인 runtime registry', () => {
+  it('입력과 반환값을 불변 snapshot으로 보존하고 plugin ID로 조회한다', () => {
+    const definition = { plugin: { id: 'sample', name: '샘플', version: '1.0.0', transformPath: '/config/transform.js', data: { types: {} }, menu: { title: '서버', icon: 'server', group: '자산', order: 20, path: '/servers', dataType: 'asset' } }, connection: { id: 'source', baseUrl: 'https://example.invalid' }, request: { method: 'GET', path: '/assets', format: 'json' }, limits: { timeoutMs: 1000, maxResponseBytes: 1000, maxRecordBytes: 100 }, response: { itemsPath: '/items' }, pagination: { type: 'single' } };
+    const menus = [
+      { title: '서버', icon: 'server', group: '자산', order: 20, path: '/servers', dataType: 'asset', pluginId: 'sample', sourceId: 'source', list: { columns: [] }, detail: { sections: [] } },
+      { title: '취약점', icon: 'shield', group: '보안', order: 10, path: '/findings', dataType: 'finding', pluginId: 'finding', sourceId: 'source', list: { columns: [] }, detail: { sections: [] } },
+    ];
+    const registry = createPluginRuntimeRegistry({ definitions: [definition], menus });
+    definition.plugin.name = '변경';
+    menus[0].title = '변경';
+    expect(registry.getDefinition('sample')?.plugin.name).toBe('샘플');
+    expect(registry.getDefinition('missing')).toBeUndefined();
+    expect(registry.menus.map(menu => menu.pluginId)).toEqual(['sample', 'finding']);
+    expect(Object.isFrozen(registry.definitions[0].plugin)).toBe(true);
+    expect(() => { registry.menus[0].title = '실패'; }).toThrow(TypeError);
+    expect(registry.menus[0].title).toBe('서버');
+  });
+});
+
+describe('플러그인 설정 오류 출력', () => {
+  it('모든 오류의 허용 필드만 로그 안전하게 출력한다', () => {
+    const formatted = formatConfigurationIssues([
+      { file: '/private/config/plugins/one/plugin.json', path: '/menu/title', message: 'invalid\nvalue', secret: 'token-value', stack: 'raw-stack' },
+      { file: 'connections/two.json', path: '/config/baseUrl\r', message: 'must match\u0085schema' },
+      { file: 'C:\\private\\config\\three.json', path: '/id', message: 'invalid id' },
+    ]);
+    expect(formatted.split('\n')).toHaveLength(3);
+    expect(formatted).toContain('plugin.json /menu/title: invalid\\u000avalue');
+    expect(formatted).toContain('connections/two.json /config/baseUrl\\u000d: must match\\u0085schema');
+    expect(formatted).toContain('three.json /id: invalid id');
+    expect(formatted).not.toMatch(/private\/config|private\\config|token-value|raw-stack/);
   });
 });
 

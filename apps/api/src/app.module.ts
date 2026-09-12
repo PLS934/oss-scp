@@ -4,8 +4,8 @@ import { HealthController } from './health.controller';
 import { HealthService, PLATFORM_DB_CONNECTION } from './health.service';
 import { RecordQueryController } from './record-query.controller';
 import { RECORD_QUERY, RecordQueryService } from './record-query.service';
-import { PLUGIN_MENUS, PluginMenuController } from './plugin-menu.controller';
-import type { ClientMenuItem } from '@oss-scp/plugin-config';
+import { PluginMenuController } from './plugin-menu.controller';
+import { createPluginRuntimeRegistry, PLUGIN_RUNTIME_REGISTRY, type PluginRuntimeRegistry } from './plugin-runtime-registry';
 
 class PlatformDbLifecycle implements OnApplicationShutdown {
   constructor(private readonly connection: PlatformDbConnection) {}
@@ -14,7 +14,11 @@ class PlatformDbLifecycle implements OnApplicationShutdown {
 
 @Module({})
 export class AppModule {
-  static register(connection: PlatformDbConnection, query?: RecordQuery, menus: readonly ClientMenuItem[] = []): DynamicModule {
+  static register(
+    connection: PlatformDbConnection,
+    query?: RecordQuery,
+    registry: PluginRuntimeRegistry = createPluginRuntimeRegistry({ definitions: [], menus: [] }),
+  ): DynamicModule {
     const unavailable: RecordQuery = {
       listRecords: async () => { throw new Error('record query adapter unavailable'); },
       getRecord: async () => { throw new Error('record query adapter unavailable'); },
@@ -25,11 +29,12 @@ export class AppModule {
       providers: [
         { provide: PLATFORM_DB_CONNECTION, useValue: connection },
         { provide: RECORD_QUERY, useValue: query ?? unavailable },
-        { provide: PLUGIN_MENUS, useValue: menus },
+        { provide: PLUGIN_RUNTIME_REGISTRY, useValue: registry },
         HealthService,
         RecordQueryService,
         { provide: PlatformDbLifecycle, useFactory: () => new PlatformDbLifecycle(connection) },
       ],
+      exports: [PLUGIN_RUNTIME_REGISTRY],
     };
   }
 }
