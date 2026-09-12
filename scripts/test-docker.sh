@@ -40,22 +40,30 @@ wait_health() {
 node scripts/check-db-compose-config.mjs
 pnpm build:plugin-transforms
 docker compose -p "$project" config --quiet
+docker compose -p "$project" build api
 docker compose -p "$project" -f compose.external-db.yaml config --format json | node -e '
 let value=""; process.stdin.on("data", chunk => value += chunk); process.stdin.on("end", () => {
   const config=JSON.parse(value); const services=Object.keys(config.services).sort();
   if (JSON.stringify(services) !== JSON.stringify(["api","web"]) || config.volumes) process.exit(1);
 });'
-docker compose -p "$project" up --build -d --wait --wait-timeout 90 api
+docker compose -p "$project" up --build -d --wait --wait-timeout 90 postgres
+docker compose -p "$project" run --rm api node node_modules/@oss-scp/platform-db/dist/migrate-cli.js | grep -q '4개 적용'
+docker compose -p "$project" up -d --wait --wait-timeout 90 api
 check_response "http://127.0.0.1:${API_PORT}"
 curl --fail --silent --show-error --max-time 5 "http://127.0.0.1:${API_PORT}/api/v1/plugin-menus" | grep -q 'sample1-offset-api'
-docker compose -p "$project" run --rm api node node_modules/@oss-scp/platform-db/dist/migrate-cli.js | grep -q '3개 적용'
 docker compose -p "$project" run --rm api node node_modules/@oss-scp/platform-db/dist/migrate-cli.js | grep -q '0개 적용'
+for ((attempt=0; attempt<30; attempt++)); do
+  status=$(curl --fail --silent --show-error --max-time 5 "http://127.0.0.1:${API_PORT}/api/v1/collection-status")
+  if printf '%s' "$status" | grep -q '"pluginId":"vulnerabilities-local-csv"' && printf '%s' "$status" | grep -q '"status":"success"'; then break; fi
+  sleep 1
+done
+printf '%s' "$status" | grep -q '"status":"success"'
 docker compose -p "$project" run --rm api node node_modules/@oss-scp/collector-cli/dist/process.js vulnerabilities-local-csv \
   | node -e 'let value=""; process.stdin.on("data", chunk => value += chunk); process.stdin.on("end", () => { const event=JSON.parse(value); if (event.status !== "success" || event.pluginId !== "vulnerabilities-local-csv") process.exit(1); });'
 docker compose -p "$project" stop postgres
 docker compose -p "$project" rm -f postgres
 docker compose -p "$project" up -d --wait --wait-timeout 90 postgres api
-test "$(docker compose -p "$project" exec -T postgres psql -U oss_scp_app -d oss_scp -Atc 'select count(*) from oss_scp_schema_migrations')" = 3
+test "$(docker compose -p "$project" exec -T postgres psql -U oss_scp_app -d oss_scp -Atc 'select count(*) from oss_scp_schema_migrations')" = 4
 test "$(docker inspect "${project}-postgres-1" --format '{{json .NetworkSettings.Ports}}')" = '{"5432/tcp":null}'
 docker run -d --name "$standalone" --network "${project}_default" -p 127.0.0.1::3000 \
   -v "$OSS_SCP_CONFIG_PATH:/config:ro" -e OSS_SCP_CONFIG_ROOT=/config \

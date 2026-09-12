@@ -24,24 +24,30 @@ services:
       PLATFORM_DB_USER: ${PLATFORM_DB_USER:-oss_scp_app}
       PLATFORM_DB_PASSWORD: ${PLATFORM_DB_PASSWORD:?PLATFORM_DB_PASSWORD must be set}
       PLATFORM_DB_TLS_MODE: disable
-    command: ["sh", "-c", "pnpm install --frozen-lockfile && pnpm --filter @oss-scp/platform-db build && pnpm --filter @oss-scp/plugin-config build && exec pnpm --filter @oss-scp/api exec nest start --watch --path tsconfig.dev.json"]
+    command: ["sh", "-c", "pnpm install --frozen-lockfile && pnpm --filter @oss-scp/collector-cli build && exec pnpm --filter @oss-scp/api exec nest start --watch --path tsconfig.dev.json"]
     volumes:
       - .:/workspace
       - api_root_modules:/workspace/node_modules
       - api_modules:/workspace/apps/api/node_modules
       - api_collector_cli_modules:/workspace/apps/collector-cli/node_modules
+      - api_collector_cli_dist:/workspace/apps/collector-cli/dist
       - api_web_modules:/workspace/apps/web/node_modules
       - api_mock_modules:/workspace/apps/mock-api/node_modules
       - api_plugin_config_modules:/workspace/packages/plugin-config/node_modules
       - api_plugin_config_dist:/workspace/packages/plugin-config/dist
       - api_plugin_sdk_modules:/workspace/packages/plugin-sdk/node_modules
+      - api_plugin_sdk_dist:/workspace/packages/plugin-sdk/dist
       - api_collection_engine_modules:/workspace/packages/collection-engine/node_modules
+      - api_collection_engine_dist:/workspace/packages/collection-engine/dist
       - api_http_collector_modules:/workspace/packages/http-collector/node_modules
+      - api_http_collector_dist:/workspace/packages/http-collector/dist
       - api_http_csv_source_modules:/workspace/packages/http-csv-source/node_modules
       - api_platform_db_modules:/workspace/packages/platform-db/node_modules
       - api_platform_db_dist:/workspace/packages/platform-db/dist
       - api_csv_reader_modules:/workspace/packages/csv-reader/node_modules
+      - api_csv_reader_dist:/workspace/packages/csv-reader/dist
       - api_local_csv_source_modules:/workspace/packages/local-csv-source/node_modules
+      - api_local_csv_source_dist:/workspace/packages/local-csv-source/dist
       - api_sample1_plugin_modules:/workspace/plugins/sample1-offset-api/node_modules
       - api_sample2_plugin_modules:/workspace/plugins/sample2-single-api/node_modules
       - api_csv_plugin_modules:/workspace/plugins/vulnerabilities-local-csv/node_modules
@@ -134,6 +140,12 @@ services:
       retries: 12
 
 volumes:
+  api_collector_cli_dist:
+  api_plugin_sdk_dist:
+  api_collection_engine_dist:
+  api_http_collector_dist:
+  api_csv_reader_dist:
+  api_local_csv_source_dist:
   web_plugin_config_dist:
   web_plugin_sdk_dist:
   web_sample1_plugin_dist:

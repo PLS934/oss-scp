@@ -12,7 +12,7 @@ import {
 
 interface RunRow extends RowDataPacket {
   plugin_id: string; source_id: string; scope_type: CollectionScope['scopeType']; scope_key: string;
-  config_revision: string; status: string; isolated_count: number | string;
+  config_revision: string; status: string; isolated_count: number | string; coordinated?: number; lease_valid?: number;
 }
 interface RecordRow extends RowDataPacket {
   id: string; plugin_id: string; source_id: string; data_type: string;
@@ -66,10 +66,32 @@ export function createMysqlRecordStorage(connection: MysqlPlatformDbConnection):
       validateStartRun(input);
       const id = randomUUID();
       try {
-        await connection.withClient(client => client.execute(`INSERT INTO collection_runs
-          (id, scope_hash, plugin_id, source_id, scope_type, scope_key, config_revision, started_at)
-          VALUES (?,?,?,?,?,?,?,?)`, [id, collectionScopeIdentity(input), ...scopeValues(input), new Date(input.startedAt)]));
+        await connection.withClient(async client => {
+          const hash = collectionScopeIdentity(input);
+          const lockName = hash.toString('hex');
+          const [locks] = await client.query('SELECT GET_LOCK(?, 5) AS acquired', [lockName]) as [{ acquired: number | null }[], unknown];
+          if (locks[0]?.acquired !== 1) throw new StorageError('PERSIST_FAILED');
+          try {
+            const [active] = await client.query<RunRow[]>(`SELECT id FROM collection_runs WHERE scope_hash=?
+              AND status='running' AND coordinated=1 AND heartbeat_at > UTC_TIMESTAMP(3) - INTERVAL 2 MINUTE LIMIT 1`, [hash]);
+            if (input.exclusive && active[0]) throw new StorageError('RUN_ALREADY_ACTIVE');
+            await client.execute(`UPDATE collection_runs SET status='failed', finished_at=UTC_TIMESTAMP(3)
+              WHERE scope_hash=? AND status='running' AND coordinated=1 AND ?=1`, [hash, input.exclusive ? 1 : 0]);
+            await client.execute(`INSERT INTO collection_runs
+              (id, scope_hash, plugin_id, source_id, scope_type, scope_key, config_revision, started_at, heartbeat_at, coordinated)
+              VALUES (?,?,?,?,?,?,?,?,UTC_TIMESTAMP(3),?)`, [id, hash, ...scopeValues(input), new Date(input.startedAt), input.exclusive ? 1 : 0]);
+          } finally { await client.query('SELECT RELEASE_LOCK(?)', [lockName]).catch(() => undefined); }
+        });
         return id;
+      } catch (error) { throw publicFailure(error); }
+    },
+
+    async renewRun(runId: string): Promise<void> {
+      if (!runId) throw new StorageError('INVALID_INPUT');
+      try {
+        const [result] = await connection.withClient(client => client.execute(
+          "UPDATE collection_runs SET heartbeat_at=UTC_TIMESTAMP(3) WHERE id=? AND status='running'", [runId]));
+        if ((result as { affectedRows?: number }).affectedRows !== 1) throw new StorageError('RUN_NOT_ACTIVE');
       } catch (error) { throw publicFailure(error); }
     },
 
@@ -79,10 +101,12 @@ export function createMysqlRecordStorage(connection: MysqlPlatformDbConnection):
         await connection.withClient(async client => {
           await client.beginTransaction();
           try {
-            const [rows] = await client.query<RunRow[]>('SELECT status, isolated_count FROM collection_runs WHERE id=? FOR UPDATE', [input.runId]);
+            const [rows] = await client.query<RunRow[]>(`SELECT status, isolated_count, coordinated,
+              heartbeat_at > UTC_TIMESTAMP(3) - INTERVAL 2 MINUTE AS lease_valid FROM collection_runs WHERE id=? FOR UPDATE`, [input.runId]);
             const run = rows[0];
             if (!run) throw new StorageError('RUN_NOT_FOUND');
             if (run.status !== 'running') throw new StorageError('RUN_NOT_ACTIVE');
+            if (run.coordinated === 1 && run.lease_valid !== 1) throw new StorageError('RUN_NOT_ACTIVE');
             if ((input.status === 'success' && Number(run.isolated_count) > 0) || (input.status === 'partial' && Number(run.isolated_count) === 0)) throw new StorageError('INVALID_INPUT');
             await client.execute('UPDATE collection_runs SET status=?, finished_at=? WHERE id=?', [input.status, new Date(input.finishedAt), input.runId]);
             await client.commit();
@@ -120,10 +144,12 @@ export function createMysqlRecordStorage(connection: MysqlPlatformDbConnection):
           if (!locked) throw new StorageError('PERSIST_FAILED');
           await client.beginTransaction();
 
-          const [runRows] = await client.query<RunRow[]>('SELECT plugin_id, source_id, scope_type, scope_key, config_revision, status, isolated_count FROM collection_runs WHERE id=? FOR UPDATE', [input.runId]);
+          const [runRows] = await client.query<RunRow[]>(`SELECT plugin_id, source_id, scope_type, scope_key, config_revision, status, isolated_count, coordinated,
+            heartbeat_at > UTC_TIMESTAMP(3) - INTERVAL 2 MINUTE AS lease_valid FROM collection_runs WHERE id=? FOR UPDATE`, [input.runId]);
           const run = runRows[0];
           if (!run) throw new StorageError('RUN_NOT_FOUND');
           if (run.status !== 'running') throw new StorageError('RUN_NOT_ACTIVE');
+          if (run.coordinated === 1 && run.lease_valid !== 1) throw new StorageError('RUN_NOT_ACTIVE');
           if (!sameScope(run, input.scope)) throw new StorageError('SCOPE_MISMATCH');
 
           const [checkpointRows] = await client.query<CheckpointRow[]>('SELECT plugin_id, source_id, scope_type, scope_key, config_revision, checkpoint FROM collection_checkpoints WHERE scope_hash=? FOR UPDATE', [scopeHash]);
@@ -184,7 +210,7 @@ export function createMysqlRecordStorage(connection: MysqlPlatformDbConnection):
               VALUES (?,?,?,?,?,?,?)`, [scopeHash, ...scopeValues(input.scope), JSON.stringify(input.nextCheckpoint)]);
           }
           await client.execute(`UPDATE collection_runs SET processed_count=processed_count+?,
-            accepted_count=accepted_count+?, isolated_count=isolated_count+? WHERE id=?`, [input.processedCount, input.acceptedCount, input.issues.length, input.runId]);
+            accepted_count=accepted_count+?, isolated_count=isolated_count+?, heartbeat_at=UTC_TIMESTAMP(3) WHERE id=?`, [input.processedCount, input.acceptedCount, input.issues.length, input.runId]);
           await client.commit();
         } catch (error) {
           await rollback(client);

@@ -23,7 +23,12 @@ async function startDatabase() {
   const address = docker('port', dbContainer, '5432/tcp');
   dbEnv = { PLATFORM_DB_TYPE: 'postgres', PLATFORM_DB_HOST: address.slice(0, address.lastIndexOf(':')), PLATFORM_DB_PORT: address.slice(address.lastIndexOf(':') + 1), PLATFORM_DB_NAME: 'oss_scp', PLATFORM_DB_USER: 'oss_scp_app', PLATFORM_DB_PASSWORD: 'process-password', PLATFORM_DB_TLS_MODE: 'disable' };
   for (let i = 0; i < 100; i++) {
-    if (await canConnect(dbEnv.PLATFORM_DB_HOST, dbEnv.PLATFORM_DB_PORT)) return;
+    if (await canConnect(dbEnv.PLATFORM_DB_HOST, dbEnv.PLATFORM_DB_PORT)) {
+      try {
+        execFileSync(process.execPath, ['packages/platform-db/dist/migrate-cli.js'], { cwd: root, env: { ...process.env, ...dbEnv }, stdio: 'ignore' });
+        return;
+      } catch { /* 초기화 중 PostgreSQL이 재시작되면 다시 시도합니다. */ }
+    }
     await delay(100);
   }
   throw new Error('PostgreSQL 호스트 포트가 준비되지 않았습니다.');

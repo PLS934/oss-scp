@@ -1,4 +1,5 @@
 import type { ClientMenuItem, CollectionDefinition } from '@oss-scp/plugin-config';
+import { createHash } from 'node:crypto';
 
 export const PLUGIN_RUNTIME_REGISTRY = Symbol('PLUGIN_RUNTIME_REGISTRY');
 
@@ -6,6 +7,21 @@ export interface PluginRuntimeRegistry {
   readonly definitions: readonly CollectionDefinition[];
   readonly menus: readonly ClientMenuItem[];
   getDefinition(pluginId: string): CollectionDefinition | undefined;
+}
+
+function stable(value: unknown): unknown {
+  if (Array.isArray(value)) return value.map(stable);
+  if (value !== null && typeof value === 'object') return Object.fromEntries(
+    Object.entries(value as Record<string, unknown>)
+      .filter(([key]) => key !== 'transformPath')
+      .sort(([left], [right]) => left.localeCompare(right))
+      .map(([key, item]) => [key, stable(item)]),
+  );
+  return value;
+}
+
+export function definitionRevision(definition: CollectionDefinition): string {
+  return createHash('sha256').update(JSON.stringify(stable(definition))).digest('hex');
 }
 
 function deepFreeze<T>(value: T): T {

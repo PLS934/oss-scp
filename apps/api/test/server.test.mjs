@@ -98,6 +98,30 @@ describe('플러그인 runtime registry', () => {
   });
 });
 
+describe('수집 상태 API', () => {
+  it('최초 수집 전과 저장된 실행 상태를 원천 호출 없이 반환한다', async () => {
+    const connection = { checkReady: async () => true, close: async () => undefined };
+    const menus = [
+      { title: '서버', icon: 'server', group: '자산', order: 1, path: '/servers', dataType: 'asset', pluginId: 'one', sourceId: 'source-1', list: { columns: [] }, detail: { sections: [] } },
+      { title: '취약점', icon: 'shield', group: '보안', order: 2, path: '/findings', dataType: 'finding', pluginId: 'two', sourceId: 'source-2', list: { columns: [] }, detail: { sections: [] } },
+    ];
+    const calls = [];
+    const query = { listRecords: async input => { calls.push(input); return { items: [], pageInfo: { nextCursor: null, hasNextPage: false }, lastStoredAt: null, collection: input.pluginId === 'one' ? null : { scope: 'source', status: 'running', runId: 'run-2', startedAt: '2026-09-12T00:00:00.000Z', finishedAt: null } }; }, getRecord: async () => null };
+    const registry = createPluginRuntimeRegistry({ definitions: [], menus });
+    const module = await Test.createTestingModule({ imports: [AppModule.register(connection, query, registry)] }).compile();
+    const app = module.createNestApplication(); await app.listen(0, '127.0.0.1');
+    try {
+      const response = await fetch(`${await app.getUrl()}/api/v1/collection-status`);
+      expect(response.status).toBe(200);
+      expect(await response.json()).toEqual([
+        { pluginId: 'one', sourceId: 'source-1', dataType: 'asset', configRevision: null, status: 'uncollected', runId: null, startedAt: null, finishedAt: null },
+        { pluginId: 'two', sourceId: 'source-2', dataType: 'finding', configRevision: null, status: 'running', runId: 'run-2', startedAt: '2026-09-12T00:00:00.000Z', finishedAt: null },
+      ]);
+      expect(calls).toHaveLength(2);
+    } finally { await app.close(); }
+  });
+});
+
 describe('플러그인 설정 오류 출력', () => {
   it('모든 오류의 허용 필드만 로그 안전하게 출력한다', () => {
     const formatted = formatConfigurationIssues([

@@ -9,6 +9,7 @@ import { createPlatformRecordAdapters, mysqlAdapter, postgresAdapter, readPlatfo
 import { preflightConfiguration } from '@oss-scp/plugin-config';
 import { formatConfigurationIssues } from './configuration-errors';
 import { createPluginRuntimeRegistry } from './plugin-runtime-registry';
+import { StartupCollectionManager } from './startup-collection';
 
 async function bootstrap() {
   const envFile = resolve(__dirname, '../../../.env');
@@ -23,10 +24,12 @@ async function bootstrap() {
   const dbConfig = readPlatformDbConfig(process.env, adapters);
   const connection = await selectPlatformDbAdapter(dbConfig.type, adapters).connect(dbConfig);
   const { query } = createPlatformRecordAdapters(dbConfig.type, connection);
-  const app = await NestFactory.create(AppModule.register(connection, query, registry), { abortOnError: false });
+  const startup = new StartupCollectionManager(configRoot);
+  const app = await NestFactory.create(AppModule.register(connection, query, registry, startup), { abortOnError: false });
   app.enableShutdownHooks();
   try {
     await app.listen(port, host);
+    startup.start(registry.definitions);
   } catch (error) {
     await app.close();
     await connection.close();

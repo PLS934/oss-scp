@@ -33,9 +33,14 @@ pnpm dev
 
 ```sh
 curl -i http://127.0.0.1:3000/api/v1/health
+curl -i http://127.0.0.1:3000/api/v1/collection-status
 ```
 
 HTTP 200, JSON 콘텐츠 유형, 본문 `{"status":"ok"}`를 반환합니다. 인증은 필요하지 않으며 DB나 수집처 상태·데이터 최신성을 보장하는 API는 아닙니다. 정의되지 않은 경로는 404를 반환합니다.
+
+API는 기동할 때 검증된 registry의 모든 수집 정의를 수동 CLI와 같은 공통 실행 경로로 비동기 실행합니다. HTTP 수신은 장시간 수집 완료를 기다리지 않으며 `/api/v1/collection-status`에서 대상별 `uncollected`, `running`, `success`, `partial`, `failed` 상태와 설정 revision·시작·종료 시각을 조회할 수 있습니다. 등록 대상이 없으면 실행을 만들지 않습니다. 같은 대상의 API 기동이나 수동 수집이 겹치면 DB 실행권을 얻은 하나만 저장하며, 중단된 실행권은 2분 후 회수됩니다. 정상 종료 시 API가 실행 중인 자식 수집 프로세스에 종료 신호를 전달합니다.
+
+샘플 자산을 컨테이너에서 기동 수집할 때는 mock 서비스뿐 아니라 Docker 네트워크용 Connection 주소가 필요합니다. 호스트용 `127.0.0.1` 설정과 컨테이너용 `mock-api:3001` 설정의 차이, 올바른 시작 순서와 상태 확인 방법은 [Mock API 실행 안내](mock-api.md)를 따릅니다.
 
 ## 환경변수
 

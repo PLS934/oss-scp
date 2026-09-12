@@ -30,13 +30,15 @@ for ((attempt=0; attempt<60; attempt++)); do
 done
 address=$(docker port "$database" 5432/tcp)
 export PLATFORM_DB_PORT="${address##*:}"
+docker compose -p "$project" -f compose.external-db.yaml -f compose.external-db.secret.yaml build api
+docker compose -p "$project" -f compose.external-db.yaml -f compose.external-db.secret.yaml run --rm api node node_modules/@oss-scp/platform-db/dist/migrate-cli.js | grep -q '4개 적용'
 if ! docker compose -p "$project" -f compose.external-db.yaml -f compose.external-db.secret.yaml up --build -d --wait --wait-timeout 90 api; then
   docker compose -p "$project" -f compose.external-db.yaml -f compose.external-db.secret.yaml logs api
   exit 1
 fi
 test "$(curl --fail --silent --show-error --max-time 5 "http://127.0.0.1:${API_PORT}/api/v1/ready")" = '{"status":"ready"}'
-docker compose -p "$project" -f compose.external-db.yaml -f compose.external-db.secret.yaml run --rm api node node_modules/@oss-scp/platform-db/dist/migrate-cli.js | grep -q '3개 적용'
+docker compose -p "$project" -f compose.external-db.yaml -f compose.external-db.secret.yaml run --rm api node node_modules/@oss-scp/platform-db/dist/migrate-cli.js | grep -q '0개 적용'
 docker compose -p "$project" -f compose.external-db.yaml -f compose.external-db.secret.yaml down --remove-orphans
 test "$(docker inspect --format '{{.State.Running}}' "$database")" = true
-test "$(docker exec "$database" psql -U oss_scp_app -d oss_scp -Atc 'select count(*) from oss_scp_schema_migrations')" = 3
+test "$(docker exec "$database" psql -U oss_scp_app -d oss_scp -Atc 'select count(*) from oss_scp_schema_migrations')" = 4
 echo '외부 PostgreSQL: API·migration 연결 및 외부 DB 생명주기 비관리 통과'
