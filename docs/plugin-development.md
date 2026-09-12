@@ -70,9 +70,9 @@ packages/plugin-config/
 
 운영자 Git revision의 `plugins/`, `connections/`와 각 `registry.json`이 구조의 유일한 원본입니다. 운영 환경에는 TypeScript 원본이 아니라 사전 빌드된 JavaScript 가공 모듈을 배포하고, 대상 플랫폼 이미지의 검증 명령으로 전체 설정과 모듈 export를 확인합니다. 브라우저는 API가 기동 시 검증한 `/api/v1/plugin-menus` 결과만 읽으며 메뉴 구조를 생성하거나 수정하지 않습니다.
 
-## 필드 표시명과 기본 목록
+## 필드 표시명과 기본 목록·상세
 
-모든 scalar·object·array 필드와 중첩된 `items`·`fields`에는 비어 있지 않은 `label`을 선언합니다. 각 데이터 종류의 `views.list.columns`에는 기본 목록에 표시할 최상위 scalar 필드 key를 원하는 순서대로 하나 이상 선언합니다.
+모든 scalar·object·array 필드와 중첩된 `items`·`fields`에는 비어 있지 않은 `label`을 선언합니다. 각 데이터 종류의 `views.list.columns`에는 기본 목록에 표시할 최상위 scalar 필드 key를 원하는 순서대로 하나 이상 선언합니다. `views.detail.sections`에는 상세 화면의 섹션 제목과 최상위 필드 key를 표시 순서대로 선언합니다.
 
 ```json
 {
@@ -80,6 +80,12 @@ packages/plugin-config/
   "views": {
     "list": {
       "columns": ["hostname", "environment", "enabled"]
+    },
+    "detail": {
+      "sections": [
+        { "title": "기본 정보", "fields": ["hostname", "environment"] },
+        { "title": "상세 구성", "fields": ["enabled", "details"] }
+      ]
     }
   },
   "fields": {
@@ -99,7 +105,9 @@ packages/plugin-config/
 
 목록 column은 같은 데이터 종류에 존재하는 `string`, `number`, `boolean`, `datetime` 필드만 참조할 수 있습니다. 존재하지 않는 key나 `details` 같은 object·array를 참조하면 해당 `columns` 배열 위치와 원인을 포함한 오류가 발생합니다. 빈 배열과 중복 key는 JSON Schema 검증에서 거부됩니다. object·array를 기본 목록에 표시하는 계약은 중첩 렌더링 작업에서 별도로 정의합니다.
 
-검증된 `/api/v1/plugin-menus` 응답은 각 메뉴에 다음처럼 선택된 column의 `key`, `label`, `type`만 포함합니다. 전체 필드 정의, source 요청, Connection과 transform 경로는 브라우저에 전달하지 않습니다.
+상세 section은 하나 이상의 필드를 가져야 하며 제목은 같은 데이터 종류에서 고유해야 합니다. 상세 필드는 같은 데이터 종류의 최상위 `string`, `number`, `boolean`, `datetime`, `object`, `array` 필드를 참조할 수 있지만, 같은 필드를 한 section 또는 여러 section에 중복 선언할 수 없습니다. 존재하지 않거나 중복된 필드는 두 번째 문제 참조의 `sections/{sectionIndex}/fields/{fieldIndex}` 경로와 함께 거부됩니다. 선언된 모든 필드를 상세에 포함할 필요는 없습니다.
+
+검증된 `/api/v1/plugin-menus` 응답은 각 메뉴에 다음처럼 선택된 목록 column과 상세 section의 `key`, `label`, `type`만 포함합니다. 선택하지 않은 필드, object·array의 중첩 schema, source 요청, Connection과 transform 경로는 브라우저에 전달하지 않습니다.
 
 ```json
 {
@@ -111,6 +119,24 @@ packages/plugin-config/
       { "key": "hostname", "label": "호스트명", "type": "string" },
       { "key": "environment", "label": "환경", "type": "string" },
       { "key": "enabled", "label": "활성 상태", "type": "boolean" }
+    ]
+  },
+  "detail": {
+    "sections": [
+      {
+        "title": "기본 정보",
+        "fields": [
+          { "key": "hostname", "label": "호스트명", "type": "string" },
+          { "key": "environment", "label": "환경", "type": "string" }
+        ]
+      },
+      {
+        "title": "상세 구성",
+        "fields": [
+          { "key": "enabled", "label": "활성 상태", "type": "boolean" },
+          { "key": "details", "label": "상세 정보", "type": "object" }
+        ]
+      }
     ]
   }
 }

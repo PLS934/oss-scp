@@ -13,9 +13,13 @@ export type PluginMenuIcon = 'server' | 'shield' | 'repository';
 export interface PluginMenuDefinition { title: string; icon: PluginMenuIcon; group: string; order: number; path: string; dataType: string; }
 export interface ClientListColumn { key: string; label: string; type: ScalarFieldType; }
 export interface ClientListDefinition { columns: ClientListColumn[]; }
-export interface ClientMenuItem extends PluginMenuDefinition { pluginId: string; sourceId: string; list: ClientListDefinition; }
+export interface ClientDetailField { key: string; label: string; type: FieldType; }
+export interface ClientDetailSection { title: string; fields: ClientDetailField[]; }
+export interface ClientDetailDefinition { sections: ClientDetailSection[]; }
+export interface ClientMenuItem extends PluginMenuDefinition { pluginId: string; sourceId: string; list: ClientListDefinition; detail: ClientDetailDefinition; }
 
 export type ScalarFieldType = 'string' | 'number' | 'boolean' | 'datetime';
+export type FieldType = ScalarFieldType | 'object' | 'array';
 export type FieldDefinition =
   | { type: ScalarFieldType; label: string; required?: boolean }
   | { type: 'object'; label: string; required?: boolean; fields: Record<string, FieldDefinition> }
@@ -23,7 +27,7 @@ export type FieldDefinition =
 export interface DataTypeDefinition {
   uniqueKey: string;
   fields: Record<string, FieldDefinition>;
-  views: { list: { columns: string[] } };
+  views: { list: { columns: string[] }; detail: { sections: Array<{ title: string; fields: string[] }> } };
 }
 export interface RelationDefinition { from: { types: string[] }; to: { types: string[] }; }
 export interface PluginDataDefinition { types: Record<string, DataTypeDefinition>; relations?: Record<string, RelationDefinition>; }

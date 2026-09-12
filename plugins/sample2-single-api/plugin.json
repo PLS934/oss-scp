@@ -10,7 +10,13 @@
     "types": {
       "repository": {
         "uniqueKey": "assetKey",
-        "views": { "list": { "columns": ["fullName", "active", "feed"] } },
+        "views": {
+          "list": { "columns": ["fullName", "active", "feed"] },
+          "detail": { "sections": [
+            { "title": "저장소 정보", "fields": ["assetKey", "fullName", "active", "feed"] },
+            { "title": "상세 구성", "fields": ["details", "members"] }
+          ] }
+        },
         "fields": {
           "assetKey": { "type": "string", "label": "자산 키", "required": true },
           "fullName": { "type": "string", "label": "저장소 전체 이름", "required": true },

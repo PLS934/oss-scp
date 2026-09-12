@@ -7,6 +7,7 @@ import { loadLocalCsvSource } from './source-loaders/file';
 import { loadHttpCsvSource } from './source-loaders/http-csv';
 import type {
   CollectionDefinition,
+  ClientDetailDefinition,
   ClientListDefinition,
   ClientMenuItem,
   CollectionDefinitionBase,
@@ -244,6 +245,7 @@ function loadPlugins(
     }
     let invalidReference = false;
     const clientLists = new Map<string, ClientListDefinition>();
+    const clientDetails = new Map<string, ClientDetailDefinition>();
     for (const [type, definition] of Object.entries(pluginValue.data.types)) {
       if (!(definition.uniqueKey in definition.fields)) {
         issue(errors, root, pluginFile, `/data/types/${type}/uniqueKey`, 'unique key must reference a declared field');
@@ -266,6 +268,38 @@ function loadPlugins(
         columns.push({ key, label: field.label, type: field.type });
       }
       clientLists.set(type, { columns });
+
+      const sectionTitles = new Set<string>();
+      const detailFields = new Set<string>();
+      const sections: ClientDetailDefinition['sections'] = [];
+      for (const [sectionIndex, section] of definition.views.detail.sections.entries()) {
+        const sectionPath = `/data/types/${type}/views/detail/sections/${sectionIndex}`;
+        if (sectionTitles.has(section.title)) {
+          issue(errors, root, pluginFile, `${sectionPath}/title`, `duplicate detail section title: ${section.title}`);
+          invalidReference = true;
+        } else {
+          sectionTitles.add(section.title);
+        }
+        const fields: ClientDetailDefinition['sections'][number]['fields'] = [];
+        for (const [fieldIndex, key] of section.fields.entries()) {
+          const path = `${sectionPath}/fields/${fieldIndex}`;
+          const field = definition.fields[key];
+          if (!field) {
+            issue(errors, root, pluginFile, path, `unknown field: ${key}`);
+            invalidReference = true;
+            continue;
+          }
+          if (detailFields.has(key)) {
+            issue(errors, root, pluginFile, path, `duplicate detail field: ${key}`);
+            invalidReference = true;
+            continue;
+          }
+          detailFields.add(key);
+          fields.push({ key, label: field.label, type: field.type });
+        }
+        sections.push({ title: section.title, fields });
+      }
+      clientDetails.set(type, { sections });
     }
     for (const [relation, definition] of Object.entries(pluginValue.data.relations ?? {})) {
       for (const [end, types] of [['from', definition.from.types], ['to', definition.to.types]] as const) {
@@ -325,7 +359,7 @@ function loadPlugins(
       );
       if (!csvPath) continue;
       definitions.push(loadLocalCsvSource(runtimePlugin, sourceValue, csvPath));
-      menus.push({ ...pluginValue.menu, pluginId: pluginValue.id, sourceId: sourceValue.path, list: clientLists.get(pluginValue.menu.dataType)! });
+      menus.push({ ...pluginValue.menu, pluginId: pluginValue.id, sourceId: sourceValue.path, list: clientLists.get(pluginValue.menu.dataType)!, detail: clientDetails.get(pluginValue.menu.dataType)! });
       continue;
     }
 
@@ -340,7 +374,7 @@ function loadPlugins(
         continue;
       }
       definitions.push(loadHttpCsvSource(runtimePlugin, sourceValue, connection.value));
-      menus.push({ ...pluginValue.menu, pluginId: pluginValue.id, sourceId: connection.value.id, list: clientLists.get(pluginValue.menu.dataType)! });
+      menus.push({ ...pluginValue.menu, pluginId: pluginValue.id, sourceId: connection.value.id, list: clientLists.get(pluginValue.menu.dataType)!, detail: clientDetails.get(pluginValue.menu.dataType)! });
       continue;
     }
 
@@ -379,7 +413,7 @@ function loadPlugins(
       },
     };
     definitions.push(loadSourceDefinition(commonDefinition, sourceValue));
-    menus.push({ ...pluginValue.menu, pluginId: pluginValue.id, sourceId: connection.value.id, list: clientLists.get(pluginValue.menu.dataType)! });
+    menus.push({ ...pluginValue.menu, pluginId: pluginValue.id, sourceId: connection.value.id, list: clientLists.get(pluginValue.menu.dataType)!, detail: clientDetails.get(pluginValue.menu.dataType)! });
   }
   return definitions;
 }

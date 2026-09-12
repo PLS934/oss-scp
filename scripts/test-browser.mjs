@@ -63,8 +63,8 @@ try {
   browser = await chromium.launch();
   const page = await browser.newPage();
   const browserMenus = [
-    { title: '서버 자산', icon: 'server', group: '자산 관리', order: 10, path: '/assets/servers', dataType: 'asset', pluginId: 'sample1-offset-api', sourceId: 'mock-api-sample1', list: { columns: [{ key: 'hostname', label: '호스트명', type: 'string' }, { key: 'score', label: '점수', type: 'number' }, { key: 'enabled', label: '활성', type: 'boolean' }, { key: 'observedAt', label: '관측 시각', type: 'datetime' }] } },
-    { title: '저장소', icon: 'repository', group: '자산 관리', order: 20, path: '/assets/repositories', dataType: 'repository', pluginId: 'sample2-single-api', sourceId: 'mock-api-sample2', list: { columns: [{ key: 'fullName', label: '저장소 전체 이름', type: 'string' }] } },
+    { title: '서버 자산', icon: 'server', group: '자산 관리', order: 10, path: '/assets/servers', dataType: 'asset', pluginId: 'sample1-offset-api', sourceId: 'mock-api-sample1', list: { columns: [{ key: 'hostname', label: '호스트명', type: 'string' }, { key: 'score', label: '점수', type: 'number' }, { key: 'enabled', label: '활성', type: 'boolean' }, { key: 'observedAt', label: '관측 시각', type: 'datetime' }] }, detail: { sections: [{ title: '기본 정보', fields: [{ key: 'hostname', label: '호스트명', type: 'string' }] }] } },
+    { title: '저장소', icon: 'repository', group: '자산 관리', order: 20, path: '/assets/repositories', dataType: 'repository', pluginId: 'sample2-single-api', sourceId: 'mock-api-sample2', list: { columns: [{ key: 'fullName', label: '저장소 전체 이름', type: 'string' }] }, detail: { sections: [{ title: '기본 정보', fields: [{ key: 'fullName', label: '저장소 전체 이름', type: 'string' }] }] } },
   ];
   const recordRequests = [];
   let sourceRequests = 0;
