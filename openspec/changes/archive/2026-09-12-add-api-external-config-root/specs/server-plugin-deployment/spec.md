@@ -1,21 +1,4 @@
-# server-plugin-deployment Specification
-
-## Purpose
-
-플랫폼 이미지와 운영자 서버 플러그인 revision을 분리하면서도 검증된 조합만 기동·수집·화면 구성에 사용하도록 안전한 배포 계약을 제공한다.
-
-## Requirements
-
-### Requirement: 외부 서버 플러그인 설정 루트
-플랫폼은 plugin·Connection registry, 선언 파일과 사전 빌드된 JavaScript 모듈을 포함하는 외부 설정 루트를 SHALL 입력받아야 한다. 배포 환경에서 설정 루트는 플랫폼 이미지 밖의 운영자 관리 디렉터리여야 하며(MUST), 읽기 전용으로 주입되어야 한다(MUST).
-
-#### Scenario: 외부 설정 루트로 기동
-- **WHEN** 운영자가 유효한 외부 설정 루트를 읽기 전용 볼륨으로 주입하고 API를 시작한다
-- **THEN** 플랫폼은 이미지 내부 샘플 파일이 아니라 주입된 registry와 플러그인으로 기동한다
-
-#### Scenario: 설정 루트 누락
-- **WHEN** 배포 API 또는 수동 수집 명령에 외부 설정 루트가 주입되지 않았거나 읽을 수 없다
-- **THEN** 플랫폼은 원천 연결이나 DB 쓰기 전에 안정적인 설정 오류로 종료한다
+## MODIFIED Requirements
 
 ### Requirement: 전체 기동 전 검증
 플랫폼은 등록된 모든 plugin·source·Connection 선언, API/schema 버전, 파일 참조, 고유 ID, 메뉴 경로와 JavaScript 모듈 export를 API listen 전에 SHALL 검증해야 한다. 하나라도 유효하지 않으면 전체 기동을 MUST 거부해야 한다. 검증 실패 로그는 발견한 모든 문제의 설정 루트 기준 상대 파일, 필드 경로와 일반화한 원인을 제공해야 하며(SHALL), 설정 루트 절대 경로·비밀정보·원본 모듈 오류·stack과 로그 제어문자를 응답이나 표준 오류에 포함하지 않아야 한다(MUST NOT). 검증에 성공하면 플랫폼은 같은 기동 시점에 확정한 수집 정의와 메뉴 산출물 snapshot만 API 내부 소비자에 제공해야 한다(SHALL).
@@ -54,25 +37,3 @@
 #### Scenario: 실행 중 설정 파일 변경
 - **WHEN** API가 정상 기동한 뒤 운영자가 외부 설정 파일을 수정하거나 교체한다
 - **THEN** 현재 프로세스의 수집 정의와 메뉴 산출물은 바뀌지 않고 재기동 후 새 revision의 전체 검증이 성공해야 변경이 반영된다
-
-### Requirement: 운영 시 코드 생성과 동적 설치 금지
-플랫폼은 운영 시점에 TypeScript를 transpile하거나 플러그인별 의존성을 설치하거나 원격 코드를 다운로드해서는 안 된다(MUST NOT). 운영 중 웹 UI를 통한 플러그인 설치·수정·교체도 제공하지 않아야 한다(MUST NOT).
-
-#### Scenario: TypeScript 모듈 등록
-- **WHEN** 운영 플러그인이 TypeScript 파일을 실행 모듈로 참조한다
-- **THEN** 플랫폼은 이를 변환하거나 실행하지 않고 사전 빌드된 JavaScript가 필요하다는 설정 오류로 거부한다
-
-#### Scenario: 선언되지 않은 런타임 의존성
-- **WHEN** 사전 빌드 모듈이 플랫폼 이미지에 없는 패키지를 import한다
-- **THEN** 플랫폼은 패키지를 설치하지 않고 기동 전 모듈 검증을 실패한다
-
-### Requirement: 사용자 정의 React 화면의 빌드 결합 유지
-외부 서버 플러그인은 선언형 메뉴·목록·상세 정의만 제공해야 하며(MUST), `List.tsx`·`Detail.tsx` 또는 임의 프론트엔드 번들을 런타임에 로드해서는 안 된다(MUST NOT).
-
-#### Scenario: 선언형 화면 사용
-- **WHEN** 외부 플러그인이 유효한 메뉴와 기본 목록·상세 정의를 제공한다
-- **THEN** 플랫폼은 공통 클라이언트 renderer에서 해당 정의를 사용할 수 있다
-
-#### Scenario: 외부 React 화면 참조
-- **WHEN** 외부 플러그인이 사용자 정의 React 화면이나 프론트엔드 번들을 참조한다
-- **THEN** 플랫폼은 해당 파일을 브라우저에 전달하거나 실행하지 않는다

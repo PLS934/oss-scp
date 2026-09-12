@@ -127,9 +127,20 @@ pnpm test:docker
 
 API와 수동 수집 CLI는 `OSS_SCP_CONFIG_ROOT`가 가리키는 운영자 설정 revision을 사용합니다. 이 디렉터리에는 `plugins/registry.json`, `connections/registry.json`, 각 선언 파일과 사전 빌드된 JavaScript 가공 모듈이 있어야 합니다. API는 DB 연결과 listen 전에 전체 설정 및 모듈 export를 검증하며 일부만 유효한 상태로 시작하지 않습니다.
 
+API는 기동 검증에 성공한 수집 정의와 메뉴를 하나의 읽기 전용 runtime snapshot으로 고정합니다. 실행 중 외부 설정 파일을 수정하거나 디렉터리를 교체해도 현재 프로세스에는 반영되지 않습니다. 운영 hot reload와 설정 watcher는 지원하지 않으므로, 변경한 설정 revision을 먼저 검증한 뒤 API를 재기동해야 합니다. 재기동 시 전체 검증이 실패하면 API는 DB 연결과 listen 전에 종료하고, 설정 루트 기준 상대 파일·필드와 안전하게 일반화한 원인을 함께 출력합니다.
+
 로컬 실행 예시:
 
 ```bash
 pnpm build:plugin-transforms
 OSS_SCP_CONFIG_ROOT="$PWD" pnpm start
 ```
+
+설정 revision 변경 절차:
+
+```bash
+OSS_SCP_CONFIG_ROOT="/path/to/config-revision" pnpm validate:plugins
+OSS_SCP_CONFIG_ROOT="/path/to/config-revision" pnpm start
+```
+
+실행 중인 프로세스의 설정을 바꾸려면 기존 프로세스를 정상 종료한 다음 두 번째 명령으로 다시 시작합니다. 설정 검증 실패 시 기존에 검증되어 실행 중인 프로세스나 배포 revision을 유지하고 오류를 수정한 뒤 재검증합니다.
