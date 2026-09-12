@@ -26,4 +26,12 @@ table { border-collapse: collapse; min-width: 100%; }
 th, td { border-bottom: 1px solid #dce2e7; padding: 11px 12px; text-align: left; white-space: nowrap; }
 th { background: #f4f6f8; }
 .pagination { display: flex; justify-content: flex-end; align-items: center; gap: 16px; margin-top: 18px; color: #516372; }
+.detail-section { margin: 20px 0; padding: 20px; }
+.detail-section h3 { margin-top: 0; }
+.detail-section dl, .nested-fields { margin: 0; }
+.detail-section dl > div, .nested-fields > div { display: grid; grid-template-columns: minmax(120px, 1fr) 2fr; gap: 16px; padding: 8px 0; border-bottom: 1px solid #edf0f2; }
+.detail-section dt { font-weight: 700; } .detail-section dd { margin: 0; overflow-wrap: anywhere; }
+.array-values { margin: 0; padding-left: 24px; }
+.empty-value { color: #6b7780; } .invalid-value { color: #a3342f; }
+.back-link { display: inline-block; margin-top: 8px; }
 @media (max-width: 700px) { .app-shell { grid-template-columns: 1fr; } main { margin: 24px auto; } }

@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
-import { NavLink, Route, Routes } from 'react-router-dom';
+import { NavLink, Route, Routes, useParams } from 'react-router-dom';
+import { RecordDetail } from './detail';
 import { observeHealth, type ConnectionState } from './health';
 import { groupMenus, type MenuItem } from './menu';
 import { loadPluginMenus } from './plugin-menus';
@@ -8,6 +9,7 @@ import { RecordList } from './record-list';
 const labels: Record<ConnectionState, string> = { loading: '서버 연결 확인 중', success: '서버 연결 성공', failure: '서버 연결 실패' };
 const iconLabels = { server: '서버', shield: '보안', repository: '저장소' } as const;
 function NotFound() { return <section><h2>페이지를 찾을 수 없습니다</h2><p>등록된 메뉴에서 이동해 주세요.</p></section>; }
+function DetailRoute({ menu }: { menu: MenuItem }) { const { recordId = '' } = useParams(); return <RecordDetail menu={menu} recordId={recordId} />; }
 
 export default function App({ menus: providedMenus }: { menus?: readonly MenuItem[] }) {
   const [state, setState] = useState<ConnectionState>('loading');
@@ -30,6 +32,9 @@ export default function App({ menus: providedMenus }: { menus?: readonly MenuIte
       {entries.map(menu => <li key={menu.path}><NavLink to={menu.path}><span aria-hidden="true">{iconLabels[menu.icon]}</span> {menu.title}</NavLink></li>)}</ul></section>)}</nav>
     <p role="status" className={`status ${state}`}>{labels[state]}</p></aside><main><Routes>
       <Route path="/" element={<section><h2>플러그인 메뉴</h2><p>조회할 데이터 메뉴를 선택해 주세요.</p></section>} />
-      {menuState === 'success' ? menus.map(menu => <Route key={menu.path} path={menu.path} element={<RecordList key={`${menu.pluginId}:${menu.sourceId}:${menu.dataType}`} menu={menu} />} />) : null}<Route path="*" element={<NotFound />} />
+      {menuState === 'success' ? menus.flatMap(menu => [
+        <Route key={menu.path} path={menu.path} element={<RecordList key={`${menu.pluginId}:${menu.sourceId}:${menu.dataType}`} menu={menu} />} />,
+        <Route key={`${menu.path}/:recordId`} path={`${menu.path}/:recordId`} element={<DetailRoute menu={menu} />} />,
+      ]) : null}<Route path="*" element={<NotFound />} />
     </Routes></main></div>;
 }

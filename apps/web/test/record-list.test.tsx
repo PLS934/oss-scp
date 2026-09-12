@@ -1,4 +1,5 @@
 import { renderToStaticMarkup } from 'react-dom/server';
+import { MemoryRouter } from 'react-router-dom';
 import { describe, expect, test, vi } from 'vitest';
 import type { MenuItem } from '../src/menu';
 import { formatColumnValue, RecordListView } from '../src/record-list';
@@ -22,7 +23,7 @@ const result = (collection: CollectionStatus['status'], withItems = true): ListR
   pageInfo: { nextCursor: withItems ? 'next' : null, hasNextPage: withItems }, collection: status(collection), lastStoredAt: withItems ? '2026-09-11T01:01:00.000Z' : null,
 });
 const handlers = { onLimitChange: vi.fn(), onNext: vi.fn(), onRetry: vi.fn() };
-const render = (props: Partial<Parameters<typeof RecordListView>[0]> = {}) => renderToStaticMarkup(<RecordListView menu={menu} limit={20} loading={false} result={result('success')} error={null} {...handlers} {...props} />);
+const render = (props: Partial<Parameters<typeof RecordListView>[0]> = {}) => renderToStaticMarkup(<MemoryRouter><RecordListView menu={menu} limit={20} loading={false} result={result('success')} error={null} {...handlers} {...props} /></MemoryRouter>);
 
 describe('record list scalar formatter', () => {
   test('선언 타입만 형식화한다', () => {
@@ -47,6 +48,10 @@ test('기본 컬럼 순서와 표시명만 렌더링한다', () => {
   expect(html.indexOf('호스트명')).toBeLessThan(html.indexOf('점수'));
   expect(html).toContain('server-1'); expect(html).toContain('12,345'); expect(html).toContain('예');
   expect(html).not.toContain('secret'); expect(html).not.toContain('not-visible'); expect(html).not.toContain('details');
+});
+
+test('목록 레코드의 내부 UUID로 현재 메뉴 상세 링크를 만든다', () => {
+  expect(render()).toContain(`href="/assets/servers/${id}"`);
 });
 
 test.each([
