@@ -103,7 +103,7 @@ external_case() {
     until docker exec "$database" pg_isready -U oss_scp_app -d oss_scp >/dev/null 2>&1; do sleep 1; done
   else
     docker run -d --name "$database" --network "$network" -e MYSQL_DATABASE=oss_scp -e MYSQL_USER=oss_scp_app -e MYSQL_PASSWORD="$password" -e MYSQL_ROOT_PASSWORD=root-test-password "$db_image" >/dev/null
-    until docker exec "$database" mysqladmin ping -uoss_scp_app -p"$password" --silent >/dev/null 2>&1; do sleep 1; done
+    until docker run --rm --network "$network" "$db_image" mysqladmin ping -h "$database" -uoss_scp_app -p"$password" --silent >/dev/null 2>&1; do sleep 1; done
   fi
 
   for entry in "$first_external:$first_version:$case_api_port:$case_web_port" "$second_external:$second_version:$case_api_port:$case_web_port"; do
