@@ -38,7 +38,11 @@ try {
     assert.deepEqual(tags, expected.sort(), `${root} 이미지 목록`);
     const imageIndex = JSON.parse(execFileSync('tar', ['-xOf', join(directory, 'images.tar'), 'index.json'], { encoding: 'utf8' }));
     const archiveDigests = new Set(imageIndex.manifests.map(image => image.digest));
-    for (const image of manifest.images) assert.ok(archiveDigests.has(image.digest), `${image.name} digest가 images.tar에 있어야 합니다`);
+    for (const image of manifest.images) {
+      assert.ok(archiveDigests.has(image.digest), `${image.name} OCI digest가 images.tar에 있어야 합니다`);
+      const saved = imageManifest.find(entry => (entry.RepoTags ?? []).includes(image.reference));
+      assert.equal(image.configDigest, `sha256:${saved.Config.split('/').at(-1)}`, `${image.name} config digest`);
+    }
   }
   console.log('두 폐쇄망 번들의 파일·checksum·manifest·이미지 목록: 통과');
 } finally {

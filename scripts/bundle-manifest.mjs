@@ -26,6 +26,7 @@ export function validateBundleManifest(value) {
     names.add(name);
     requiredString(image.reference, `images[${index}].reference`);
     if (!digestPattern.test(requiredString(image.digest, `images[${index}].digest`))) throw new Error(`manifest images[${index}].digest가 유효하지 않습니다`);
+    if (!digestPattern.test(requiredString(image.configDigest, `images[${index}].configDigest`))) throw new Error(`manifest images[${index}].configDigest가 유효하지 않습니다`);
   }
   if (!names.has('api') || !names.has('web')) throw new Error('manifest에는 api와 web 이미지가 필요합니다');
   if ((value.variant === 'postgresql') !== names.has('postgresql')) throw new Error('manifest variant와 PostgreSQL 이미지가 일치하지 않습니다');

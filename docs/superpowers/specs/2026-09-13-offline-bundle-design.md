@@ -35,7 +35,7 @@ oss-scp-bundle-<version>/
 
 `images.tar`는 `docker load --input images.tar` 한 번으로 필요한 이미지를 모두 적재할 수 있어야 한다. 기본 번들은 API·웹 이미지만, PostgreSQL 변형은 여기에 고정된 PostgreSQL 이미지를 추가한다. Compose는 `build`를 포함하지 않고 모든 서비스에 `pull_policy: never`를 적용하며 이미지 이름과 제품 버전을 고정한다.
 
-`manifest.json`에는 schema version, 제품 버전, 전체 Git revision, 번들 변형, 생성 시각, 지원 OS·아키텍처·Compose·DB 조건과 각 이미지의 repository·tag·OCI digest를 기록한다. PostgreSQL 이미지가 없는 기본 번들은 이를 명시적으로 기록한다. `SHA256SUMS`는 번들 내부 파일을 결정적인 파일명 순서로 검증하며 자신은 포함하지 않는다. GitHub Release가 표시하는 바깥쪽 자산 digest는 압축 파일 자체를, 내부 `SHA256SUMS`는 폐쇄망으로 전달한 뒤 풀린 파일 묶음을 검증한다.
+`manifest.json`에는 schema version, 제품 버전, 전체 Git revision, 번들 변형, 생성 시각, 지원 OS·아키텍처·Compose·DB 조건과 각 이미지의 repository·tag·OCI manifest digest 및 config digest를 기록한다. 두 digest를 모두 기록해 Docker Engine별 image ID 표현 차이와 무관하게 archive와 실제 load 결과를 검증한다. PostgreSQL 이미지가 없는 기본 번들은 이를 명시적으로 기록한다. `SHA256SUMS`는 번들 내부 파일을 결정적인 파일명 순서로 검증하며 자신은 포함하지 않는다. GitHub Release가 표시하는 바깥쪽 자산 digest는 압축 파일 자체를, 내부 `SHA256SUMS`는 폐쇄망으로 전달한 뒤 풀린 파일 묶음을 검증한다.
 
 번들에는 비밀번호·토큰 등 비밀정보, 운영자 관리 `plugins/`·`connections/`, TypeScript 원본과 사용자 정의 `.tsx` 화면을 포함하지 않는다. 공통 목록·상세 React 화면은 웹 이미지에 컴파일되어 있고, 운영자는 사전 빌드한 `dist/transform.js`와 선언형 `plugin.json`·`source.json`·Connection 설정을 별도 디렉터리로 반입한다.
 

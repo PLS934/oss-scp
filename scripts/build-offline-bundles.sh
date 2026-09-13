@@ -39,19 +39,22 @@ for variant in existing-db postgresql; do
 import { createBundleManifest } from './scripts/bundle-manifest.mjs';
 import { execFileSync } from 'node:child_process';
 const archive = JSON.parse(execFileSync('tar', ['-xOf', process.env.BUNDLE_IMAGES_TAR, 'index.json'], { encoding: 'utf8' }));
-const id = reference => {
+const legacy = JSON.parse(execFileSync('tar', ['-xOf', process.env.BUNDLE_IMAGES_TAR, 'manifest.json'], { encoding: 'utf8' }));
+const metadata = reference => {
   const image = archive.manifests.find(entry => entry.annotations?.['io.containerd.image.name']?.endsWith(`/${reference}`));
-  if (!image) throw new Error(`images.tar에 ${reference} 이미지가 없습니다`);
-  return image.digest;
+  const legacyImage = legacy.find(entry => (entry.RepoTags ?? []).includes(reference));
+  if (!image || !legacyImage) throw new Error(`images.tar에 ${reference} 이미지가 없습니다`);
+  return { digest: image.digest, configDigest: `sha256:${legacyImage.Config.split('/').at(-1)}` };
 };
 const images = [
-  { name: 'api', reference: process.env.BUNDLE_API, digest: id(process.env.BUNDLE_API) },
-  { name: 'web', reference: process.env.BUNDLE_WEB, digest: id(process.env.BUNDLE_WEB) },
+  { name: 'api', reference: process.env.BUNDLE_API, ...metadata(process.env.BUNDLE_API) },
+  { name: 'web', reference: process.env.BUNDLE_WEB, ...metadata(process.env.BUNDLE_WEB) },
 ];
-if (process.env.BUNDLE_VARIANT === 'postgresql') images.push({ name: 'postgresql', reference: process.env.BUNDLE_POSTGRES, digest: id(process.env.BUNDLE_POSTGRES) });
+if (process.env.BUNDLE_VARIANT === 'postgresql') images.push({ name: 'postgresql', reference: process.env.BUNDLE_POSTGRES, ...metadata(process.env.BUNDLE_POSTGRES) });
 const manifest = createBundleManifest({ productVersion: process.env.BUNDLE_VERSION, gitRevision: process.env.BUNDLE_REVISION, variant: process.env.BUNDLE_VARIANT, createdAt: process.env.BUNDLE_CREATED_AT, images });
 const flat = { ...manifest };
 for (const image of images) { flat[`${image.name}Reference`] = image.reference; flat[`${image.name}Digest`] = image.digest; }
+for (const image of images) flat[`${image.name}ConfigDigest`] = image.configDigest;
 process.stdout.write(`${JSON.stringify(flat, null, 2)}\n`);
 NODE
   (cd "$stage" && find . -type f ! -name SHA256SUMS -print | LC_ALL=C sort | sed 's#^./##' | xargs sha256sum >SHA256SUMS)
