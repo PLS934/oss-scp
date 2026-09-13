@@ -17,7 +17,7 @@
 
 ## 4. GitHub Actions 게시 경로
 
-- [ ] 4.1 기존 통합 CI에 `workflow_call`을 추가하고 PR·main push·수동 trigger 및 네 검증 job이 유지되는지 workflow 구문과 기존 CI 실행으로 확인한다.
+- [x] 4.1 기존 통합 CI에 `workflow_call`을 추가하고 PR·main push·수동 trigger 및 네 검증 job이 유지되는지 workflow 구문과 기존 CI 실행으로 확인한다.
 - [x] 4.2 `v*` 태그에서 메타데이터 검증, 재사용 통합 CI, 자산 생성·smoke test 순서로 실행하는 release workflow를 추가하고 게시 전 단계가 PR에서 검증 가능한지 확인한다.
 - [ ] 4.3 게시 job에만 `contents: write`를 부여하고 동일 태그 Release 존재 시 실패, draft 자산 업로드 완료 후 prerelease 또는 정식 공개가 되도록 구현하며 workflow 정적 검사와 테스트용 태그 실행 기록으로 확인한다.
 - [x] 4.4 Release 본문에 제품 버전, 전체 Git revision, API·웹 image digest, 지원 환경, migration 주의사항과 알려진 제한이 포함되는지 생성 결과를 검증한다.
@@ -26,4 +26,4 @@
 
 - [x] 5.1 checksum 검증, image load, 외부 설정 준비, 명시적 migration, 최초 기동, 업데이트, 플러그인 교체, 이미지 롤백과 DB 백업 복원 조건을 실행 명령과 함께 문서화하고 링크·명령을 검토한다.
 - [x] 5.2 #71 개별 자산과 #88 단일 폐쇄망 번들의 경계, 0.x·RC prerelease 정책과 기존 Release 비덮어쓰기 정책을 릴리스 문서에 반영하고 OpenSpec 요구사항과 대조한다.
-- [ ] 5.3 태그·자산 단위 테스트, 설치·업데이트 Docker smoke test와 기존 typecheck·lint·test·build 및 전체 통합 CI를 실행해 모두 성공하는지 확인한다.
+- [x] 5.3 태그·자산 단위 테스트, 설치·업데이트 Docker smoke test와 기존 typecheck·lint·test·build 및 전체 통합 CI를 실행해 모두 성공하는지 확인한다.
