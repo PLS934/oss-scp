@@ -73,6 +73,9 @@ importers:
       '@oss-scp/http-collector':
         specifier: workspace:*
         version: link:../../packages/http-collector
+      '@oss-scp/http-csv-source':
+        specifier: workspace:*
+        version: link:../../packages/http-csv-source
       '@oss-scp/local-csv-source':
         specifier: workspace:*
         version: link:../../packages/local-csv-source

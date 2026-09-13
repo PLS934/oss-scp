@@ -90,8 +90,8 @@ async function mysqlRoot(sql) {
   return run('docker', ['exec', container, 'mysql', '-uroot', '-proot-integration-password', '-N', '-B', 'oss_scp', '-e', sql]);
 }
 const databaseSql = sql => databaseType === 'mysql' ? mysql(sql.mysql) : psql(sql.postgres);
-async function collect(env, expectedCode = 0) {
-  const output = await run(process.execPath, [path.join(root, 'apps/collector-cli/dist/process.js'), 'sample1-offset-api'], {
+async function collect(env, expectedCode = 0, pluginId = 'sample1-offset-api') {
+  const output = await run(process.execPath, [path.join(root, 'apps/collector-cli/dist/process.js'), pluginId], {
     cwd: temporaryRoot,
     env,
   }, expectedCode);
@@ -123,6 +123,10 @@ try {
   const connection = JSON.parse(await readFile(connectionPath, 'utf8'));
   connection.config.baseUrl = `http://127.0.0.1:${mockPort}`;
   await writeFile(connectionPath, `${JSON.stringify(connection, null, 2)}\n`);
+  const csvConnectionPath = path.join(temporaryRoot, 'connections/mock-api-vulnerabilities-csv.json');
+  const csvConnection = JSON.parse(await readFile(csvConnectionPath, 'utf8'));
+  csvConnection.config.baseUrl = `http://127.0.0.1:${mockPort}`;
+  await writeFile(csvConnectionPath, `${JSON.stringify(csvConnection, null, 2)}\n`);
 
   const databasePort = databaseType === 'mysql' ? '3306' : '5432';
   const dockerArguments = databaseType === 'mysql'
@@ -193,10 +197,38 @@ try {
     mysql: `SELECT CONCAT(r.status, '|', r.processed_count, '|', r.accepted_count, '|', r.isolated_count, '|', c.checkpoint) FROM collection_runs r JOIN collection_checkpoints c USING (plugin_id, source_id, scope_type, scope_key, config_revision) WHERE r.id='${partial.runId}'`,
   }), 'partial|72|71|1|72');
 
+  const httpCsv = await collect(env, 0, 'vulnerabilities-http-csv');
+  assert.deepEqual(
+    { status: httpCsv.status, batches: httpCsv.batches, processed: httpCsv.processed, accepted: httpCsv.accepted, rejected: httpCsv.rejected },
+    { status: 'success', batches: 3, processed: 53, accepted: 53, rejected: 0 },
+  );
+  assert.equal(await databaseSql({ postgres: "SELECT count(*) FROM platform_records WHERE plugin_id='vulnerabilities-http-csv'", mysql: "SELECT count(*) FROM platform_records WHERE plugin_id='vulnerabilities-http-csv'" }), '53');
+  assert.equal(await databaseSql({ postgres: "SELECT checkpoint::text FROM collection_checkpoints WHERE plugin_id='vulnerabilities-http-csv'", mysql: "SELECT checkpoint FROM collection_checkpoints WHERE plugin_id='vulnerabilities-http-csv'" }), '53');
+
+  if (databaseType === 'mysql') await mysqlRoot(`CREATE TRIGGER reject_http_csv_batch BEFORE UPDATE ON platform_records FOR EACH ROW SET NEW.id = IF(NEW.external_key='cve-21', NULL, NEW.id)`);
+  else await psql(`CREATE FUNCTION reject_http_csv_batch() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN IF NEW.external_key='cve-21' THEN RAISE EXCEPTION 'injected storage failure'; END IF; RETURN NEW; END $$; CREATE TRIGGER reject_http_csv_batch BEFORE INSERT OR UPDATE ON platform_records FOR EACH ROW EXECUTE FUNCTION reject_http_csv_batch();`);
+  const httpCsvFailed = await collect(env, 3, 'vulnerabilities-http-csv');
+  assert.equal(httpCsvFailed.status, 'failed');
+  assert.equal(httpCsvFailed.errorCode, 'collection_failed');
+  assert.equal(await databaseSql({ postgres: "SELECT checkpoint::text FROM collection_checkpoints WHERE plugin_id='vulnerabilities-http-csv'", mysql: "SELECT checkpoint FROM collection_checkpoints WHERE plugin_id='vulnerabilities-http-csv'" }), '20');
+  if (databaseType === 'mysql') await mysqlRoot('DROP TRIGGER reject_http_csv_batch');
+  else await psql('DROP TRIGGER reject_http_csv_batch ON platform_records; DROP FUNCTION reject_http_csv_batch();');
+  const httpCsvResumed = await collect(env, 0, 'vulnerabilities-http-csv');
+  assert.deepEqual(
+    { status: httpCsvResumed.status, batches: httpCsvResumed.batches, processed: httpCsvResumed.processed },
+    { status: 'success', batches: 2, processed: 33 },
+  );
+  assert.equal(await databaseSql({ postgres: "SELECT checkpoint::text FROM collection_checkpoints WHERE plugin_id='vulnerabilities-http-csv'", mysql: "SELECT checkpoint FROM collection_checkpoints WHERE plugin_id='vulnerabilities-http-csv'" }), '53');
+  assert.equal(await databaseSql({ postgres: "SELECT count(*) FROM platform_records WHERE plugin_id='vulnerabilities-http-csv'", mysql: "SELECT count(*) FROM platform_records WHERE plugin_id='vulnerabilities-http-csv'" }), '53');
+
   await mock.close();
   mock = undefined;
+  const registryPath = path.join(temporaryRoot, 'plugins/registry.json');
+  const registry = JSON.parse(await readFile(registryPath, 'utf8'));
+  registry.plugins = registry.plugins.filter(pluginPath => pluginPath.includes('sample2-single-api'));
+  await writeFile(registryPath, `${JSON.stringify(registry, null, 2)}\n`);
   const apiPort = await freePort();
-  api = processRun(process.execPath, [path.join(root, 'apps/api/dist/main.js')], { env: { ...env, OSS_SCP_CONFIG_ROOT: root, HOST: '127.0.0.1', PORT: String(apiPort) } });
+  api = processRun(process.execPath, [path.join(root, 'apps/api/dist/main.js')], { env: { ...env, HOST: '127.0.0.1', PORT: String(apiPort) } });
   await waitFor(async () => (await fetch(`http://127.0.0.1:${apiPort}/api/v1/ready`)).ok, 'record API');
   const list = await (await fetch(`http://127.0.0.1:${apiPort}/api/v1/records?pluginId=sample1-offset-api&sourceId=mock-api-sample1&dataType=asset&limit=20`)).json();
   assert.equal(list.items.length, 20);
@@ -205,7 +237,7 @@ try {
   const detail = await (await fetch(`http://127.0.0.1:${apiPort}/api/v1/records/${list.items[0].id}`)).json();
   assert.equal(detail.id, list.items[0].id);
   assert.equal(detail.pluginId, 'sample1-offset-api');
-  console.log(`sample1 ${databaseType} 72건 수집·재실행·실패 재개·partial·원천 독립 조회 검증 통과`);
+  console.log(`sample1 및 HTTP CSV ${databaseType} 수집·재실행·실패 재개·partial·원천 독립 조회 검증 통과`);
 } finally {
   await mock?.close().catch(() => undefined);
   await stopProcess(api);

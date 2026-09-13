@@ -25,6 +25,12 @@ const env = {
   API_PORT: String(await port()),
 };
 delete env.COMPOSE_PROFILES;
+for (const file of ['mock-api-sample1.json', 'mock-api-sample2.json', 'mock-api-vulnerabilities-csv.json']) {
+  const connectionPath = path.join(dir, 'connections', file);
+  const connection = JSON.parse(await readFile(connectionPath, 'utf8'));
+  connection.config.baseUrl = 'http://mock-api:3001';
+  await writeFile(connectionPath, `${JSON.stringify(connection, null, 2)}\n`);
+}
 const docker = (args) => run('docker', args, { cwd: dir, env });
 const compose = (args, dev = false, profile = true) =>
   docker([
@@ -163,6 +169,19 @@ async function verifyIntegration() {
     ['api', 'mock-api', 'postgres', 'web'],
   );
   await waitFor(() => healthy(webUrl), '웹 프록시');
+  await compose(['run', '--rm', 'api', 'node', 'node_modules/@oss-scp/platform-db/dist/migrate-cli.js']);
+  await compose(['up', '-d', '--force-recreate', '--wait', '--wait-timeout', '180', 'api']);
+  await waitFor(async () => {
+    const response = await fetch(`${webUrl}/api/v1/collection-status`, { signal: AbortSignal.timeout(3000) });
+    if (!response.ok) return false;
+    const body = await response.json();
+    return body.some(item => item.pluginId === 'vulnerabilities-http-csv' && item.status === 'success');
+  }, 'HTTP CSV 기동 수집');
+  const manualOutput = await compose(['run', '--rm', 'api', 'node', 'node_modules/@oss-scp/collector-cli/dist/process.js', 'vulnerabilities-http-csv']);
+  const manualEvent = JSON.parse(manualOutput.trim().split('\n').at(-1));
+  assert.equal(manualEvent.pluginId, 'vulnerabilities-http-csv');
+  assert.equal(manualEvent.status, 'success');
+  assert.equal(manualEvent.accepted, 53);
   await compose([
     'exec',
     '-T',

@@ -7,6 +7,7 @@ COPY apps/collector-cli/package.json ./apps/collector-cli/package.json
 COPY packages/collection-engine/package.json ./packages/collection-engine/package.json
 COPY packages/csv-reader/package.json ./packages/csv-reader/package.json
 COPY packages/http-collector/package.json ./packages/http-collector/package.json
+COPY packages/http-csv-source/package.json ./packages/http-csv-source/package.json
 COPY packages/local-csv-source/package.json ./packages/local-csv-source/package.json
 COPY packages/platform-db/package.json ./packages/platform-db/package.json
 COPY packages/plugin-config/package.json ./packages/plugin-config/package.json
