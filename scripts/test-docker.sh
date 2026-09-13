@@ -47,6 +47,8 @@ let value=""; process.stdin.on("data", chunk => value += chunk); process.stdin.o
   if (JSON.stringify(services) !== JSON.stringify(["api","web"]) || config.volumes) process.exit(1);
 });'
 docker compose -p "$project" up --build -d --wait --wait-timeout 90 postgres
+api_image_id="$(docker image inspect oss-scp-api:local --format '{{.Id}}')"
+web_image_id="$(docker image inspect oss-scp-web:local --format '{{.Id}}')"
 docker compose -p "$project" run --rm api node node_modules/@oss-scp/platform-db/dist/migrate-cli.js | grep -q '4개 적용'
 docker compose -p "$project" up -d --wait --wait-timeout 90 api
 check_response "http://127.0.0.1:${API_PORT}"
@@ -110,11 +112,14 @@ for (const directory of ["server-assets-revision-b", "vulnerabilities-local-csv"
 '
 export OSS_SCP_CONFIG_PATH="$config_revision_root"
 docker compose -p "$project" up -d --force-recreate --wait --wait-timeout 90 api
+test "$(docker image inspect oss-scp-api:local --format '{{.Id}}')" = "$api_image_id"
+test "$(docker image inspect oss-scp-web:local --format '{{.Id}}')" = "$web_image_id"
 curl --fail --silent --show-error --max-time 5 "http://127.0.0.1:${API_PORT}/api/v1/plugin-menus" | grep -q '서버 자산 B'
 docker compose -p "$project" run --rm api node node_modules/@oss-scp/collector-cli/dist/process.js vulnerabilities-local-csv \
   | node -e 'let value=""; process.stdin.on("data", chunk => value += chunk); process.stdin.on("end", () => { const event=JSON.parse(value); if (event.status !== "success" || event.accepted < 1) process.exit(1); });'
 
 # 잘못된 revision은 DB 접속 시도보다 먼저 preflight에서 중단되어야 합니다.
+cp "$config_revision_root/plugins/vulnerabilities-local-csv/dist/transform.js" "$config_revision_root/valid-transform.js"
 printf '%s\n' 'module.exports = {};' > "$config_revision_root/plugins/vulnerabilities-local-csv/dist/transform.js"
 docker run --name "$invalid_revision" --network "${project}_default" \
   -v "$config_revision_root:/config:ro" -e OSS_SCP_CONFIG_ROOT=/config \
@@ -124,6 +129,11 @@ docker run --name "$invalid_revision" --network "${project}_default" \
 test "$(docker inspect --format '{{.State.ExitCode}}' "$invalid_revision")" != 0
 docker logs "$invalid_revision" 2>&1 | grep -q '플러그인 설정 검증 실패'
 if docker logs "$invalid_revision" 2>&1 | grep -q '플랫폼 DB에 연결할 수 없습니다'; then exit 1; fi
+# 이전에 검증한 설정 revision으로 돌아가면 같은 이미지로 다시 기동됩니다.
+mv "$config_revision_root/valid-transform.js" "$config_revision_root/plugins/vulnerabilities-local-csv/dist/transform.js"
+docker compose -p "$project" up -d --force-recreate --wait --wait-timeout 90 api
+test "$(docker image inspect oss-scp-api:local --format '{{.Id}}')" = "$api_image_id"
+curl --fail --silent --show-error --max-time 5 "http://127.0.0.1:${API_PORT}/api/v1/plugin-menus" | grep -q '서버 자산 B'
 # HTTP 연결은 받지만 응답을 끝내지 않는 서버로 healthcheck timeout을 검증합니다.
 docker run -d --name "$unresponsive" \
   --health-cmd="node healthcheck.mjs" --health-interval=1s --health-timeout=1s --health-retries=2 oss-scp-api:local \

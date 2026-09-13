@@ -1,6 +1,7 @@
 # 검증 환경: Ubuntu 24.04 (linux/amd64). 실행 결과는 Actions와 PR에서 확인합니다.
 name: 서버·클라이언트 통합 검증
 on:
+  workflow_call:
   push:
     branches:
       - main
@@ -57,6 +58,7 @@ jobs:
       - run: pnpm typecheck
       - run: pnpm lint
       - run: pnpm test
+      - run: pnpm test:release
       # JSON offset·single HTTP 수집의 loopback 통합·오류·자원 제한 검증
       - run: pnpm test:http-collector
       # HTTP CSV의 공통 파서 재사용·압축·한도·중단·backpressure 검증
@@ -73,7 +75,7 @@ jobs:
   docker:
     name: Docker 빌드 및 실행
     runs-on: ubuntu-24.04
-    timeout-minutes: 20
+    timeout-minutes: 40
     steps:
       - uses: actions/checkout@v7.0.1
       - uses: pnpm/action-setup@v6.1.0
@@ -87,6 +89,8 @@ jobs:
       - run: pnpm test:docker:web
       # Compose·이미지 단독 실행·비루트·개발 파일 제외·무응답 unhealthy 전환
       - run: bash scripts/test-docker.sh
+      # 실제 archive load, migration, 두 제품 버전 전환과 DB·설정 보존 검증
+      - run: pnpm test:docker:release
       - run: pnpm test:docker:external-db
       - run: pnpm test:docker:mysql
       - run: pnpm test:docker:mock
