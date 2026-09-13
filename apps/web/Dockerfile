@@ -1,11 +1,12 @@
 FROM node:24.19.0-bookworm-slim AS build
+ARG PRODUCT_VERSION=dev
 WORKDIR /workspace
 RUN npm install --global pnpm@10.34.5
 COPY package.json pnpm-workspace.yaml pnpm-lock.yaml ./
 COPY apps/web/package.json ./apps/web/package.json
 RUN pnpm install --frozen-lockfile
 COPY apps/web ./apps/web
-RUN pnpm --filter @oss-scp/web build
+RUN VITE_OSS_SCP_VERSION="$PRODUCT_VERSION" pnpm --filter @oss-scp/web build
 
 FROM nginxinc/nginx-unprivileged:1.30.1-alpine AS runtime
 ARG PRODUCT_VERSION

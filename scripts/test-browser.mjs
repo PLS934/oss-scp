@@ -124,6 +124,7 @@ try {
   await page.goto(url);
   await expect(page.getByRole('heading', { name: 'OSS-SCP', exact: true })).toBeVisible();
   await expect(page.getByRole('status')).toHaveText('서버 연결 성공');
+  await expect(page.getByText('vdev', { exact: true })).toBeVisible();
   await page.getByRole('link', { name: /서버 자산/ }).click();
   await expect(page.getByRole('heading', { name: '서버 자산', exact: true })).toBeVisible();
   await expect(page.getByRole('columnheader', { name: '호스트명' })).toBeVisible();

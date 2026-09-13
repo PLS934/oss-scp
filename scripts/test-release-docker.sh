@@ -45,6 +45,7 @@ docker compose -p "$project" -f "$first_compose" up -d --wait --wait-timeout 90 
 test "$(curl --fail --silent --show-error --max-time 5 "http://127.0.0.1:${API_PORT}/api/v1/health")" = '{"status":"ok"}'
 test "$(curl --fail --silent --show-error --max-time 5 "http://127.0.0.1:${API_PORT}/api/v1/ready")" = '{"status":"ready"}'
 curl --fail --silent --show-error --max-time 5 "http://127.0.0.1:${WEB_PORT}/" | grep -q '<div id="root">'
+docker compose -p "$project" -f "$first_compose" exec -T web grep -R -q "$first_version" /usr/share/nginx/html/assets
 docker compose -p "$project" -f "$first_compose" exec -T postgres psql -U oss_scp_app -d oss_scp -c 'CREATE TABLE release_smoke_marker(value text NOT NULL); INSERT INTO release_smoke_marker VALUES ('"'"'preserved'"'"');' >/dev/null
 volume_before="$(docker inspect "${project}-postgres-1" --format '{{range .Mounts}}{{if eq .Destination "/var/lib/postgresql/data"}}{{.Name}}{{end}}{{end}}')"
 config_before="$(docker inspect "${project}-api-1" --format '{{range .Mounts}}{{if eq .Destination "/config"}}{{.Source}}{{end}}{{end}}')"
@@ -63,5 +64,6 @@ test "$(docker inspect "${project}-api-1" --format '{{range .Mounts}}{{if eq .De
 test "$(docker compose -p "$project" -f "$second_compose" exec -T postgres psql -U oss_scp_app -d oss_scp -Atc 'SELECT value FROM release_smoke_marker')" = 'preserved'
 test "$(docker compose -p "$project" -f "$second_compose" exec -T postgres psql -U oss_scp_app -d oss_scp -Atc 'SELECT count(*) FROM oss_scp_schema_migrations')" = '4'
 test "$(curl --fail --silent --show-error --max-time 5 "http://127.0.0.1:${API_PORT}/api/v1/ready")" = '{"status":"ready"}'
+docker compose -p "$project" -f "$second_compose" exec -T web grep -R -q "$second_version" /usr/share/nginx/html/assets
 
 echo '릴리스 자산 최초 설치·migration·두 버전 업데이트·DB/설정 보존: 통과'

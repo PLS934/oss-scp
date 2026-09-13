@@ -6,7 +6,10 @@ h1 { font-size: 30px; margin: 4px 0 30px; } h1 a { text-decoration: none; }
 .menu-group { background: transparent; border: 0; padding: 0; margin: 0 0 22px; }
 .menu-group h2 { color: #b9c7d3; font-size: 13px; letter-spacing: .06em; }
 ul { list-style: none; padding: 0; margin: 0; } li a { display: block; padding: 8px 10px; border-radius: 7px; text-decoration: none; }
-li a:hover, li a.active { background: #27445b; } aside .status { margin-top: 32px; font-size: 13px; }
+li a:hover, li a.active { background: #27445b; }
+.sidebar-meta { margin-top: 32px; }
+aside .status { margin: 0; font-size: 13px; }
+aside .version { margin: 3px 0 0; color: #8fa2b2; font-size: 12px; }
 main { max-width: 900px; width: calc(100% - 48px); margin: 8vh auto; }
 main section { background: white; border: 1px solid #dce2e7; border-radius: 12px; padding: 28px; }
 .eyebrow { color: #516372; margin-bottom: 4px; } h2 { margin-top: 0; } .status { font-weight: 700; }
