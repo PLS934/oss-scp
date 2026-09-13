@@ -68,7 +68,7 @@
 - **THEN** 플랫폼은 각 source 형식에 맞는 내부 수집 정의를 모두 반환하고 sample1 정의에는 변경을 만들지 않는다
 
 #### Scenario: 지원하지 않는 수집 방식
-- **WHEN** 운영자가 이번 계약에서 지원하지 않는 pagination 방식이나 HTTP 응답 형식을 선언한다
+- **WHEN** 운영자가 지원하지 않는 pagination 방식이나 HTTP 응답 형식을 선언한다
 - **THEN** 플랫폼은 해당 방식을 실행 가능한 설정으로 승인하지 않고 지원하지 않는 값임을 명시한다
 
 #### Scenario: 유효하지 않은 실행 한도
@@ -172,12 +172,12 @@
 - **WHEN** 여러 설정 파일에 구조 또는 참조 오류가 있다
 - **THEN** 검증 결과는 비밀정보를 출력하지 않으면서 각 파일과 오류 위치를 구분해 보고한다
 
-### Requirement: 후속 source 방식의 독립 확장
-플랫폼은 플러그인, source와 Connection 책임을 분리하여 sample2 단일 JSON 플러그인과 후속 source 방식이 기존 sample1 offset 및 로컬 CSV 동작을 변경하지 않고 추가될 수 있는 경계를 SHALL 유지해야 한다. 이번 Connection 이름 대칭화에 필요한 sample1 `connectionRef` 변경 외에는 sample1 설정을 변경하지 않아야 한다.
+### Requirement: source 방식의 독립 확장
+플랫폼은 플러그인, source와 Connection 책임을 분리하여 새로운 source 방식이 기존 HTTP JSON offset·single, 로컬 CSV 및 HTTP CSV 동작을 변경하지 않고 추가될 수 있는 경계를 SHALL 유지해야 한다. 새 플러그인 등록을 위해 기존 플러그인의 식별 정보·source 설정·Connection 참조를 변경하도록 요구하지 않아야 한다(SHALL).
 
 #### Scenario: sample2 플러그인 추가
 - **WHEN** 운영자가 sample2 single source를 별도 플러그인으로 등록한다
-- **THEN** 기존 sample1 플러그인의 식별 정보와 offset 설정은 유지되고 이름이 대칭화된 sample1·sample2 독립 Connection이 함께 검증된다
+- **THEN** 기존 sample1 플러그인의 식별 정보·offset 설정·Connection 참조는 유지되고 sample1·sample2 독립 Connection이 함께 검증된다
 
 #### Scenario: 기존 로컬 CSV와 함께 sample2 추가
 - **WHEN** 운영자가 로컬 CSV source가 등록된 상태에서 sample2 single source를 추가한다

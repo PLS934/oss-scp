@@ -6,7 +6,7 @@ oss-scp는 외부 자산·취약점 데이터를 수집·가공해 플랫폼 DB�
 
 현재 합의한 제품 요구사항과 구현 순서를 관리한다. 파일명·JSON·SDK는 명세 작성용 초안이며 구현 완료를 뜻하지 않는다. 세부 계약은 단계별 OpenSpec change에서 확정한다.
 
-확인된 개발 기반은 React·NestJS health API 연결과 로컬·Docker 실행 환경이다. 업무 수집·DB·플러그인·권한은 구현 대상이다. 실행 방법은 [클라이언트 가이드](../client-development.md), [서버 가이드](../server-development.md), 브랜치·배포 절차는 [개발 워크플로](../development-workflow.md)를 따른다.
+현재 구현된 범위는 React·NestJS와 로컬·Docker 실행 환경, HTTP JSON offset·single 및 로컬·HTTP CSV 수집, 공통 가공·저장·수동 수집 CLI, PostgreSQL·MySQL 연결과 저장·조회, 외부 플러그인 설정 검증, registry 기반 메뉴·기본 목록·상세와 cursor 기반 첫·이전·다음 묶음 이동이다. 기동·재시작 시 전체 수집, 대상별 실행 조정·상태 조회 API, HTTP CSV의 공통 CLI 연결과 GitHub Release 개별 Docker 자산 자동화도 구현되어 있다. 인증·권한, 담당자 관리, 매일 22시 정기 수집, 검색·필터·정렬·개인별 목록 설정과 운영 상태 화면 등은 남아 있다. 구현된 계약은 [OpenSpec 본 명세](../../openspec/specs/)를 기준으로 하고, 아래 단계별 계획과 구분한다. 실행 방법은 [클라이언트 가이드](../client-development.md), [서버 가이드](../server-development.md), 브랜치·배포 절차는 [개발 워크플로](../development-workflow.md)를 따른다.
 
 ### 계정관리 옵션
 
@@ -537,23 +537,21 @@ Vitest·Playwright와 실제 PostgreSQL/MySQL 통합 검증을 사용한다. 규
 
 한 번에 한 기능만 구현하고 검증을 마친 뒤 다음 기능으로 넘어간다. 각 Phase는 여러 작은 작업을 묶은 목표이며 단일 구현 작업이 아니다.
 
-먼저 비밀정보를 제거한 실제 샘플 파일 또는 API 응답을 확보하고 형식·유일키·담당자 필드·규모·호출 규칙을 확인한다. JSON 응답이 먼저 확보되면 그 규칙을 재현하는 mock API부터, CSV가 먼저 확보되면 로컬 CSV 읽기부터 시작한다. 첫 JSON 샘플의 분할 반환 API는 `offset`·`limit`을 사용한다. `offset`은 건너뛸 행 수(기본 0), `limit`은 반환할 최대 건수(기본 1000, 허용 범위 1~1000)다. `offset`은 0 이상의 정수이며 잘못된 파라미터는 HTTP 400으로 처리한다. 범위를 초과하면 빈 목록과 전체 건수를 반환한다.
+### 완료된 기반
 
-실행 순서:
+아래 항목은 main에 반영되어 관련 change가 [아카이브](../../openspec/changes/archive/)되었다. 세부 동작은 본 명세를 기준으로 유지하며, 신규 작업 목록에서 반복하지 않는다.
 
-1. 샘플 확보·수집 방식 확인: 재현 가능한 입력과 기대 건수를 정한다.
-2. 첫 입력 기능: JSON이면 mock API, CSV이면 로컬 CSV 읽기만 구현한다.
-3. 수집 기능: JSON 반복 호출 또는 CSV 행 묶음 처리를 검증한다.
-4. 가공 실행: JS/TS 코드 실행과 반환값·유일키 검증을 구현한다.
-5. DB 적재: 첫 어댑터에서 저장·같은 키 갱신을 검증한다.
-6. 조회 API: 원천 접근 없이 저장 데이터 목록을 조회한다.
-7. 메뉴·라우팅: 플러그인 registry에 따라 메뉴와 조회 범위를 생성한다.
-8. 서버 플러그인 배포 분리: 외부 설정 로딩과 이미지·플러그인 revision 독립 배포를 구현한다.
-9. 기본 목록: 분리된 플러그인 정의에 따라 저장 데이터를 표시한다.
-10. cursor 묶음 이동·검색·필터·정렬·상세를 각각 별도 작업으로 추가한다.
-11. 다른 수집 경로와 두 번째 DB 어댑터를 각각 추가해 확장 계약을 검증한다.
+| 완료 범위 | 현재 계약 |
+|---|---|
+| React·NestJS, 로컬·Docker 실행과 CI | [클라이언트](../../openspec/specs/client-bootstrap/spec.md), [서버](../../openspec/specs/server-bootstrap/spec.md) |
+| 원천 mock·CSV 샘플, HTTP JSON offset·single 및 로컬·HTTP CSV 수집 | [원천 mock](../../openspec/specs/source-mock-api/spec.md), [source 계약](../../openspec/specs/plugin-source-contract/spec.md) |
+| 가공·검증·묶음 저장·checkpoint·수동 CLI | [공통 실행기](../../openspec/specs/common-collection-runner/spec.md), [수동 CLI](../../openspec/specs/manual-collection-cli/spec.md) |
+| PostgreSQL·MySQL 연결·migration·공통 저장·조회 | [저장](../../openspec/specs/platform-record-storage/spec.md), [조회](../../openspec/specs/platform-record-query/spec.md) |
+| 외부 플러그인 검증·독립 배포, 메뉴·기본 목록·상세, cursor 첫·이전·다음 이동 | [배포](../../openspec/specs/server-plugin-deployment/spec.md), [목록](../../openspec/specs/plugin-record-list/spec.md), [상세](../../openspec/specs/plugin-detail-view/spec.md) |
+| 기동·재시작 전체 수집, 실행 충돌 조정과 상태 조회 API | [기동 수집](../../openspec/specs/startup-full-collection/spec.md), [실행 조정](../../openspec/specs/collection-run-coordination/spec.md) |
+| 기술 프리뷰 범위 정의와 개별 Release 자산 자동화 | [0.1.0 계약](../../openspec/specs/technical-preview-release/spec.md), [Release 자산](../../openspec/specs/github-release-artifacts/spec.md) |
 
-각 작업에 필요한 최소 OpenSpec 계약을 먼저 작성한다. 인증·담당자·자동 동기화·보관·삭제는 기본 흐름 이후 Phase 1에서 하나씩 구현한다.
+각 후속 작업에 필요한 최소 OpenSpec 계약을 먼저 작성한다. 아래 Phase의 작업 목록은 남은 범위이며, 완료 기준에는 기존 동작을 유지하기 위한 회귀 검증도 포함한다.
 
 ### 0.1.0 기술 프리뷰 범위
 
@@ -572,22 +570,17 @@ LDAP·Active Directory 인증, 역할 권한, 담당자·감사, 보관·삭제,
 
 ### Phase 0: 샘플 수집부터 저장·조회까지
 
-첫 샘플에 필요한 최소 플러그인·등록·수집 계약부터 구현한다. single·offset·page·custom과 CSV 경로는 필요한 순서대로 추가하며 한 작업에서 모두 구현하지 않는다. 서로 다른 원천 형식으로 본체 수정 없는 확장을 검증한다.
+현재 상태: **진행 중**. 수집부터 저장·조회까지의 기반은 위 표와 같이 완료되었으나, 다음 작업과 최종 통합 검증이 남아 있다.
 
-현재 상태: **진행 중**. 서버 기반은 적용되었고 React·health API 연결과 Docker 개발 환경은 현재 작업 트리에 구현되어 있다. 플러그인·DB·수집·업무 조회는 남아 있다.
+남은 작업:
 
-목표는 첫 샘플 플러그인의 수집·가공·저장·메뉴·목록·상세를 연결한 뒤, API와 데이터 구조가 다른 플러그인을 파일 추가와 등록 목록 변경만으로 빌드·배포하여 확장 계약을 검증하는 것이다.
+1. 첫 실제 수집처의 비밀정보를 제거한 샘플을 확보하고 식별자·상태·데이터 규모·호출 규칙을 확인한다. 추가 수집 방식은 실제 요구에 따라 별도 change로 정의한다.
+2. 개인별 표시 컬럼·순서·너비 등 목록 설정을 브라우저에 저장·복원한다.
+3. 기존 수집 상태 조회 API를 사용해 마지막 수집 상태·시각을 화면에 표시한다.
+4. 큰 본문의 분리 저장·참조와 건수·바이트·메모리·응답 기준을 구체화한다.
+5. 위 기능을 연결한 뒤 기존 수집·가공·저장·조회 계약을 포함해 아래 완료 기준을 통합 검증한다. 실제 수집처의 원천 변경·중단·재개·규모 제약도 확인한다.
 
-1. 첫 수집처와 비밀정보를 제거한 샘플을 정하고 식별자·상태·데이터 규모를 조사한다.
-2. 확보한 샘플에 맞춰 원천 mock API 또는 CSV fixture를 준비하고 현재 기능에 필요한 최소 계약을 작성한다. 프론트엔드 개발용 조회 Mock API와 원천 mock 서버의 역할을 구분한다.
-3. Node.js·pnpm·React·NestJS·Docker 실행·기본 CI를 구성한다. 필요한 모듈만 만든다.
-4. assets·findings·collection_runs의 storage-adapter와 migration을 구성한다. PostgreSQL·MySQL 지원 목표는 유지하며 첫 경로를 한 제품에서 검증한 뒤 같은 계약을 다른 제품에서도 확인한다.
-5. 수동 CLI 수집으로 제한된 묶음을 검증·변환·upsert하고 저장 완료 checkpoint를 기록한다.
-6. 최소 목록·상세 API 계약과 공통 샘플을 정해 서버와 Mock API 기반 화면을 병렬 개발한다.
-7. 플러그인 정의로 메뉴·목록·상세를 생성하고 실제 조회 API에 연결한다. 개인별 표시 컬럼·순서·너비 저장·복원을 구현한다.
-8. 재실행·중단 후 재개·원천 중단·많은 건수·큰 레코드·혼합 샘플을 검증한다.
-
-완료 기준:
+완료 기준(기존 구현의 회귀 검증 포함):
 
 - 계정관리를 비활성화하고 Redis·주기 worker 없이 원천 mock API → 플러그인 가공 → 공통 검증·DB 저장 → 메뉴·목록·상세가 동작한다.
 - API와 데이터 구조가 다른 플러그인도 파일 추가·등록·빌드·배포만으로 동작한다. 본체 diff 없이 저장·조회·메뉴·화면이 확장되는지 확인한다.
@@ -607,24 +600,24 @@ LDAP·Active Directory 인증, 역할 권한, 담당자·감사, 보관·삭제,
 확정된 역할 권한을 바탕으로 사용자 식별·자산 연결과 동기화 실행 계약을 정한 뒤 화면·인증·스케줄을 연결한다. 필드·키 변경의 호환성 검사와 미지원 변경 차단은 이 단계에 포함한다.
 
 - 계정관리는 기본 비활성화로 제공한다. 설정으로 활성화한 LDAP·AD 인증과 로그인 없는 기본 실행을 각각 검증한다.
-- 최초·재시작마다 전체 동기화하고 실행 중에는 매일 22:00 전체 동기화를 구현한다. 우선 Asia/Seoul을 사용하며 실행 중복·부분 실패·수동 업무 데이터 보존을 검증한다.
+- 구현된 [기동·재시작 전체 수집](../../openspec/specs/startup-full-collection/spec.md)과 [대상별 실행 조정](../../openspec/specs/collection-run-coordination/spec.md)을 기반으로 매일 22:00 전체 동기화를 추가한다. 우선 Asia/Seoul을 사용하며 정기 실행과 기존 실행 간 충돌·부분 실패·수동 업무 데이터 보존을 검증한다.
 - 원천 필드 기본 담당자와 수동 복수 지정 우선 규칙, 원천 기본값 복귀·감사·접근 범위 변경을 구현한다.
 - 권한에 따른 자산 수동 삭제와 감사 기록을 구현한다. 확정된 영구 삭제·동일 키 재수집 시 신규 등록 정책을 적용한다.
 - 같은 DB에서 활성·보관 목록을 제공하고 검증된 전체 수집의 미확인 자산 보관과 동일 키 재등장 시 복원을 구현한다.
 - 자산별 동기화 버튼·실행 상태와 전체 동기화 실패 시 상단 알림을 제공하고 동기화 중 기존 데이터 조회를 검증한다.
 - Employee 조회 전용·담당 자산 제한과 Security·Audit·Admin 전체 권한을 적용하고 사용자 식별·담당 자산 연결에 대한 공통 서버 권한 검사를 구현한다. Employee의 타인 자산 접근은 목록·상세·검색·집계·다운로드 및 직접 API 호출에서 차단한다.
-- 기본 목록·상세가 공통 필드·조회 계약을 사용하게 하고 화면 교체 지점과 권한 경계를 설계·검증한다. 사용자 정의 화면 파일의 등록·빌드·배포 지원은 Phase 2로 미룬다.
-- 가공 결과의 중첩 객체·배열을 기본 화면에서 표시하고 필드 경로·요소 타입 검증을 구현한다.
+- 기존 기본 목록·상세에 서버 권한 경계를 연결하고 화면 교체 시에도 같은 조회·권한 계약을 유지하도록 설계·검증한다. 사용자 정의 화면 파일의 등록·빌드·배포 지원은 Phase 2로 미룬다.
+- 기존 최상위 object·array의 재귀 JSON 표시를 바탕으로 업무용 중첩 필드 경로·요소 타입 검증과 표시 규칙을 확장한다.
 - 첫 실제 수집처를 연결하고 식별·상태 변환·중복·갱신·부분 실패 정책을 검증한다.
 - fixture·JSON-file·REST·PostgreSQL connector를 한 개씩 확장한다. 기존 조회 화면·API에 수집처별 원천 코드를 추가하지 않는다.
-- 플랫폼 DB의 검색·정렬·필터, cursor 기반 20·50·100·200건 묶음 선택과 자산·취약점 상세를 구현한다.
+- 플랫폼 DB의 검색·정렬·필터를 구현하고 기존 cursor 묶음 이동에 결합한다. 자산·취약점 상세에 업무 데이터와 권한을 연결한다.
 - 담당자 지정 API·화면·감사와 재수집 시 보존을 검증한다. 계정관리 비활성화 상태의 담당자 표현·감사 주체를 먼저 설계한다.
-- 수집 결과·오류·설정 revision의 읽기 전용 운영 화면과 수동 CLI 가이드를 제공한다.
-- JSON 검증·개발 전용 hot reload·화면 상태 복원을 구성한다.
+- 기존 상태 조회 API를 사용하는 수집 결과·오류·설정 revision의 읽기 전용 운영 화면을 제공하고 변경된 운영 절차를 수동 CLI 가이드에 반영한다.
+- 기존 JSON 구조·참조 검증에 신규 계약을 반영하고 개발 전용 설정 hot reload와 화면 상태 복원을 구성한다.
 - 큰 본문 저장·참조·다운로드·보존·실패 정리를 구현하고 원본 전체 저장 여부는 필요에 따라 선택한다.
-- 양쪽 플랫폼 DB의 migration·계약 테스트, Dockerfile·릴리스 이미지·Compose·샘플 초기화·설치 문서를 완성한다.
+- 기존 양쪽 DB migration·계약 테스트와 릴리스 이미지·Compose를 기반으로 최종 오프라인 번들 및 설치·업데이트·복구 절차를 완성하고 같은 배포물로 검증한다.
 
-완료 기준:
+완료 기준(기존 구현의 회귀 검증 포함):
 
 - 사용자가 계정관리를 비활성화하고 샘플로 설치하고 실제 수집처 설정으로 전환할 수 있다.
 - 수집 후 조회 API는 플랫폼 DB만 사용하며 UI 조회가 원천 읽기를 유발하지 않는다.
@@ -698,19 +691,23 @@ AI·IAM·규제 대응·분산 처리 및 자동 확장은 실제 필요성과 �
 
 ## 15. 다음 작업
 
-registry 기반 메뉴·라우팅 다음에는 외부 서버 플러그인 디렉터리의 로딩·검증·Compose 주입·독립 배포를 구현한다. 기본 목록과 상세 renderer는 이 분리된 registry 경계를 사용해 단계별로 연결한다.
+현재 활성 OpenSpec change는 없다. 완료된 기반은 12절에 모아 두고, 다음 작업은 아래 공개 준비와 기능 확장 후보에서 구체화한다.
+
+0.1.0 공개 준비는 [기술 프리뷰의 출시 차단 게이트](../../openspec/specs/technical-preview-release/spec.md)를 기준으로 추적한다. [개별 Release 자산 자동화](../../openspec/specs/github-release-artifacts/spec.md)는 구현되었으나, API·웹·선택 DB를 묶는 단일 오프라인 번들과 설치·업데이트·복구 검증까지 완료된 것을 의미하지 않는다. 공개 전 최종 번들 검증과 태그 후보 CI 등 각 게이트의 증거를 확인한다.
+
+기능 확장 후보는 서버 검색·필터·정렬과 개인별 목록 설정, 기존 상태 조회 API를 사용하는 운영 화면, 매일 22시 정기 수집 및 Phase 0의 나머지 완료 기준이다. 각 후보는 기존 계약을 기반으로 별도 change에서 구체화하며 후보 간 착수 순서는 아직 확정하지 않았다.
 
 ## 16. 남은 결정
 
 - **수동 삭제**: 원천 부재 확인 방법, 영구 삭제 시 공유 관계·본문 등 관련 데이터 정리 경계
 
-- **플러그인 계약**: manifest/source schema, JS/TS 코드 로딩·빌드 규약, 묶음·checkpoint·오류 입출력, 코드·화면 확장 지점과 호환성 버전
-- **DB**: 새 데이터 종류의 물리 저장 모델, 관계·검색 인덱스, 유일키 타입·출처 범위와 이관, DB driver·지원 버전
+- **플러그인 확장**: 기존 [선언·source 계약](../../openspec/specs/plugin-source-contract/spec.md), [가공 실행](../../openspec/specs/plugin-transform-runtime/spec.md), [묶음·checkpoint·오류 처리](../../openspec/specs/common-collection-runner/spec.md), [서버 배포 계약](../../openspec/specs/server-plugin-deployment/spec.md)은 확정되어 있다. 남은 결정은 page·custom 등 추가 수집 방식, 필드·키 변경의 호환성 정책과 Phase 2의 외부 UI 빌드·SDK·번들 계약이다.
+- **DB 확장**: 기존 [공통 저장 모델·관계·유일키 범위](../../openspec/specs/platform-record-storage/spec.md)와 [PostgreSQL](../../openspec/specs/postgresql-platform-db/spec.md)·[MySQL](../../openspec/specs/mysql-platform-db/spec.md) 연결·migration 계약은 확정되어 있다. 남은 결정은 업무 관계·검색 인덱스 확장, 필드·유일키 변경 시 데이터 이관과 릴리스별 DB 지원·호환성 정책이다.
 - **인증·권한**: LDAP 사용자 매핑·세션, 복수 역할·복수 자산 규칙과 권한 변경 시 반영 방식
 - **담당자**: 플러그인별 담당자 필드↔계정 속성 매핑 설정 형식과 미일치·다중 일치 상태 표시, 계정관리 비활성화 상태 표현·감사 주체
-- **동기화·알림**: 시간대는 우선 Asia/Seoul, 중단 작업 복구·실행 충돌 방지·스케줄러, 실패 이력 보존 기간
+- **동기화·알림**: 기동 수집과 [대상별 실행 충돌 조정](../../openspec/specs/collection-run-coordination/spec.md)은 확정되어 있다. 남은 결정은 Asia/Seoul 기준 매일 22시 스케줄러, 정기 실행과 기존 실행의 결합, 운영 화면·알림 및 실패 이력 보존 기간이다.
 - **목록**: 플러그인 지정 필터의 지원 종류·연산자·옵션 공급 방식, 다중 정렬, 검색의 대소문자·여러 단어·배열/비문자 타입 처리, 필드 변경·계정관리 설정 전환 시 목록 설정 처리
 - **운영 규모**: 첫 실제 수집처와 대표 샘플, 건수·바이트·응답 한도, 큰 본문 저장 위치와 원본·이력 보존 기간
-- **릴리스**: 라이선스, 이미지 공개·버전 정책과 OS·CPU 지원 검증
+- **릴리스**: [0.1.0 기술 프리뷰](../../openspec/specs/technical-preview-release/spec.md)의 Ubuntu 24.04 linux/amd64·Docker Compose·PostgreSQL 17.6/MySQL 8.4.6 검증 대상과 [태그·개별 자산 게시 규칙](../../openspec/specs/github-release-artifacts/spec.md)은 확정되어 있다. 남은 항목은 라이선스, 단일 오프라인 번들·설치·업데이트 스크립트의 세부 계약과 최종 설치·업데이트·복구 검증, 후속 지원 환경 확대다.
 
 Node.js 24 LTS·pnpm·React/Vite·NestJS와 PostgreSQL/MySQL 지원은 유지한다. Redis/BullMQ는 후속 큐 기반 고도화에 사용하며 일일 동기화의 필수 설치 조건으로 고정하지 않는다.
