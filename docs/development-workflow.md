@@ -31,7 +31,7 @@ Codex의 작업 브랜치는 `codex/<작업명>` 형식을 사용할 수 있으�
 
 클라이언트와 서버는 동일한 제품 버전을 사용하고 각 이미지 digest는 별도로 기록한다. 제품 버전과 API·설정 schema 버전은 별도로 관리한다. 개발 릴리스에서도 계약 변경은 릴리스 노트에 기록한다.
 
-릴리스 자동화는 `v<MAJOR>.<MINOR>.<PATCH>`와 `v<MAJOR>.<MINOR>.<PATCH>-rc.<NUMBER>` 태그만 허용한다. 태그 commit에서 전체 CI를 다시 통과한 뒤 개별 Docker image archive, 버전 고정 Compose, 환경변수 예시와 checksum을 게시한다. 동일 태그의 GitHub Release가 이미 있으면 기존 본문이나 자산을 덮어쓰지 않고 실패한다. 이 개별 자산은 #88에서 제공할 단일 폐쇄망 번들의 입력이며, 그 번들이 완료되기 전에는 0.1.0 릴리스 게이트를 충족하지 않는다.
+릴리스 자동화는 `v<MAJOR>.<MINOR>.<PATCH>`와 `v<MAJOR>.<MINOR>.<PATCH>-rc.<NUMBER>` 태그만 허용한다. 태그 commit에서 전체 CI를 다시 통과한 뒤 개별 Docker image archive, 버전 고정 Compose, 환경변수 예시와 checksum을 만든다. 이어서 이 자산을 재검증해 기본 폐쇄망 번들과 PostgreSQL 포함 번들을 생성·검증하고 같은 draft에 업로드한 후 공개한다. 동일 태그의 GitHub Release가 이미 있으면 기존 본문이나 자산을 덮어쓰지 않고 실패한다. 사용 절차는 [폐쇄망 번들 가이드](offline-bundle.md)를 따른다.
 
 ## 0.1.0 기술 프리뷰
 

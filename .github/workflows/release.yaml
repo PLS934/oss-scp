@@ -60,6 +60,11 @@ jobs:
           fi
       - name: 이미지와 배포 자산 생성
         run: bash scripts/build-release-assets.sh "$RELEASE_VERSION" "$RELEASE_REVISION" release-output
+      - name: 폐쇄망 번들 생성과 검증
+        run: |
+          bash scripts/build-offline-bundles.sh "$RELEASE_VERSION" "$RELEASE_REVISION" release-output bundle-output
+          node scripts/verify-offline-bundles.mjs "$RELEASE_VERSION" "$RELEASE_REVISION" bundle-output
+          bash scripts/test-offline-bundle-generator.sh "$RELEASE_VERSION" "$RELEASE_REVISION" release-output
       - name: Release 본문 생성
         run: |
           api_digest="$(docker image inspect --format '{{.Id}}' "oss-scp-api:${RELEASE_VERSION}")"
@@ -73,6 +78,8 @@ jobs:
             release-output/oss-scp-"$RELEASE_VERSION"-compose.yaml \
             release-output/oss-scp-"$RELEASE_VERSION".env.example \
             release-output/SHA256SUMS \
+            bundle-output/oss-scp-bundle-"$RELEASE_VERSION".tar.gz \
+            bundle-output/oss-scp-bundle-"$RELEASE_VERSION"-postgresql.tar.gz \
             --verify-tag --draft --title "oss-scp ${RELEASE_VERSION}" --notes-file release-notes.md
       - name: 검증된 Draft 공개
         run: gh release edit "$RELEASE_TAG" --draft=false --prerelease="$RELEASE_PRERELEASE"

@@ -1,0 +1,46 @@
+services:
+  postgres:
+    image: ${OSS_SCP_POSTGRES_IMAGE:?OSS_SCP_POSTGRES_IMAGE must be set}
+    pull_policy: never
+    environment:
+      POSTGRES_DB: ${PLATFORM_DB_NAME:-oss_scp}
+      POSTGRES_USER: ${PLATFORM_DB_USER:-oss_scp_app}
+      POSTGRES_PASSWORD: ${PLATFORM_DB_PASSWORD:?PLATFORM_DB_PASSWORD must be set}
+    volumes:
+      - platform_db_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+  api:
+    image: oss-scp-api:${OSS_SCP_VERSION:?OSS_SCP_VERSION must be set}
+    pull_policy: never
+    environment:
+      NODE_ENV: production
+      HOST: 0.0.0.0
+      PORT: "3000"
+      OSS_SCP_CONFIG_ROOT: /config
+      PLATFORM_DB_TYPE: postgres
+      PLATFORM_DB_HOST: postgres
+      PLATFORM_DB_PORT: "5432"
+      PLATFORM_DB_NAME: ${PLATFORM_DB_NAME:-oss_scp}
+      PLATFORM_DB_USER: ${PLATFORM_DB_USER:-oss_scp_app}
+      PLATFORM_DB_PASSWORD: ${PLATFORM_DB_PASSWORD:?PLATFORM_DB_PASSWORD must be set}
+      PLATFORM_DB_TLS_MODE: disable
+    depends_on:
+      postgres:
+        condition: service_healthy
+    ports:
+      - "127.0.0.1:${API_PORT:-3000}:3000"
+    volumes:
+      - ${OSS_SCP_CONFIG_PATH:?OSS_SCP_CONFIG_PATH must be set}:/config:ro
+  web:
+    image: oss-scp-web:${OSS_SCP_VERSION:?OSS_SCP_VERSION must be set}
+    pull_policy: never
+    environment:
+      API_UPSTREAM: api:3000
+    ports:
+      - "0.0.0.0:${WEB_PORT:-8080}:8080"
+volumes:
+  platform_db_data:

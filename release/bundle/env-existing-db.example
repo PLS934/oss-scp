@@ -1,0 +1,13 @@
+OSS_SCP_VERSION=0.1.0
+COMPOSE_PROJECT_NAME=oss-scp
+OSS_SCP_CONFIG_PATH=/absolute/path/to/oss-scp-plugin-config
+PLATFORM_DB_TYPE=postgres
+PLATFORM_DB_HOST=db.example.internal
+PLATFORM_DB_PORT=5432
+PLATFORM_DB_NAME=oss_scp
+PLATFORM_DB_USER=oss_scp_app
+# PLATFORM_DB_PASSWORD는 이 파일이 아니라 실행 환경 또는 별도 secret 파일로 제공합니다.
+PLATFORM_DB_PASSWORD=
+PLATFORM_DB_TLS_MODE=require
+API_PORT=3000
+WEB_PORT=8080
