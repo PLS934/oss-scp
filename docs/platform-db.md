@@ -233,4 +233,6 @@ docker compose -f compose.external-db.yaml config --quiet
 docker compose -f compose.external-db.yaml up -d
 ```
 
-Compose는 이 경로를 `/config:ro`로 주입합니다. 배포 시 플랫폼 이미지는 정확한 tag 또는 digest로, 플러그인은 Git SHA로 고정하고 해당 이미지의 preflight 명령으로 조합을 먼저 검증합니다. DB migration은 이미지·플러그인 교체와 분리해 명시적으로 실행합니다. 롤백은 DB를 자동 역행시키지 않고 이전에 검증한 image digest와 plugin SHA 조합으로 재기동하며, 데이터 변경은 별도 백업·역이관 절차를 따릅니다.
+Compose는 이 경로를 `/config:ro`로 주입하며 API 컨테이너는 UID `1000`으로 실행됩니다. 따라서 UID `1000`이 설정 루트와 모든 상위 디렉터리를 탐색(`x`)하고, registry·선언 파일·사전 빌드된 JavaScript 가공 모듈을 읽을(`r`) 수 있어야 합니다. 비밀 정보를 포함하지 않는 전용 checkout이라면 디렉터리 `0755`, 파일 `0644`가 단순한 예시입니다. 접근 범위를 줄여야 한다면 컨테이너가 읽을 수 있는 소유자 또는 그룹을 맞춘 뒤 디렉터리 `0750`, 파일 `0640`을 사용합니다. 설정 checkout에는 비밀번호나 토큰을 넣지 않고 DB 비밀번호는 별도 secret 파일 또는 실행 환경으로 제공합니다.
+
+배포 시 플랫폼 이미지는 정확한 tag 또는 digest로, 플러그인은 Git SHA로 고정하고 해당 이미지의 preflight 명령으로 조합을 먼저 검증합니다. DB migration은 이미지·플러그인 교체와 분리해 명시적으로 실행합니다. 롤백은 DB를 자동 역행시키지 않고 이전에 검증한 image digest와 plugin SHA 조합으로 재기동하며, 데이터 변경은 별도 백업·역이관 절차를 따릅니다.
