@@ -2,6 +2,7 @@ import { createHash } from 'node:crypto';
 import { relative, resolve } from 'node:path';
 import { runCollection, CollectionRunnerError, type CollectionCollector, type CollectionRunResult, type RunCollectionOptions } from '@oss-scp/collection-engine';
 import { collectHttpOffset, collectHttpSingle } from '@oss-scp/http-collector';
+import { collectHttpCsv } from '@oss-scp/http-csv-source';
 import { collectLocalCsv } from '@oss-scp/local-csv-source';
 import {
   createPlatformRecordAdapters,
@@ -12,7 +13,7 @@ import {
   type CollectionScope,
   type RecordStorage,
 } from '@oss-scp/platform-db';
-import { preflightConfiguration, type CollectionDefinition, type ConfigurationResult, type OffsetCollectionDefinition, type SingleCollectionDefinition } from '@oss-scp/plugin-config';
+import { preflightConfiguration, type CollectionDefinition, type ConfigurationResult, type HttpCsvCollectionDefinition, type OffsetCollectionDefinition, type SingleCollectionDefinition } from '@oss-scp/plugin-config';
 
 export type CliErrorCode =
   | 'usage'
@@ -135,6 +136,24 @@ export function collectorFor(definition: CollectionDefinition, now: () => string
       if (checkpoint !== null) return;
       await collectHttpSingle(singleDefinition, async (batch) => {
         await onBatch({ records: batch.items, startCheckpoint: null, nextCheckpoint: { complete: true }, collectedAt: now(), responseMetadata: batch.responseMetadata });
+      }, { signal });
+    };
+  }
+  if ('request' in definition && definition.request.format === 'csv') {
+    const httpCsvDefinition = definition as HttpCsvCollectionDefinition;
+    return async ({ checkpoint, signal }, onBatch) => {
+      let consumed = numericCheckpoint(checkpoint, 0);
+      let expectedCheckpoint = checkpoint;
+      let position = 0;
+      await collectHttpCsv(httpCsvDefinition, async (batch) => {
+        const end = position + batch.records.length;
+        if (end <= consumed) { position = end; return; }
+        const records = batch.records.slice(Math.max(0, consumed - position));
+        const nextCheckpoint = consumed + records.length;
+        await onBatch({ records, startCheckpoint: expectedCheckpoint, nextCheckpoint, collectedAt: now(), responseMetadata: { complete: batch.complete } });
+        expectedCheckpoint = nextCheckpoint;
+        consumed = nextCheckpoint;
+        position = end;
       }, { signal });
     };
   }

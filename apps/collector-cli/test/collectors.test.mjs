@@ -63,3 +63,71 @@ it('CSV numeric checkpoint 이후 레코드만 전달한다', async () => {
   expect(batches).toHaveLength(1);
   expect(batches[0]).toMatchObject({ startCheckpoint: 2, nextCheckpoint: 3, records: [{ id: '3', name: 'three' }] });
 });
+
+function httpCsvDefinition(baseUrl, batchSize = 2) {
+  return {
+    plugin,
+    connection: { id: 'csv-source', baseUrl },
+    request: { transport: 'http', method: 'GET', path: '/source.csv', format: 'csv' },
+    batching: { size: batchSize },
+    limits: { timeoutMs: 1000, maxDownloadBytes: 10_000, maxCsvBytes: 10_000, maxRecordSize: 1000 },
+  };
+}
+
+it('플러그인의 HTTP CSV 선언을 여러 공통 묶음과 완료 metadata로 변환한다', async () => {
+  const baseUrl = await server((_request, response) => {
+    response.setHeader('content-type', 'text/csv');
+    response.end('id,name\n1,one\n2,two\n3,three\n');
+  });
+  const batches = [];
+  await collectorFor(httpCsvDefinition(baseUrl), () => '2026-09-13T00:00:00.000Z')(
+    { checkpoint: null, signal: new AbortController().signal },
+    async (batch) => batches.push(batch),
+  );
+  expect(batches).toMatchObject([
+    { startCheckpoint: null, nextCheckpoint: 2, records: [{ id: '1', name: 'one' }, { id: '2', name: 'two' }], responseMetadata: { complete: false } },
+    { startCheckpoint: 2, nextCheckpoint: 3, records: [{ id: '3', name: 'three' }], responseMetadata: { complete: true } },
+  ]);
+});
+
+it('HTTP CSV numeric checkpoint가 묶음 중간이면 확정 행만 건너뛴다', async () => {
+  const baseUrl = await server((_request, response) => {
+    response.end('id,name\n1,one\n2,two\n3,three\n4,four\n5,five\n');
+  });
+  const batches = [];
+  await collectorFor(httpCsvDefinition(baseUrl, 3), () => '2026-09-13T00:00:00.000Z')(
+    { checkpoint: 2, signal: new AbortController().signal },
+    async (batch) => batches.push(batch),
+  );
+  expect(batches).toMatchObject([
+    { startCheckpoint: 2, nextCheckpoint: 3, records: [{ id: '3', name: 'three' }], responseMetadata: { complete: false } },
+    { startCheckpoint: 3, nextCheckpoint: 5, records: [{ id: '4', name: 'four' }, { id: '5', name: 'five' }], responseMetadata: { complete: true } },
+  ]);
+});
+
+it('HTTP CSV의 잘못된 checkpoint와 실패·취소를 성공으로 처리하지 않는다', async () => {
+  let requests = 0;
+  const baseUrl = await server((_request, response) => {
+    requests += 1;
+    response.end('id,name\n1,one\n2,two\n');
+  });
+  const definition = httpCsvDefinition(baseUrl, 1);
+  const signal = new AbortController().signal;
+  await expect(collectorFor(definition, () => '2026-09-13T00:00:00.000Z')(
+    { checkpoint: 'invalid', signal }, async () => undefined,
+  )).rejects.toMatchObject({ code: 'collection_failed' });
+  expect(requests).toBe(0);
+
+  let delivered = 0;
+  await expect(collectorFor(definition, () => '2026-09-13T00:00:00.000Z')(
+    { checkpoint: null, signal },
+    async () => { delivered += 1; throw new Error('storage failed'); },
+  )).rejects.toMatchObject({ code: 'processing' });
+  expect(delivered).toBe(1);
+
+  const controller = new AbortController();
+  controller.abort();
+  await expect(collectorFor(definition, () => '2026-09-13T00:00:00.000Z')(
+    { checkpoint: null, signal: controller.signal }, async () => undefined,
+  )).rejects.toMatchObject({ code: 'cancelled' });
+});
