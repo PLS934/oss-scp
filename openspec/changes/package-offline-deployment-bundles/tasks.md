@@ -13,7 +13,7 @@
 
 ## 3. 설치·업데이트·복구 도구
 
-- [ ] 3.1 checksum, manifest, Docker image, 외부 설정, DB 연결, migration, Compose recreate와 상태 확인 단계를 공유하는 shell library를 구현하고 단계별 실패 코드·비밀정보 비노출 테스트를 통과시킨다.
+- [x] 3.1 checksum, manifest, Docker image, 외부 설정, DB 연결, migration, Compose recreate와 상태 확인 단계를 공유하는 shell library를 구현하고 단계별 실패 코드·비밀정보 비노출 테스트를 통과시킨다.
 - [x] 3.2 `install.sh`가 기존 DB 사전 조건 또는 포함 PostgreSQL ready를 확인하고 명시적 migration 후 `--pull never`로 API·웹을 기동하며 실제 version·revision·health·ready를 검증하는 smoke test를 통과시킨다.
 - [x] 3.3 `update.sh`가 운영자 백업 확인, 새 번들·설정 사전 검증, image load, migration, 강제 재생성과 실제 적용 버전 검사를 순서대로 수행하고 기존 DB 데이터·volume·설정 경로를 보존하는 테스트를 통과시킨다.
 - [x] 3.4 `rollback.sh`가 migration 전 실패에서는 현재 배포를 유지하고 migration 이후에는 자동 롤백을 거부하며 DB 복원 확인과 이전 번들·설정이 있을 때만 재기동하는 회귀 테스트를 통과시킨다.
