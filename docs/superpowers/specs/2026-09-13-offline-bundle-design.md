@@ -10,8 +10,8 @@ GitHub Release의 검증된 OSS-SCP API·웹 이미지를 외부 Registry에 접
 
 공개 릴리스는 같은 제품 버전으로 다음 두 자산을 제공한다.
 
-- `oss-scp-offline-<version>.tar.gz`: API·웹 이미지만 포함하고 운영자가 준비한 PostgreSQL 17.6 또는 MySQL 8.4.6에 연결하는 기본 번들
-- `oss-scp-offline-<version>-postgresql.tar.gz`: API·웹과 고정된 PostgreSQL 17.6 이미지를 포함하는 단일 서버용 번들
+- `oss-scp-bundle-<version>.tar.gz`: API·웹 이미지만 포함하고 운영자가 준비한 PostgreSQL 17.6 또는 MySQL 8.4.6에 연결하는 기본 번들
+- `oss-scp-bundle-<version>-postgresql.tar.gz`: API·웹과 고정된 PostgreSQL 17.6 이미지를 포함하는 단일 서버용 번들
 
 기본 번들에서 “기존 DB”는 원격 서버만 의미하지 않는다. 번들이 수명 주기를 관리하지 않는 PostgreSQL 또는 MySQL이면 같은 서버의 DB도 사용할 수 있다. PostgreSQL 포함 번들은 Compose가 DB 컨테이너와 영속 volume을 관리한다.
 
@@ -20,7 +20,7 @@ GitHub Release의 검증된 OSS-SCP API·웹 이미지를 외부 Registry에 접
 두 자산을 풀면 독립된 최상위 디렉터리가 만들어진다.
 
 ```text
-oss-scp-offline-<version>/
+oss-scp-bundle-<version>/
 ├── images.tar
 ├── compose.yaml
 ├── manifest.json
