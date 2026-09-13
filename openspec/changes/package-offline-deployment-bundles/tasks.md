@@ -34,5 +34,5 @@
 
 ## 6. 전체 확인과 실제 게시
 
-- [ ] 6.1 번들 단위·계약 테스트와 모든 Docker 설치·업데이트·복구 smoke test 및 기존 typecheck·lint·test·build·통합 CI를 실행해 성공 결과를 확인한다.
+- [x] 6.1 번들 단위·계약 테스트와 모든 Docker 설치·업데이트·복구 smoke test 및 기존 typecheck·lint·test·build·통합 CI를 실행해 성공 결과를 확인한다.
 - [ ] 6.2 병합 후 새 RC 태그에서 두 번들이 prerelease에 게시되고 개별 자산과 API·웹 digest가 일치하며 다운로드한 번들의 checksum·최초 설치·업데이트·복구가 재현되는 실행 기록을 남긴다.
