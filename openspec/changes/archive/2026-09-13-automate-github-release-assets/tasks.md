@@ -19,7 +19,7 @@
 
 - [x] 4.1 기존 통합 CI에 `workflow_call`을 추가하고 PR·main push·수동 trigger 및 네 검증 job이 유지되는지 workflow 구문과 기존 CI 실행으로 확인한다.
 - [x] 4.2 `v*` 태그에서 메타데이터 검증, 재사용 통합 CI, 자산 생성·smoke test 순서로 실행하는 release workflow를 추가하고 게시 전 단계가 PR에서 검증 가능한지 확인한다.
-- [ ] 4.3 게시 job에만 `contents: write`를 부여하고 동일 태그 Release 존재 시 실패, draft 자산 업로드 완료 후 prerelease 또는 정식 공개가 되도록 구현하며 workflow 정적 검사와 테스트용 태그 실행 기록으로 확인한다.
+- [x] 4.3 게시 job에만 `contents: write`를 부여하고 동일 태그 Release 존재 시 실패, draft 자산 업로드 완료 후 prerelease 또는 정식 공개가 되도록 구현하며 workflow 정적 검사와 테스트용 태그 `v0.1.0-rc.0`의 [실행 기록](https://github.com/PLS934/oss-scp/actions/runs/34752865063)으로 확인한다.
 - [x] 4.4 Release 본문에 제품 버전, 전체 Git revision, API·웹 image digest, 지원 환경, migration 주의사항과 알려진 제한이 포함되는지 생성 결과를 검증한다.
 
 ## 5. 운영 문서와 전체 확인
