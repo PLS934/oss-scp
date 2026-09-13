@@ -38,11 +38,11 @@ for variant in existing-db postgresql; do
   BUNDLE_VERSION="$version" BUNDLE_REVISION="$revision" BUNDLE_VARIANT="$variant" BUNDLE_CREATED_AT="$created_at" BUNDLE_API="$api" BUNDLE_WEB="$web" BUNDLE_POSTGRES="$postgres_tag" BUNDLE_IMAGES_TAR="$stage/images.tar" node --input-type=module >"$stage/manifest.json" <<'NODE'
 import { createBundleManifest } from './scripts/bundle-manifest.mjs';
 import { execFileSync } from 'node:child_process';
-const archive = JSON.parse(execFileSync('tar', ['-xOf', process.env.BUNDLE_IMAGES_TAR, 'manifest.json'], { encoding: 'utf8' }));
+const archive = JSON.parse(execFileSync('tar', ['-xOf', process.env.BUNDLE_IMAGES_TAR, 'index.json'], { encoding: 'utf8' }));
 const id = reference => {
-  const image = archive.find(entry => (entry.RepoTags ?? []).includes(reference));
+  const image = archive.manifests.find(entry => entry.annotations?.['io.containerd.image.name']?.endsWith(`/${reference}`));
   if (!image) throw new Error(`images.tar에 ${reference} 이미지가 없습니다`);
-  return `sha256:${image.Config.split('/').at(-1)}`;
+  return image.digest;
 };
 const images = [
   { name: 'api', reference: process.env.BUNDLE_API, digest: id(process.env.BUNDLE_API) },

@@ -36,8 +36,9 @@ try {
     const expected = [`oss-scp-api:${version}`, `oss-scp-web:${version}`];
     if (variant === 'postgresql') expected.push('postgres:17.6-bookworm');
     assert.deepEqual(tags, expected.sort(), `${root} 이미지 목록`);
-    const configDigests = new Set(imageManifest.map(image => `sha256:${image.Config.split('/').at(-1)}`));
-    for (const image of manifest.images) assert.ok(configDigests.has(image.digest), `${image.name} digest가 images.tar에 있어야 합니다`);
+    const imageIndex = JSON.parse(execFileSync('tar', ['-xOf', join(directory, 'images.tar'), 'index.json'], { encoding: 'utf8' }));
+    const archiveDigests = new Set(imageIndex.manifests.map(image => image.digest));
+    for (const image of manifest.images) assert.ok(archiveDigests.has(image.digest), `${image.name} digest가 images.tar에 있어야 합니다`);
   }
   console.log('두 폐쇄망 번들의 파일·checksum·manifest·이미지 목록: 통과');
 } finally {
