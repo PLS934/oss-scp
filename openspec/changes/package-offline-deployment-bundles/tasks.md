@@ -21,10 +21,10 @@
 
 ## 4. 폐쇄망과 DB 복원 통합 검증
 
-- [ ] 4.1 대상 이미지를 제거한 깨끗한 Docker 상태에서 기본 번들만 load하고 별도 fixture 설정과 PostgreSQL 17.6 기존 DB로 migration·기동·대표 수집·저장 목록·상세 조회가 성공하는지 검증한다.
+- [x] 4.1 대상 이미지를 제거한 깨끗한 Docker 상태에서 기본 번들만 load하고 별도 fixture 설정과 PostgreSQL 17.6 기존 DB로 migration·기동·대표 수집·저장 목록·상세 조회가 성공하는지 검증한다.
 - [x] 4.2 PostgreSQL 포함 번들만으로 Registry pull 없이 DB volume·migration·API·웹을 최초 설치하고 화면 제품 버전이 manifest와 일치하는지 검증한다.
-- [ ] 4.3 서로 다른 두 테스트 버전 번들로 업데이트해 PostgreSQL·MySQL 각각의 데이터와 migration 이력·외부 설정 경로가 유지되는지 검증한다.
-- [ ] 4.4 migration 전 의도적 실패에서 현재 컨테이너·버전이 유지되고, migration 이후 의도적 실패에서는 PostgreSQL·MySQL 표준 backup·restore 뒤 이전 이미지·설정 조합이 복구되는지 검증한다.
+- [x] 4.3 서로 다른 두 테스트 버전 번들로 업데이트해 PostgreSQL·MySQL 각각의 데이터와 migration 이력·외부 설정 경로가 유지되는지 검증한다.
+- [x] 4.4 migration 전 의도적 실패에서 현재 컨테이너·버전이 유지되고, migration 이후 의도적 실패에서는 PostgreSQL·MySQL 표준 backup·restore 뒤 이전 이미지·설정 조합이 복구되는지 검증한다.
 
 ## 5. 릴리스 자동화와 운영 문서
 
