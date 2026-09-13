@@ -20,12 +20,14 @@ main section { background: white; border: 1px solid #dce2e7; border-radius: 12px
 .list-message.partial, .list-message.failed, .list-message.error { background: #fff0ef; color: #7d2420; }
 .list-message p { margin-top: 0; }
 .list-message button, .pagination button { padding: 7px 12px; cursor: pointer; }
+.list-heading select:focus-visible, .pagination button:focus-visible { outline: 3px solid #2f6f9f; outline-offset: 2px; }
+.list-heading select:disabled, .pagination button:disabled { cursor: not-allowed; opacity: .55; }
 .empty-state { color: #516372; padding: 30px 0; text-align: center; }
 .record-table-wrap { overflow-x: auto; margin-top: 18px; }
 table { border-collapse: collapse; min-width: 100%; }
 th, td { border-bottom: 1px solid #dce2e7; padding: 11px 12px; text-align: left; white-space: nowrap; }
 th { background: #f4f6f8; }
-.pagination { display: flex; justify-content: flex-end; align-items: center; gap: 16px; margin-top: 18px; color: #516372; }
+.pagination { display: flex; flex-wrap: wrap; justify-content: flex-end; align-items: center; gap: 12px; margin-top: 18px; color: #516372; }
 .detail-section { margin: 20px 0; padding: 20px; }
 .detail-section h3 { margin-top: 0; }
 .detail-section dl, .nested-fields { margin: 0; }

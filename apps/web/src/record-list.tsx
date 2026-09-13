@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useReducer, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { recordDetailPath, type ListColumn, type MenuItem } from './menu';
 import {
@@ -36,17 +36,20 @@ const collectionMessages: Partial<Record<ListRecordsResult['collection']['status
 interface RecordListViewProps {
   menu: MenuItem;
   limit: RecordListLimit;
+  pageIndex: number;
   loading: boolean;
   result: ListRecordsResult | null;
   error: RecordApiError | null;
   onLimitChange: (limit: RecordListLimit) => void;
+  onPrevious: () => void;
   onNext: () => void;
   onRetry: () => void;
 }
 
-export function RecordListView({ menu, limit, loading, result, error, onLimitChange, onNext, onRetry }: RecordListViewProps) {
+export function RecordListView({ menu, limit, pageIndex, loading, result, error, onLimitChange, onPrevious, onNext, onRetry }: RecordListViewProps) {
   const collectionMessage = result ? collectionMessages[result.collection.status] : undefined;
   const hasItems = Boolean(result?.items.length);
+  const navigationDisabled = loading || error !== null;
   return <section aria-labelledby="record-list-title">
     <p className="eyebrow">{menu.group}</p>
     <div className="list-heading">
@@ -61,15 +64,57 @@ export function RecordListView({ menu, limit, loading, result, error, onLimitCha
     {!loading && !error && result?.collection.status === 'never_collected' && !hasItems ? <p className="empty-state">아직 수집된 데이터가 없습니다.</p> : null}
     {!loading && !error && result?.collection.status === 'success' && !hasItems ? <p className="empty-state">수집이 완료됐지만 표시할 결과가 없습니다.</p> : null}
     {!loading && !error && result && result.collection.status !== 'never_collected' && result.collection.status !== 'success' && !hasItems ? <p className="empty-state">현재 표시할 저장 데이터가 없습니다.</p> : null}
-    {!loading && !error && result && hasItems ? <div className="record-table-wrap"><table>
+    {result && hasItems ? <div className="record-table-wrap"><table>
       <thead><tr>{menu.list.columns.map(column => <th key={column.key} scope="col">{column.label}</th>)}<th scope="col">상세</th></tr></thead>
       <tbody>{result.items.map(item => <tr key={item.id}>{menu.list.columns.map(column => <td key={column.key}>{formatColumnValue(column.type, item.sourceValues[column.key])}</td>)}<td><Link to={recordDetailPath(menu.path, item.id)}>보기</Link></td></tr>)}</tbody>
     </table></div> : null}
-    {!loading && !error && result && hasItems ? <div className="pagination">
-      <span>{result.items.length}개 항목</span>
-      {result.pageInfo.hasNextPage ? <button type="button" onClick={onNext}>다음 묶음</button> : <span>마지막 묶음입니다.</span>}
-    </div> : null}
+    <nav className="pagination" aria-label="목록 페이지 탐색">
+      <span>{pageIndex + 1}번째 묶음{result ? ` · ${result.items.length}개 항목` : ''}</span>
+      <button type="button" disabled={navigationDisabled || pageIndex === 0} onClick={onPrevious}>이전 묶음</button>
+      <button type="button" disabled={navigationDisabled || !result?.pageInfo.hasNextPage} onClick={onNext}>다음 묶음</button>
+      {!loading && !error && result && !result.pageInfo.hasNextPage ? <span>마지막 묶음입니다.</span> : null}
+    </nav>
   </section>;
+}
+
+export interface NavigationTarget { cursor: string | undefined; index: number }
+export interface NavigationState {
+  sessionKey: string;
+  history: (string | undefined)[];
+  index: number;
+  target: NavigationTarget | null;
+  requestVersion: number;
+}
+export type NavigationAction =
+  | { type: 'reset'; sessionKey: string }
+  | { type: 'next'; cursor: string }
+  | { type: 'previous' }
+  | { type: 'success' }
+  | { type: 'failure' };
+
+export function createNavigationState(sessionKey: string): NavigationState {
+  return { sessionKey, history: [undefined], index: 0, target: null, requestVersion: 0 };
+}
+
+export function navigationReducer(state: NavigationState, action: NavigationAction): NavigationState {
+  if (action.type === 'reset') return createNavigationState(action.sessionKey);
+  if (action.type === 'failure') return state;
+  if (action.type === 'next') {
+    return { ...state, target: { cursor: action.cursor, index: state.index + 1 }, requestVersion: state.requestVersion + 1 };
+  }
+  if (action.type === 'previous') {
+    if (state.index === 0) return state;
+    return { ...state, target: { cursor: state.history[state.index - 1], index: state.index - 1 }, requestVersion: state.requestVersion + 1 };
+  }
+  if (!state.target) return state;
+  const history = state.target.index > state.index
+    ? [...state.history.slice(0, state.index + 1), state.target.cursor]
+    : state.history;
+  return { ...state, history, index: state.target.index, target: null };
+}
+
+export function requestedCursor(state: NavigationState): string | undefined {
+  return state.target ? state.target.cursor : state.history[state.index];
 }
 
 export interface RecordListProps {
@@ -79,7 +124,8 @@ export interface RecordListProps {
 
 export function RecordList({ menu, request = listRecords }: RecordListProps) {
   const [limit, setLimit] = useState<RecordListLimit>(20);
-  const [cursor, setCursor] = useState<string | undefined>();
+  const sessionKey = JSON.stringify([menu.pluginId, menu.sourceId, menu.dataType, limit]);
+  const [navigation, dispatchNavigation] = useReducer(navigationReducer, sessionKey, createNavigationState);
   const [retry, setRetry] = useState(0);
   const [loading, setLoading] = useState(true);
   const [result, setResult] = useState<ListRecordsResult | null>(null);
@@ -87,23 +133,40 @@ export function RecordList({ menu, request = listRecords }: RecordListProps) {
   const requestId = useRef(0);
 
   useEffect(() => {
+    if (navigation.sessionKey !== sessionKey) {
+      dispatchNavigation({ type: 'reset', sessionKey });
+      setResult(null);
+      setError(null);
+      return;
+    }
     const controller = new AbortController();
     const currentRequest = ++requestId.current;
+    const cursor = requestedCursor(navigation);
     setLoading(true);
-    setResult(null);
     setError(null);
     void request({ pluginId: menu.pluginId, sourceId: menu.sourceId, dataType: menu.dataType, limit, cursor }, { signal: controller.signal })
       .then((response: ApiResult<ListRecordsResult>) => {
         if (controller.signal.aborted || currentRequest !== requestId.current) return;
-        if (response.ok) setResult(response.data);
-        else if (response.error.kind !== 'ABORTED') setError(response.error);
+        if (response.ok) {
+          setResult(response.data);
+          dispatchNavigation({ type: 'success' });
+        } else if (response.error.kind !== 'ABORTED') {
+          setError(response.error);
+          dispatchNavigation({ type: 'failure' });
+        }
         setLoading(false);
       });
     return () => { controller.abort(); requestId.current += 1; };
-  }, [cursor, limit, menu.dataType, menu.pluginId, menu.sourceId, request, retry]);
+  }, [limit, menu.dataType, menu.pluginId, menu.sourceId, navigation.requestVersion, navigation.sessionKey, request, retry, sessionKey]);
 
-  return <RecordListView menu={menu} limit={limit} loading={loading} result={result} error={error}
-    onLimitChange={value => { setCursor(undefined); setLimit(value); }}
-    onNext={() => { if (!loading && result?.pageInfo.hasNextPage && result.pageInfo.nextCursor) setCursor(result.pageInfo.nextCursor); }}
-    onRetry={() => setRetry(value => value + 1)} />;
+  const currentSession = navigation.sessionKey === sessionKey;
+  const visibleResult = currentSession ? result : null;
+  const visibleError = currentSession ? error : null;
+  const busy = !currentSession || loading || (navigation.target !== null && visibleError === null);
+
+  return <RecordListView menu={menu} limit={limit} pageIndex={currentSession ? navigation.index : 0} loading={busy} result={visibleResult} error={visibleError}
+    onLimitChange={value => setLimit(value)}
+    onPrevious={() => { if (!busy && navigation.index > 0) { setError(null); dispatchNavigation({ type: 'previous' }); } }}
+    onNext={() => { if (!busy && visibleResult?.pageInfo.hasNextPage && visibleResult.pageInfo.nextCursor) { setError(null); dispatchNavigation({ type: 'next', cursor: visibleResult.pageInfo.nextCursor }); } }}
+    onRetry={() => { setError(null); setRetry(value => value + 1); }} />;
 }
