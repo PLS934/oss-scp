@@ -21,6 +21,11 @@ RUN pnpm --filter @oss-scp/collector-cli build \
     && pnpm --filter @oss-scp/api deploy --prod /out
 
 FROM node:24.19.0-bookworm-slim AS runtime
+ARG PRODUCT_VERSION
+ARG GIT_REVISION
+LABEL org.opencontainers.image.version="$PRODUCT_VERSION" \
+      org.opencontainers.image.revision="$GIT_REVISION" \
+      org.opencontainers.image.source="https://github.com/PLS934/oss-scp"
 ENV NODE_ENV=production HOST=0.0.0.0 PORT=3000
 WORKDIR /app
 COPY --from=build --chown=node:node /out ./

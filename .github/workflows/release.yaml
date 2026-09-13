@@ -1,0 +1,78 @@
+name: GitHub Release Docker 자산 게시
+on:
+  push:
+    tags:
+      - 'v*'
+permissions:
+  contents: read
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  metadata:
+    name: 릴리스 태그 검증
+    runs-on: ubuntu-24.04
+    outputs:
+      tag: ${{ steps.metadata.outputs.tag }}
+      version: ${{ steps.metadata.outputs.version }}
+      revision: ${{ steps.metadata.outputs.revision }}
+      prerelease: ${{ steps.metadata.outputs.prerelease }}
+    steps:
+      - uses: actions/checkout@v7.0.1
+      - uses: actions/setup-node@v7.0.0
+        with:
+          node-version-file: .nvmrc
+      - id: metadata
+        name: 버전과 공개 수준 계산
+        run: node scripts/release-metadata.mjs "$GITHUB_REF_NAME" "$GITHUB_SHA"
+
+  verify:
+    name: 태그 commit 전체 검증
+    needs: metadata
+    permissions:
+      contents: read
+    uses: ./.github/workflows/integration-ci.yaml
+
+  publish:
+    name: 검증 자산 게시
+    needs: [metadata, verify]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 40
+    permissions:
+      contents: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+      RELEASE_TAG: ${{ needs.metadata.outputs.tag }}
+      RELEASE_VERSION: ${{ needs.metadata.outputs.version }}
+      RELEASE_REVISION: ${{ needs.metadata.outputs.revision }}
+      RELEASE_PRERELEASE: ${{ needs.metadata.outputs.prerelease }}
+    steps:
+      - uses: actions/checkout@v7.0.1
+      - uses: actions/setup-node@v7.0.0
+        with:
+          node-version-file: .nvmrc
+      - name: 기존 Release 거부
+        run: |
+          if gh release view "$RELEASE_TAG" >/dev/null 2>&1; then
+            echo "이미 존재하는 Release는 변경하지 않습니다: $RELEASE_TAG" >&2
+            exit 1
+          fi
+      - name: 이미지와 배포 자산 생성
+        run: bash scripts/build-release-assets.sh "$RELEASE_VERSION" "$RELEASE_REVISION" release-output
+      - name: Release 본문 생성
+        run: |
+          api_digest="$(docker image inspect --format '{{.Id}}' "oss-scp-api:${RELEASE_VERSION}")"
+          web_digest="$(docker image inspect --format '{{.Id}}' "oss-scp-web:${RELEASE_VERSION}")"
+          node scripts/release-notes.mjs "$RELEASE_VERSION" "$RELEASE_REVISION" "$api_digest" "$web_digest" > release-notes.md
+      - name: Draft 생성과 자산 업로드
+        run: |
+          gh release create "$RELEASE_TAG" \
+            release-output/oss-scp-api-"$RELEASE_VERSION".tar.gz \
+            release-output/oss-scp-web-"$RELEASE_VERSION".tar.gz \
+            release-output/oss-scp-"$RELEASE_VERSION"-compose.yaml \
+            release-output/oss-scp-"$RELEASE_VERSION".env.example \
+            release-output/SHA256SUMS \
+            --verify-tag --draft --title "oss-scp ${RELEASE_VERSION}" --notes-file release-notes.md
+      - name: 검증된 Draft 공개
+        run: gh release edit "$RELEASE_TAG" --draft=false --prerelease="$RELEASE_PRERELEASE"

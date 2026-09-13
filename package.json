@@ -31,6 +31,8 @@
     "test:docker:mysql": "bash scripts/test-mysql-docker.sh",
     "test:http-collector": "pnpm --filter @oss-scp/http-collector test",
     "test:http-csv-source": "pnpm --filter @oss-scp/http-csv-source test",
+    "test:release": "node --test scripts/release-metadata.test.mjs scripts/test-release-assets.mjs scripts/test-release-workflow.mjs",
+    "test:docker:release": "bash scripts/test-release-docker.sh",
     "test:integration:sample1": "pnpm build:plugin-transforms && pnpm --filter @oss-scp/mock-api build && pnpm --filter @oss-scp/collector-cli build && pnpm --filter @oss-scp/api build && node scripts/test-sample1-postgres.mjs",
     "test:integration:sample1:mysql": "pnpm build:plugin-transforms && pnpm --filter @oss-scp/mock-api build && pnpm --filter @oss-scp/collector-cli build && pnpm --filter @oss-scp/api build && SAMPLE1_DB_TYPE=mysql node scripts/test-sample1-postgres.mjs",
     "collect": "pnpm --filter @oss-scp/collector-cli start"
