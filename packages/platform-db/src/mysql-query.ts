@@ -1,4 +1,5 @@
 import { conditionSql } from './condition-sql';
+import { recordOrderSql } from './sort-sql';
 import type { RowDataPacket } from 'mysql2/promise';
 import type { MysqlPlatformDbConnection } from './mysql';
 import { recordQueryScopeIdentity } from './storage-identity';
@@ -54,10 +55,12 @@ export function createMysqlRecordQuery(connection: MysqlPlatformDbConnection): R
           parameters.push(...filtered.parameters);
           const boundary = input.boundary ? ' AND (last_seen_at < ? OR (last_seen_at = ? AND id > ?))' : '';
           if (input.boundary) parameters.push(new Date(input.boundary.lastSeenAt), new Date(input.boundary.lastSeenAt), input.boundary.id);
+          const order = recordOrderSql(input.sort, 'mysql');
+          parameters.push(...order.parameters);
           parameters.push(numbered ? input.limit : input.limit + 1);
           if (numbered) parameters.push((numbered.page - 1) * input.limit);
           const [recordRows] = await client.query<RecordRow[]>(`SELECT id, plugin_id, source_id, data_type, external_key_type, external_key, source_values, first_seen_at, last_seen_at
-            FROM platform_records WHERE query_scope_hash=?${filtered.sql}${boundary} ORDER BY last_seen_at DESC, id ASC LIMIT ?${numbered ? ' OFFSET ?' : ''}`, parameters);
+            FROM platform_records WHERE query_scope_hash=?${filtered.sql}${boundary} ORDER BY ${order.sql} LIMIT ?${numbered ? ' OFFSET ?' : ''}`, parameters);
           const [runRows] = await client.query<RunRow[]>(`SELECT id, status, started_at, finished_at FROM collection_runs
             WHERE plugin_id=? AND source_id=? AND scope_type='full' ORDER BY started_at DESC, id DESC LIMIT 1`, [input.pluginId, input.sourceId]);
           const [storedRows] = await client.query<StoredRow[]>('SELECT max(last_seen_at) AS last_stored_at FROM platform_records WHERE query_scope_hash=?', [parameters[0]]);

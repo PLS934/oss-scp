@@ -18,12 +18,12 @@
           ] }
         },
         "fields": {
-          "hostname": {"type": "string", "label": "호스트명", "required": true, "searchable": true},
-          "environment": {"type": "string", "label": "환경", "required": true, "searchable": true, "filter": {"kind": "multiSelect", "options": [{"value": "sandbox", "label": "sandbox"}]}},
-          "ip": {"type": "string", "label": "IP 주소", "required": true, "searchable": true},
+          "hostname": {"type": "string", "label": "호스트명", "required": true, "searchable": true, "sortable": true},
+          "environment": {"type": "string", "label": "환경", "required": true, "searchable": true, "sortable": true, "filter": {"kind": "multiSelect", "options": [{"value": "sandbox", "label": "sandbox"}]}},
+          "ip": {"type": "string", "label": "IP 주소", "required": true, "searchable": true, "sortable": true},
           "integerValue": { "type": "number", "label": "정수 값", "required": true },
           "decimalValue": { "type": "number", "label": "소수 값", "required": true },
-          "enabled": {"type": "boolean", "label": "활성 상태", "required": true, "filter": {"kind": "select", "options": [{"value": true, "label": "활성"}, {"value": false, "label": "비활성"}]}}
+          "enabled": {"type": "boolean", "label": "활성 상태", "required": true, "sortable": true, "filter": {"kind": "select", "options": [{"value": true, "label": "활성"}, {"value": false, "label": "비활성"}]}}
         }
       }
     }

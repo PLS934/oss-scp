@@ -10,7 +10,7 @@ function fixture(edit) {
   for (const name of ['plugins', 'connections']) cpSync(resolve(import.meta.dirname, '../../..', name), join(root, name), { recursive: true });
   const file = join(root, 'plugins/vulnerabilities-local-csv/plugin.json');
   const plugin = JSON.parse(readFileSync(file, 'utf8'));
-  for (const field of Object.values(plugin.data.types.vulnerability.fields)) { delete field.searchable; delete field.filter; }
+  for (const field of Object.values(plugin.data.types.vulnerability.fields)) { delete field.searchable; delete field.filter; delete field.sortable; }
   edit(plugin.data.types.vulnerability);
   writeFileSync(file, JSON.stringify(plugin));
   return validateRepository(root);
@@ -55,4 +55,20 @@ test('새 속성을 생략한 플러그인은 query 메타데이터 없이 기�
   const result = fixture(() => {});
   expect(result.ok).toBe(true);
   expect(result.menus.find(menu => menu.pluginId === 'vulnerabilities-local-csv').list.query).toBeUndefined();
+  expect(result.menus.find(menu => menu.pluginId === 'vulnerabilities-local-csv').list.sorts).toBeUndefined();
 });
+
+test('정렬 가능한 scalar 목록 필드를 선언 순서의 최소 정보로 공개한다', () => {
+  const result = fixture(type => { type.fields.cve.sortable = true; type.fields.score.sortable = true; });
+  expect(result.ok).toBe(true);
+  expect(result.menus.find(menu => menu.pluginId === 'vulnerabilities-local-csv').list.sorts).toEqual([
+    { key: 'cve', label: 'CVE', type: 'string' }, { key: 'score', label: '점수', type: 'number' },
+  ]);
+});
+
+test.each([
+  type => { type.fields.cve.sortable = false; },
+  type => { type.fields.cve.sortable = 'yes'; },
+  type => { type.fields.cve.sortable = true; type.views.list.columns = ['name']; },
+  type => { type.fields.nested = { type: 'object', label: '중첩', fields: { name: { type: 'string', label: '이름', sortable: true } } }; },
+])('잘못된 정렬 선언을 거부한다 (%#)', edit => { expect(fixture(edit).ok).toBe(false); });

@@ -170,4 +170,10 @@ PostgreSQL과 MySQL 모두 SQL WHERE에서 전체 범위에 조건을 적용한 
 
 새 cursor는 v2이며 정규화된 조건과 검색·필터 선언의 SHA-256 지문에 귀속된다. 조건 변경 또는 선언 변경 시 `400 INVALID_CURSOR`로 거부한다. 필터 순서, multiSelect 순서·중복, 검색어 ASCII 대소문자만 다른 요청은 동일 조건이다. v1 cursor는 활성 조건이 없는 요청에만 허용한다. 지문은 접근 권한 증명이 아니며 매 요청에서 선언 검증을 수행한다. 수집 상태와 lastStoredAt은 필터와 무관하게 기존 범위를 나타낸다. 내부 DB 오류는 비밀정보 없는 `503 QUERY_FAILED`로 반환한다.
 
+## 저장 목록 정렬
+
+번호형 조회는 플러그인이 `sortable: true`로 허용한 최상위 scalar 필드 하나를 `sort`와 `direction=asc|desc`로 정렬할 수 있다. 두 파라미터는 함께 있어야 하며 미허용·중복·부분 값과 cursor 결합은 DB 접근 전에 `400 INVALID_QUERY`로 거부한다. 정렬이 없거나 cursor 조회이면 기존 `lastSeenAt DESC, id ASC`를 유지한다.
+
+정렬은 검색·필터 이후, LIMIT/OFFSET 이전에 적용한다. 유효한 scalar 값을 요청 방향으로 정렬하고 null·타입 불일치·잘못된 datetime은 항상 뒤에 둔다. 같은 값은 `lastSeenAt DESC, id ASC`로 안정화한다. JSON 계산 정렬은 전용 index가 없어 범위가 커지면 비용이 증가할 수 있다.
+
 번호형 요청(`page`)에도 동일 조건을 count와 목록 모두에 적용한다. 전체 건수·페이지 수·범위를 벗어난 페이지 보정은 일치 결과를 기준으로 하며, 기존 REPEATABLE READ 읽기 전용 트랜잭션을 유지한다.

@@ -1,17 +1,18 @@
 import { PLUGIN_RUNTIME_REGISTRY, type PluginRuntimeRegistry } from './plugin-runtime-registry';
 import { Inject, Injectable } from '@nestjs/common';
 import { normalizeRecordConditions, QueryError, validateListRecordsInput, type QueryDeclaration } from '@oss-scp/platform-db';
-import type { AnyListRecordsResult, QueryRecord, RecordQuery } from '@oss-scp/platform-db';
+import type { AnyListRecordsResult, QueryRecord, RecordQuery, RecordSortType } from '@oss-scp/platform-db';
 
 export const RECORD_QUERY = Symbol('RECORD_QUERY');
 
 @Injectable()
 export class RecordQueryService {
   constructor(@Inject(RECORD_QUERY) private readonly query: RecordQuery, @Inject(PLUGIN_RUNTIME_REGISTRY) private readonly registry: PluginRuntimeRegistry) {}
-  list(pluginId: string | undefined, sourceId: string | undefined, dataType: string | undefined, rawLimit: string | undefined, cursor: string | undefined, rawPage?: string, rawQ?: unknown, rawFilters?: unknown): Promise<AnyListRecordsResult> {
+  list(pluginId: string | undefined, sourceId: string | undefined, dataType: string | undefined, rawLimit: string | undefined, cursor: string | undefined, rawPage?: string, rawQ?: unknown, rawFilters?: unknown, rawSort?: unknown, rawDirection?: unknown): Promise<AnyListRecordsResult> {
     if ([pluginId, sourceId, dataType, rawLimit, cursor].some(value => value !== undefined && typeof value !== 'string')) throw new QueryError('INVALID_QUERY');
     if (rawFilters !== undefined && typeof rawFilters !== 'string') throw new QueryError('INVALID_QUERY');
     if (rawPage !== undefined && (typeof rawPage !== 'string' || !/^\d+$/.test(rawPage))) throw new QueryError('INVALID_QUERY');
+    if ((rawSort === undefined) !== (rawDirection === undefined) || (rawSort !== undefined && (typeof rawSort !== 'string' || typeof rawDirection !== 'string' || !['asc', 'desc'].includes(rawDirection)))) throw new QueryError('INVALID_QUERY');
     const page = rawPage === undefined ? undefined : Number(rawPage);
     const limit = rawLimit === undefined ? undefined : /^\d+$/.test(rawLimit) ? Number(rawLimit) : Number.NaN;
     const definition = pluginId ? this.registry.getDefinition(pluginId) : undefined;
@@ -22,8 +23,11 @@ export class RecordQueryService {
       declaration.searchFields = Object.entries(type.fields).filter(([key, field]) => field.type === 'string' && field.searchable && type.views.list.columns.includes(key)).map(([key]) => key);
       declaration.filters = Object.entries(type.fields).flatMap(([key, field]) => field.type !== 'object' && field.type !== 'array' && field.filter && type.views.list.columns.includes(key) ? [{ key, type: field.type, ...field.filter }] : []);
     }
+    const sortField = typeof rawSort === 'string' && type ? Object.entries(type.fields).find(([key, field]) => key === rawSort && field.type !== 'object' && field.type !== 'array' && field.sortable && type.views.list.columns.includes(key)) : undefined;
+    if (rawSort !== undefined && (!sortField || page === undefined || cursor !== undefined)) throw new QueryError('INVALID_QUERY');
+    const sort = sortField ? { field: sortField[0], type: sortField[1].type as RecordSortType, direction: rawDirection as 'asc' | 'desc' } : undefined;
     const conditions = normalizeRecordConditions(rawQ, rawFilters, declaration);
-    const input = { pluginId: pluginId ?? '', sourceId: sourceId ?? '', dataType: dataType ?? '', ...(limit === undefined ? {} : { limit }), ...(cursor === undefined ? {} : { cursor }), ...(page === undefined ? {} : { page }), ...(conditions.q || conditions.filters.length || declaration.searchFields.length || declaration.filters.length ? { conditions } : {}) };
+    const input = { pluginId: pluginId ?? '', sourceId: sourceId ?? '', dataType: dataType ?? '', ...(limit === undefined ? {} : { limit }), ...(cursor === undefined ? {} : { cursor }), ...(page === undefined ? {} : { page }), ...(sort ? { sort } : {}), ...(conditions.q || conditions.filters.length || declaration.searchFields.length || declaration.filters.length ? { conditions } : {}) };
     validateListRecordsInput(input);
     return this.query.listRecords(input);
   }

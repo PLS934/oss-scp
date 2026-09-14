@@ -6,15 +6,19 @@ const fieldTypes = new Set([...scalarTypes, 'object', 'array']);
 
 function isList(value: unknown): value is MenuItem['list'] {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
-  const { columns, query } = value as Record<string, unknown>;
+  const { columns, query, sorts } = value as Record<string, unknown>;
   if (query !== undefined && !isListQuery(query, columns)) return false;
-  return Array.isArray(columns) && columns.length > 0 && columns.every(column => {
+  if (!Array.isArray(columns) || columns.length === 0 || !columns.every(isListField)) return false;
+  if (sorts !== undefined && (!Array.isArray(sorts) || new Set(sorts.map(sort => sort && typeof sort === 'object' ? (sort as Record<string, unknown>).key : undefined)).size !== sorts.length || !sorts.every(sort => isListField(sort) && columns.some(column => column && column.key === sort.key && column.type === sort.type && column.label === sort.label)))) return false;
+  return Object.keys(value as Record<string, unknown>).every(key => ['columns', 'query', 'sorts'].includes(key));
+}
+
+function isListField(column: unknown): column is MenuItem['list']['columns'][number] {
     if (!column || typeof column !== 'object' || Array.isArray(column)) return false;
     const item = column as Record<string, unknown>;
-    return typeof item.key === 'string' && item.key.length > 0
+    return Object.keys(item).sort().join() === 'key,label,type' && typeof item.key === 'string' && item.key.length > 0
       && typeof item.label === 'string' && item.label.length > 0
       && typeof item.type === 'string' && scalarTypes.has(item.type);
-  });
 }
 
 function isListQuery(value: unknown, columns: unknown): boolean {

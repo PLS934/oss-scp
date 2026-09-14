@@ -97,6 +97,15 @@ test('번호형 입력을 직렬화하고 마지막 페이지 응답을 검증�
   expect(request.mock.calls[0][0]).toBe('/api/v1/records?pluginId=sample&sourceId=source&dataType=asset&limit=20&page=2');
 });
 
+test('번호형 정렬을 직렬화하고 cursor 정렬은 요청 전에 거부한다', async () => {
+  const request = vi.fn<typeof fetch>().mockResolvedValue(json({ ...numbered, pageInfo: { ...numbered.pageInfo, page: 1 } }));
+  await listRecords({ ...scope, page: 1, sort: { field: 'score', direction: 'desc' } }, { request });
+  expect(request.mock.calls[0][0]).toBe('/api/v1/records?pluginId=sample&sourceId=source&dataType=asset&sort=score&direction=desc&page=1');
+  request.mockClear();
+  expect(await listRecords({ ...scope, sort: { field: 'score', direction: 'asc' } }, { request })).toMatchObject({ ok: false, error: { kind: 'INVALID_INPUT' } });
+  expect(request).not.toHaveBeenCalled();
+});
+
 test.each([0, -1, 1.5, Number.NaN, Number.MAX_SAFE_INTEGER, Number.MAX_SAFE_INTEGER + 1])('잘못된 page %s는 요청 전에 거부한다', async page => {
   const request = vi.fn<typeof fetch>();
   expect(await listRecords({ ...scope, page }, { request })).toMatchObject({ ok: false, error: { kind: 'INVALID_INPUT' } });

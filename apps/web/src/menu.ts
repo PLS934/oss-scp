@@ -4,6 +4,7 @@ export interface QueryFilter {
   options?: Array<{ value: string | number | boolean; label: string }>;
 }
 export interface ListQuery { searchEnabled: boolean; filters: QueryFilter[] }
+export type ListSort = ListColumn;
 
 export interface ListColumn {
   key: string;
@@ -31,7 +32,7 @@ export interface MenuItem {
   dataType: string;
   pluginId: string;
   sourceId: string;
-  list: { columns: ListColumn[]; query?: ListQuery };
+  list: { columns: ListColumn[]; query?: ListQuery; sorts?: ListSort[] };
   detail: { sections: DetailSection[] };
 }
 

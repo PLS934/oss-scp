@@ -2,7 +2,7 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { MemoryRouter } from 'react-router-dom';
 import { describe, expect, test, vi } from 'vitest';
 import type { MenuItem } from '../src/menu';
-import { createNavigationState, formatColumnValue, navigationReducer, RecordListView, pageNumbers } from '../src/record-list';
+import { createNavigationState, formatColumnValue, navigationReducer, nextRecordSort, RecordListView, pageNumbers } from '../src/record-list';
 import type { RecordSearchState } from '../src/record-search';
 import type { CollectionStatus, NumberedListRecordsResult } from '../src/records';
 
@@ -90,6 +90,17 @@ test('첫 페이지에서 번호·전체 건수와 접근 가능한 탐색을 �
   expect(html).toContain('aria-label="1페이지" aria-current="page"');
   expect(html).not.toMatch(/aria-label="다음 페이지" disabled/);
   for (const limit of [20, 50, 100, 200]) expect(html).toContain(`value="${limit}"`);
+});
+
+test('정렬 뱃지는 오름차순·내림차순·해제하고 다른 필드는 오름차순으로 교체한다', () => {
+  expect(nextRecordSort(undefined, 'score')).toEqual({ field: 'score', direction: 'asc' });
+  expect(nextRecordSort({ field: 'score', direction: 'asc' }, 'score')).toEqual({ field: 'score', direction: 'desc' });
+  expect(nextRecordSort({ field: 'score', direction: 'desc' }, 'score')).toBeUndefined();
+  expect(nextRecordSort({ field: 'score', direction: 'desc' }, 'hostname')).toEqual({ field: 'hostname', direction: 'asc' });
+  const sortable = { ...menu, list: { ...menu.list, sorts: [menu.list.columns[0], menu.list.columns[1]] } };
+  const html = render({ menu: sortable, sort: { field: 'score', direction: 'desc' } });
+  expect(html).toContain('aria-label="호스트명 정렬: 해제"');
+  expect(html).toContain('aria-label="점수 정렬: 내림차순" aria-pressed="true"');
 });
 
 test('마지막 페이지에서는 다음과 마지막 이동을 막는다', () => {

@@ -30,6 +30,12 @@ test('등록 정의에 맞는 q·filters를 정규화하여 전달한다', async
   expect(response.status).toBe(200);
   expect(listRecords.mock.lastCall[0].conditions).toMatchObject({ q: 'abc %_\\', filters: [{ field: 'affected', kind: 'select', value: false }, { field: 'score', kind: 'numberRange', min: 0, max: 10 }] });
 });
+test('등록된 번호형 단일 정렬을 타입과 함께 전달한다', async () => {
+  const query = params(); query.set('page', '1'); query.set('sort', 'score'); query.set('direction', 'desc');
+  const response = await fetch(`${url}/api/v1/records?${query}`);
+  expect(response.status).toBe(200);
+  expect(listRecords.mock.lastCall[0].sort).toEqual({ field: 'score', type: 'number', direction: 'desc' });
+});
 test.each([
   query => query.set('filters', '{'),
   query => query.set('filters', '{}'),
@@ -42,6 +48,11 @@ test.each([
   query => query.set('q', 'x'.repeat(201)),
   query => { query.set('q', 'a'); query.set('pluginId', 'unknown'); },
   query => { query.set('q', 'a'); query.set('sourceId', 'other'); },
+  query => { query.set('page', '1'); query.set('sort', 'secret'); query.set('direction', 'asc'); },
+  query => { query.set('page', '1'); query.set('sort', 'score'); },
+  query => { query.set('page', '1'); query.set('sort', 'score'); query.set('direction', 'up'); },
+  query => { query.set('sort', 'score'); query.set('direction', 'asc'); },
+  query => { query.set('page', '1'); query.append('sort', 'score'); query.append('sort', 'name'); query.set('direction', 'asc'); },
 ])('잘못된 조건을 DB 접근 전에 안정적인 400으로 거부한다 (%#)', async edit => {
   const query = params(); edit(query); listRecords.mockClear();
   const response = await fetch(`${url}/api/v1/records?${query}`);

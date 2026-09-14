@@ -11,6 +11,7 @@ const apiRequire = createRequire(new URL('../apps/api/package.json', import.meta
 const { GenericContainer, Wait } = dbRequire('testcontainers');
 const db = dbRequire('./dist/index.js');
 const { conditionSql } = dbRequire('./dist/condition-sql.js');
+const { recordOrderSql } = dbRequire('./dist/sort-sql.js');
 const { NestFactory } = apiRequire('@nestjs/core');
 const { AppModule } = apiRequire('./dist/app.module.js');
 const { createPluginRuntimeRegistry } = apiRequire('./dist/plugin-runtime-registry.js');
@@ -41,7 +42,7 @@ for (const dialect of (process.env.SEARCH_DB_TYPE ? [process.env.SEARCH_DB_TYPE]
     menu.list.query.filters.push({ key: 'name', label: '취약점명', type: 'string', ...definition.plugin.data.types.vulnerability.fields.name.filter });
     const scope = { pluginId: menu.pluginId, sourceId: menu.sourceId, scopeType: 'full', scopeKey: '', configRevision: 'search-test' };
     const runId = await storage.startRun({ ...scope, startedAt: '2026-09-14T00:00:00Z' });
-    const records = Array.from({ length: 1000 }, (_, index) => ({ type: 'vulnerability', key: index, values: { cve: `CVE-${String(index).padStart(4, '0')}`, name: index < 45 ? 'Alpha' : 'Beta', score: index < 45 ? 9.5 : 3, affected: index < 45, observedAt: '2024-02-29T12:00:00+09:00' } }));
+    const records = Array.from({ length: 1000 }, (_, index) => ({ type: 'vulnerability', key: index, values: { cve: `CVE-${String(index).padStart(4, '0')}`, name: index < 45 ? 'Alpha' : 'Beta', score: index < 45 ? 9.5 : 3, affected: index < 45, observedAt: '2024-02-29T12:00:00+09:00', sortString: index === 998 ? null : index === 999 ? 42 : `value-${index}`, sortNumber: index === 998 ? null : index === 999 ? 'bad' : index, sortBoolean: index === 998 ? null : index === 999 ? 'bad' : index % 2 === 0, sortDatetime: index === 998 ? null : index === 999 ? 'bad' : `2024-01-${String(index % 28 + 1).padStart(2, '0')}T00:00:00Z` } }));
     await storage.commitBatch({ runId, scope, observedAt: '2026-09-14T01:00:00Z', expectedCheckpoint: null, nextCheckpoint: { offset: 1000 }, processedCount: 1000, acceptedCount: 1000, records, relations: [], issues: [] });
     for (const [pluginId, filename, recordsKey] of [['sample1-offset-api', 'sample1.json', 'rows'], ['sample2-single-api', 'sample2.json', 'items']]) {
       const assetMenu = config.menus.find(item => item.pluginId === pluginId);
@@ -75,6 +76,19 @@ for (const dialect of (process.env.SEARCH_DB_TYPE ? [process.env.SEARCH_DB_TYPE]
     page.on('request', request => { if (new URL(request.url()).pathname === '/api/v1/records') requests.push(new URL(request.url())); });
     await page.goto(`${url}${menu.path}`);
     await expect(page.getByText('전체 1,000건', { exact: true })).toBeVisible();
+    const cveSort = page.getByRole('button', { name: 'CVE 정렬: 해제', exact: true });
+    await cveSort.click();
+    await expect(page.getByRole('button', { name: 'CVE 정렬: 오름차순', exact: true })).toHaveAttribute('aria-pressed', 'true');
+    await expect(page.locator('tbody tr').first()).toContainText('CVE-0000');
+    assert.equal(requests.at(-1).searchParams.get('sort'), 'cve'); assert.equal(requests.at(-1).searchParams.get('direction'), 'asc');
+    await page.getByRole('button', { name: 'CVE 정렬: 오름차순', exact: true }).click();
+    await expect(page.locator('tbody tr').first()).toContainText('CVE-0999');
+    await page.getByRole('button', { name: '점수 정렬: 해제', exact: true }).click();
+    await expect(page.getByRole('button', { name: 'CVE 정렬: 해제', exact: true })).toHaveAttribute('aria-pressed', 'false');
+    await expect(page.getByRole('button', { name: '점수 정렬: 오름차순', exact: true })).toHaveAttribute('aria-pressed', 'true');
+    await page.getByRole('button', { name: '점수 정렬: 오름차순', exact: true }).click();
+    await page.getByRole('button', { name: '점수 정렬: 내림차순', exact: true }).click();
+    await expect(page.getByRole('button', { name: '점수 정렬: 해제', exact: true })).toHaveAttribute('aria-pressed', 'false');
     await page.getByRole('button', { name: '다음 페이지', exact: true }).click();
     await expect(page.getByRole('button', { name: '2페이지', exact: true })).toHaveAttribute('aria-current', 'page');
     const search = page.getByRole('searchbox', { name: '검색', exact: true });
@@ -159,14 +173,28 @@ for (const dialect of (process.env.SEARCH_DB_TYPE ? [process.env.SEARCH_DB_TYPE]
     await mkdir(new URL('../test-results/', import.meta.url), { recursive: true });
     await page.screenshot({ path: `${root}/test-results/record-search-${dialect}.png`, fullPage: true });
     const conditions = db.normalizeRecordConditions('Alpha', [{ field: 'score', kind: 'numberRange', min: 9 }], { searchFields: ['cve', 'name'], filters: menu.list.query.filters });
+    for (const [field, type] of [['cve', 'string'], ['score', 'number'], ['affected', 'boolean'], ['observedAt', 'datetime']]) {
+      for (const direction of ['asc', 'desc']) {
+        const sorted = await query.listRecords({ pluginId: scope.pluginId, sourceId: scope.sourceId, dataType: 'vulnerability', page: 1, limit: 20, sort: { field, type, direction } });
+        assert.equal(sorted.items.length, 20, `${dialect} ${field} ${direction} 정렬 결과`);
+      }
+    }
+    for (const [field, type] of [['sortString', 'string'], ['sortNumber', 'number'], ['sortBoolean', 'boolean'], ['sortDatetime', 'datetime']]) {
+      for (const direction of ['asc', 'desc']) {
+        const sorted = await query.listRecords({ pluginId: scope.pluginId, sourceId: scope.sourceId, dataType: 'vulnerability', page: 50, limit: 20, sort: { field, type, direction } });
+        assert.ok(sorted.items.slice(-2).every(item => item.sourceValues[field] === null || ['number', 'string'].includes(typeof item.sourceValues[field]) && (item.sourceValues[field] === 42 || item.sourceValues[field] === 'bad')), `${dialect} ${field} ${direction} 잘못된 값은 마지막`);
+      }
+    }
     const input = { pluginId: scope.pluginId, sourceId: scope.sourceId, dataType: 'vulnerability', conditions, limit: 20 };
     const measured = performance.now(); await query.listRecords(input); const elapsedMs = performance.now() - measured;
+    const sortMeasured = performance.now(); await query.listRecords({ ...input, page: 1, sort: { field: 'score', type: 'number', direction: 'desc' } }); const sortElapsedMs = performance.now() - sortMeasured;
     const filtered = conditionSql(conditions, dialect, pg ? 3 : 0);
-    const sql = pg ? `EXPLAIN (FORMAT JSON) SELECT id FROM platform_records WHERE plugin_id=$1 AND source_id=$2 AND data_type=$3${filtered.sql} ORDER BY last_seen_at DESC, id ASC LIMIT 21` : `EXPLAIN FORMAT=JSON SELECT id FROM platform_records WHERE query_scope_hash=?${filtered.sql} ORDER BY last_seen_at DESC, id ASC LIMIT 21`;
-    const parameters = pg ? [scope.pluginId, scope.sourceId, 'vulnerability', ...filtered.parameters] : [db.recordQueryScopeIdentity(scope.pluginId, scope.sourceId, 'vulnerability'), ...filtered.parameters];
+    const order = recordOrderSql({ field: 'score', type: 'number', direction: 'desc' }, dialect, pg ? 3 + filtered.parameters.length : 0);
+    const sql = pg ? `EXPLAIN (FORMAT JSON) SELECT id FROM platform_records WHERE plugin_id=$1 AND source_id=$2 AND data_type=$3${filtered.sql} ORDER BY ${order.sql} LIMIT 21` : `EXPLAIN FORMAT=JSON SELECT id FROM platform_records WHERE query_scope_hash=?${filtered.sql} ORDER BY ${order.sql} LIMIT 21`;
+    const parameters = pg ? [scope.pluginId, scope.sourceId, 'vulnerability', ...filtered.parameters, ...order.parameters] : [db.recordQueryScopeIdentity(scope.pluginId, scope.sourceId, 'vulnerability'), ...filtered.parameters, ...order.parameters];
     const explain = await connection.withClient(client => client.query(sql, parameters));
-    reports.push({ dialect, rows: 1000, matches: 45, elapsedMs: Number(elapsedMs.toFixed(2)), explain: pg ? explain.rows : explain[0] });
-    console.log(`${dialect}: 검색·필터 표→API→DB, 입력·초기화·재시도·경합 검증 통과 (${elapsedMs.toFixed(2)} ms)`);
+    reports.push({ dialect, rows: 1000, matches: 45, elapsedMs: Number(elapsedMs.toFixed(2)), sortElapsedMs: Number(sortElapsedMs.toFixed(2)), explain: pg ? explain.rows : explain[0] });
+    console.log(`${dialect}: 검색·필터·정렬 표→API→DB, 입력·초기화·재시도·경합 검증 통과 (${elapsedMs.toFixed(2)} ms, 정렬 ${sortElapsedMs.toFixed(2)} ms)`);
   } finally { await browser?.close(); await stop(web); if (app) await app.close(); else await connection?.close(); await container?.stop(); }
 }
 await mkdir(new URL('../test-results/', import.meta.url), { recursive: true });

@@ -7,9 +7,12 @@ export const QUERY_LIMITS = {
   summaryFieldBytes: 8 * 1024, summaryRecordBytes: 64 * 1024, summaryPageBytes: 4 * 1024 * 1024,
 } as const;
 export const RECORD_LIST_SORT = 'lastSeenAt-desc-id-asc' as const;
-export interface ListRecordsInput { pluginId: string; sourceId: string; dataType: string; limit?: number; cursor?: string; page?: number; conditions?: RecordConditions }
+export type RecordSortDirection = 'asc' | 'desc';
+export type RecordSortType = 'string' | 'number' | 'boolean' | 'datetime';
+export interface RecordSort { field: string; type: RecordSortType; direction: RecordSortDirection }
+export interface ListRecordsInput { pluginId: string; sourceId: string; dataType: string; limit?: number; cursor?: string; page?: number; conditions?: RecordConditions; sort?: RecordSort }
 export interface RecordCursorBoundary { lastSeenAt: string; id: string }
-export interface NormalizedListRecordsInput { pluginId: string; sourceId: string; dataType: string; limit: number; boundary?: RecordCursorBoundary; page?: number; conditions?: RecordConditions }
+export interface NormalizedListRecordsInput { pluginId: string; sourceId: string; dataType: string; limit: number; boundary?: RecordCursorBoundary; page?: number; conditions?: RecordConditions; sort?: RecordSort }
 export interface QueryRecord { id: string; pluginId: string; sourceId: string; dataType: string; externalKey: ExternalKey; sourceValues: Record<string, JsonValue>; firstSeenAt: string; lastSeenAt: string }
 export interface QueryRecordSummary extends QueryRecord { omittedFields: string[] }
 export interface CollectionStatus { scope: 'source'; status: 'never_collected' | 'running' | 'success' | 'partial' | 'failed'; runId: string | null; startedAt: string | null; finishedAt: string | null }
@@ -54,9 +57,11 @@ export function validateListRecordsInput(input: ListRecordsInput): NormalizedLis
   const limit = input.limit ?? QUERY_LIMITS.defaultList;
   if (!Number.isInteger(limit) || !(QUERY_LIMITS.allowedListSizes as readonly number[]).includes(limit)) throw new QueryError('INVALID_QUERY');
   const conditions = input.conditions;
+  const sort = input.sort;
+  if (sort && (!validIdentifier(sort.field) || !['string', 'number', 'boolean', 'datetime'].includes(sort.type) || !['asc', 'desc'].includes(sort.direction) || input.page === undefined)) throw new QueryError('INVALID_QUERY');
   if (input.page !== undefined) {
     if (!Number.isSafeInteger(input.page) || input.page < 1 || !Number.isSafeInteger((input.page - 1) * limit) || input.cursor !== undefined) throw new QueryError('INVALID_QUERY');
-    return { pluginId: input.pluginId, sourceId: input.sourceId, dataType: input.dataType, limit, ...(conditions ? { conditions } : {}), page: input.page };
+    return { pluginId: input.pluginId, sourceId: input.sourceId, dataType: input.dataType, limit, ...(conditions ? { conditions } : {}), ...(sort ? { sort } : {}), page: input.page };
   }
   if (input.cursor === undefined) return { pluginId: input.pluginId, sourceId: input.sourceId, dataType: input.dataType, limit, ...(conditions ? { conditions } : {}) };
   const cursor = decodeCursor(input.cursor);

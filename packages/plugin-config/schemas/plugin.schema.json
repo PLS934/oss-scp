@@ -65,7 +65,7 @@
     "id": { "type": "string", "pattern": "^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$", "maxLength": 100 },
     "field": {
       "oneOf": [
-        { "type": "object", "additionalProperties": false, "required": ["type", "label"], "properties": { "type": { "enum": ["string", "number", "boolean", "datetime"] }, "label": { "$ref": "#/$defs/label" }, "required": { "type": "boolean", "default": false }, "searchable": { "const": true }, "filter": { "$ref": "#/$defs/filter" } } },
+        { "type": "object", "additionalProperties": false, "required": ["type", "label"], "properties": { "type": { "enum": ["string", "number", "boolean", "datetime"] }, "label": { "$ref": "#/$defs/label" }, "required": { "type": "boolean", "default": false }, "searchable": { "const": true }, "sortable": { "const": true }, "filter": { "$ref": "#/$defs/filter" } } },
         { "type": "object", "additionalProperties": false, "required": ["type", "label", "fields"], "properties": { "type": { "const": "object" }, "label": { "$ref": "#/$defs/label" }, "required": { "type": "boolean", "default": false }, "fields": { "type": "object", "minProperties": 1, "additionalProperties": { "$ref": "#/$defs/field" } } } },
         { "type": "object", "additionalProperties": false, "required": ["type", "label", "items"], "properties": { "type": { "const": "array" }, "label": { "$ref": "#/$defs/label" }, "required": { "type": "boolean", "default": false }, "items": { "$ref": "#/$defs/field" } } }
       ]

@@ -19,7 +19,7 @@ export { createPostgresRecordStorage } from './postgres-storage';
 export { createMysqlRecordStorage } from './mysql-storage';
 export { collectionScopeIdentity, recordIdentity, recordQueryScopeIdentity, relationIdentity, relationScopeIdentity } from './storage-identity';
 export { numberedPageInfo, summarizeNumberedRecords, encodeRecordCursor, QUERY_LIMITS, QueryError, RECORD_LIST_SORT, summarizeSourceValues, validateListRecordsInput, validateRecordId } from './query';
-export type { AnyListRecordsResult, NumberedListRecordsResult, NumberedRecordPageInfo, CollectionStatus, ListRecordsInput, ListRecordsResult, NormalizedListRecordsInput, QueryErrorCode, QueryRecord, QueryRecordSummary, RecordCursorBoundary, RecordPageInfo, RecordQuery } from './query';
+export type { AnyListRecordsResult, NumberedListRecordsResult, NumberedRecordPageInfo, CollectionStatus, ListRecordsInput, ListRecordsResult, NormalizedListRecordsInput, QueryErrorCode, QueryRecord, QueryRecordSummary, RecordCursorBoundary, RecordPageInfo, RecordQuery, RecordSort, RecordSortDirection, RecordSortType } from './query';
 export { createPostgresRecordQuery } from './postgres-query';
 export { createMysqlRecordQuery } from './mysql-query';
 export { createPlatformRecordAdapters } from './records';

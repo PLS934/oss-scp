@@ -271,15 +271,17 @@ function loadPlugins(
         columns.push({ key, label: field.label, type: field.type });
       }
       const query: NonNullable<ClientListDefinition['query']> = { searchEnabled: false, filters: [] };
+      const sorts: NonNullable<ClientListDefinition['sorts']> = [];
       const inspectField = (field: FieldDefinition, key: string, path: string, topLevel: boolean): void => {
         if (field.type === 'object') {
           for (const [child, value] of Object.entries(field.fields)) inspectField(value, child, `${path}/fields/${child}`, false);
           return;
         }
         if (field.type === 'array') { inspectField(field.items, key, `${path}/items`, false); return; }
-        if (!field.searchable && !field.filter) return;
+        if (!field.searchable && !field.filter && !field.sortable) return;
         const reject = (message: string) => { issue(errors, root, pluginFile, path, message); invalidReference = true; };
-        if (!topLevel || !definition.views.list.columns.includes(key)) { reject('검색·필터는 최상위 목록 필드에만 선언할 수 있습니다.'); return; }
+        if (!topLevel || !definition.views.list.columns.includes(key)) { reject('검색·필터·정렬은 최상위 목록 필드에만 선언할 수 있습니다.'); return; }
+        if (field.sortable) sorts.push({ key, label: field.label, type: field.type });
         if (field.searchable) {
           if (field.type !== 'string') reject('검색 필드는 string 타입이어야 합니다.');
           else query.searchEnabled = true;
@@ -299,7 +301,7 @@ function loadPlugins(
         query.filters.push({ key, label: field.label, type: field.type, ...filter });
       };
       for (const [key, field] of Object.entries(definition.fields)) inspectField(field, key, `/data/types/${type}/fields/${key}`, true);
-      clientLists.set(type, { columns, ...(query.searchEnabled || query.filters.length ? { query } : {}) });
+      clientLists.set(type, { columns, ...(query.searchEnabled || query.filters.length ? { query } : {}), ...(sorts.length ? { sorts } : {}) });
 
       const sectionTitles = new Set<string>();
       const detailFields = new Set<string>();

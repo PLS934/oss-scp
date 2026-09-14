@@ -4,6 +4,7 @@ export type RecordFilter =
   | { field: string; kind: 'numberRange'; min?: number; max?: number }
   | { field: string; kind: 'dateRange'; from?: string; to?: string };
 export interface SearchConditions { q?: string; filters?: RecordFilter[] }
+export interface RecordSort { field: string; direction: 'asc' | 'desc' }
 export type JsonValue = null | boolean | number | string | JsonValue[] | { [key: string]: JsonValue };
 export type RecordListLimit = 20 | 50 | 100 | 200;
 
@@ -14,6 +15,7 @@ export interface ListRecordsInput extends SearchConditions {
   limit?: RecordListLimit;
   cursor?: string;
   page?: number;
+  sort?: RecordSort;
 }
 
 export interface QueryRecord {
@@ -169,11 +171,13 @@ export async function listRecords(input: ListRecordsInput, options: RecordReques
   if (!validIdentifier(input.pluginId) || !validIdentifier(input.sourceId) || !validIdentifier(input.dataType)) return failure('INVALID_INPUT');
   if (input.limit !== undefined && !allowedLimits.has(input.limit)) return failure('INVALID_INPUT');
   if (input.page !== undefined && (!Number.isSafeInteger(input.page) || input.page < 1 || !Number.isSafeInteger((input.page - 1) * (input.limit ?? 20)) || input.cursor !== undefined)) return failure('INVALID_INPUT');
+  if (input.sort && (input.page === undefined || !validIdentifier(input.sort.field) || !['asc', 'desc'].includes(input.sort.direction))) return failure('INVALID_INPUT');
   const params = new URLSearchParams({ pluginId: input.pluginId, sourceId: input.sourceId, dataType: input.dataType });
   if (input.limit !== undefined) params.set('limit', String(input.limit));
   if (input.cursor !== undefined) params.set('cursor', input.cursor);
   if (input.q !== undefined) params.set('q', input.q);
   if (input.filters !== undefined) params.set('filters', JSON.stringify(input.filters));
+  if (input.sort) { params.set('sort', input.sort.field); params.set('direction', input.sort.direction); }
   if (input.page !== undefined) {
     params.set('page', String(input.page));
     return requestJson(`/api/v1/records?${params.toString()}`, (value): value is NumberedListRecordsResult => isNumberedListResult(value, input as NumberedListRecordsInput), options);

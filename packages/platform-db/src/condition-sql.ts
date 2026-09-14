@@ -50,7 +50,7 @@ export function conditionSql(conditions: RecordConditions | undefined, dialect: 
 
 // 유효한 ISO 시각만 수치로 변환한다. 달력 검증과 UTC 환산을 직접 수행하여
 // DB별 datetime 유효 범위·세션 시간대·잘못된 날짜의 자동 보정을 피한다.
-function timestampSeconds(value: string, isString: string, pg: boolean): string {
+export function timestampSeconds(value: string, isString: string, pg: boolean): string {
   const pattern = '^[0-9]{4}-(0[1-9]|1[0-2])-(0[1-9]|[12][0-9]|3[01])T([01][0-9]|2[0-3]):[0-5][0-9]:[0-5][0-9]([.][0-9]{1,9})?(Z|[+-]([01][0-9]|2[0-3]):[0-5][0-9])$';
   const matches = pg ? `${value} ~ '${pattern}'` : `(REGEXP_LIKE(${value}, '${pattern}', 'c') AND CHAR_LENGTH(REGEXP_SUBSTR(${value}, '${pattern}', 1, 1, 'c')) = CHAR_LENGTH(${value}))`;
   const part = (start: number, length: number): string => `CAST(SUBSTRING(${value}, ${start}, ${length}) AS ${pg ? 'numeric' : 'DECIMAL(20,9)'})`;

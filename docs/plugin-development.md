@@ -320,3 +320,9 @@ MOCK_PORT=3002 pnpm start:mock
 
 
 자산관리 예시도 검색·필터를 선언한다. 서버 자산은 호스트명·환경·IP를 검색하고 환경(현재 원천 fixture의 `sandbox`)과 활성 상태로 필터링한다. 저장소는 전체 이름·피드를 검색하고 활성 상태와 피드로 필터링한다. 피드는 원천 boolean을 transform에서 문자열로 저장하므로 옵션도 문자열 `"true"`/`"false"`를 사용한다. 환경의 정적 옵션은 원천 환경 종류가 늘면 플러그인 선언에 추가한다.
+
+## 목록 정렬 선언
+
+기본 목록에 포함된 최상위 scalar 필드는 `"sortable": true`로 정렬을 허용할 수 있다. string, number, boolean, datetime만 지원하며 생략한 필드는 정렬 뱃지와 API 허용 목록에 포함되지 않는다. object·array, 중첩 필드와 목록 밖 필드는 정렬 가능으로 선언할 수 없다.
+
+검증된 메뉴에는 정렬 필드의 `key`, `label`, `type`만 `list.sorts` 선언 순서로 전달된다. 예를 들어 `"score": { "type": "number", "label": "점수", "sortable": true }`는 점수 정렬을 허용한다. 여러 플러그인이 서로 다른 필드를 선언할 수 있으며 플랫폼 코어에 필드명을 추가할 필요가 없다.

@@ -18,11 +18,11 @@
           ] }
         },
         "fields": {
-          "cve": {"type": "string", "label": "CVE", "required": true, "searchable": true},
-          "name": {"type": "string", "label": "취약점명", "required": true, "searchable": true},
-          "score": {"type": "number", "label": "점수", "required": true, "filter": {"kind": "numberRange"}},
-          "affected": {"type": "boolean", "label": "영향 여부", "required": true, "filter": {"kind": "select", "options": [{"value": true, "label": "영향 있음"}, {"value": false, "label": "영향 없음"}]}},
-          "observedAt": {"type": "datetime", "label": "관측 시각", "required": true, "filter": {"kind": "dateRange"}}
+          "cve": {"type": "string", "label": "CVE", "required": true, "searchable": true, "sortable": true},
+          "name": {"type": "string", "label": "취약점명", "required": true, "searchable": true, "sortable": true},
+          "score": {"type": "number", "label": "점수", "required": true, "sortable": true, "filter": {"kind": "numberRange"}},
+          "affected": {"type": "boolean", "label": "영향 여부", "required": true, "sortable": true, "filter": {"kind": "select", "options": [{"value": true, "label": "영향 있음"}, {"value": false, "label": "영향 없음"}]}},
+          "observedAt": {"type": "datetime", "label": "관측 시각", "required": true, "sortable": true, "filter": {"kind": "dateRange"}}
         }
       }
     }

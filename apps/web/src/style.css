@@ -68,6 +68,13 @@ aside a:focus-visible { outline-color: var(--sidebar-focus); }
 .pagination { display: flex; flex-direction: column; align-items: center; gap: 12px; margin-top: 24px; color: var(--muted, #516372); }
 .record-table-toolbar { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px; margin: 18px 0 8px; }
 .record-total { margin: 0; text-align: left; color: var(--muted, #516372); font-size: 12px; font-variant-numeric: tabular-nums; }
+.record-list-summary, .sort-chips { display: flex; align-items: center; flex-wrap: wrap; gap: .45rem; }
+.sort-chips { padding-left: .2rem; }
+.sort-chip { display: inline-flex; align-items: center; gap: .2rem; min-height: 26px; padding: 3px 9px; border: 1px solid var(--border); border-radius: 999px; background: var(--surface); color: var(--muted); font: inherit; font-size: .75rem; cursor: pointer; }
+.sort-chip:hover { border-color: var(--focus); background: var(--info); color: var(--text); }
+.sort-chip.active { border-color: var(--focus); background: var(--info); color: var(--text); font-weight: 600; }
+.sort-chip svg { width: .8rem; height: .8rem; fill: none; stroke: currentColor; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
+.sort-chip:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
 .record-table-toolbar + .record-table-wrap { margin-top: 0; }
 .pagination-controls { display: flex; justify-content: center; gap: 4px; max-width: 100%; flex-wrap: wrap; }
 .pagination button { display: inline-flex; align-items: center; justify-content: center; width: 32px; height: 32px; padding: 0; border: 1px solid transparent; border-radius: 8px; background: transparent; color: var(--muted, #516372); font: inherit; font-size: 13px; font-variant-numeric: tabular-nums; cursor: pointer; transition: background-color .15s, color .15s; }

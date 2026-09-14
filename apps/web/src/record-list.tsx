@@ -10,6 +10,7 @@ import {
   type NumberedListRecordsResult,
   type RecordApiError,
   type RecordListLimit,
+  type RecordSort,
 } from './records';
 
 const limits: readonly RecordListLimit[] = [20, 50, 100, 200];
@@ -48,6 +49,14 @@ interface RecordListViewProps {
   searchControls?: ReactNode;
   searchState?: RecordSearchState;
   activeConditions?: boolean;
+  sort?: RecordSort;
+  onSortChange?: (sort: RecordSort | undefined) => void;
+}
+
+export function nextRecordSort(current: RecordSort | undefined, field: string): RecordSort | undefined {
+  if (!current || current.field !== field) return { field, direction: 'asc' };
+  if (current.direction === 'asc') return { field, direction: 'desc' };
+  return undefined;
 }
 
 function activateRowLink(event: MouseEvent<HTMLTableRowElement>) {
@@ -58,7 +67,7 @@ function activateRowLink(event: MouseEvent<HTMLTableRowElement>) {
   event.currentTarget.querySelector<HTMLAnchorElement>('a')?.click();
 }
 
-export function RecordListView({ menu, limit, page, loading, result, error, onLimitChange, onPageChange, onRetry, searchControls, searchState, activeConditions = false }: RecordListViewProps) {
+export function RecordListView({ menu, limit, page, loading, result, error, onLimitChange, onPageChange, onRetry, searchControls, searchState, activeConditions = false, sort, onSortChange }: RecordListViewProps) {
   const collectionMessage = result ? collectionMessages[result.collection.status] : undefined;
   const hasItems = Boolean(result?.items.length);
   const navigationDisabled = loading || error !== null || !result || result.pageInfo.totalPages === 0;
@@ -78,7 +87,11 @@ export function RecordListView({ menu, limit, page, loading, result, error, onLi
     {!loading && !error && !activeConditions && result?.collection.status === 'success' && !hasItems ? <p className="empty-state">수집이 완료됐지만 표시할 결과가 없습니다.</p> : null}
     {!loading && !error && !activeConditions && result && result.collection.status !== 'never_collected' && result.collection.status !== 'success' && !hasItems ? <p className="empty-state">현재 표시할 저장 데이터가 없습니다.</p> : null}
     <div className="record-table-toolbar">
-      <p className="record-total" aria-live="polite">전체 {numberFormat.format(result?.pageInfo.totalItems ?? 0)}건</p>
+      <div className="record-list-summary"><p className="record-total" aria-live="polite">전체 {numberFormat.format(result?.pageInfo.totalItems ?? 0)}건</p>{menu.list.sorts?.length ? <div className="sort-chips" aria-label="정렬 기준">{menu.list.sorts.map(field => {
+        const direction = sort?.field === field.key ? sort.direction : undefined;
+        const state = direction === 'asc' ? '오름차순' : direction === 'desc' ? '내림차순' : '해제';
+        return <button key={field.key} type="button" className={`sort-chip${direction ? ' active' : ''}`} aria-label={`${field.label} 정렬: ${state}`} aria-pressed={Boolean(direction)} onClick={() => onSortChange?.(nextRecordSort(sort, field.key))}><span>{field.label}</span>{direction ? <svg aria-hidden="true" viewBox="0 0 16 16"><path d={direction === 'asc' ? 'm4 10 4-4 4 4' : 'm4 6 4 4 4-4'} /></svg> : null}</button>;
+      })}</div> : null}</div>
       <label className="page-size-select"><select aria-label="페이지 크기" value={limit} disabled={loading} onChange={event => onLimitChange(Number(event.target.value) as RecordListLimit)}>
         {limits.map(value => <option key={value} value={value}>{value}개씩 보기</option>)}
       </select><svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"><path d="m7 10 5 5 5-5" /></svg></label>
@@ -145,15 +158,16 @@ export interface RecordListProps {
 
 export function RecordList(props: RecordListProps) {
   const { menu } = props;
-  return <RecordListSession key={JSON.stringify([menu.path, menu.pluginId, menu.sourceId, menu.dataType, menu.list.query])} {...props} />;
+  return <RecordListSession key={JSON.stringify([menu.path, menu.pluginId, menu.sourceId, menu.dataType, menu.list.query, menu.list.sorts])} {...props} />;
 }
 function RecordListSession({ menu, request = listNumberedRecords }: RecordListProps) {
   const [conditions, setConditions] = useState<SearchConditions>({});
   const [conditionVersion, setConditionVersion] = useState(0);
   const [limit, setLimit] = useState<RecordListLimit>(20);
+  const [sort, setSort] = useState<RecordSort | undefined>();
   const applyConditions = (value: SearchConditions) => { setConditions(value); setConditionVersion(version => version + 1); };
   const searchState = useRecordSearchState(menu.list.query ?? { searchEnabled: false, filters: [] }, applyConditions);
-  const sessionKey = JSON.stringify([menu.path, menu.pluginId, menu.sourceId, menu.dataType, limit, conditions, conditionVersion]);
+  const sessionKey = JSON.stringify([menu.path, menu.pluginId, menu.sourceId, menu.dataType, limit, conditions, conditionVersion, sort]);
   const [navigation, dispatchNavigation] = useReducer(navigationReducer, sessionKey, createNavigationState);
   const [retry, setRetry] = useState(0);
   const [loading, setLoading] = useState(true);
@@ -173,7 +187,7 @@ function RecordListSession({ menu, request = listNumberedRecords }: RecordListPr
     const page = navigation.target ?? navigation.page;
     setLoading(true);
     setError(null);
-    void request({ pluginId: menu.pluginId, sourceId: menu.sourceId, dataType: menu.dataType, limit, page, ...conditions }, { signal: controller.signal })
+    void request({ pluginId: menu.pluginId, sourceId: menu.sourceId, dataType: menu.dataType, limit, page, ...conditions, ...(sort ? { sort } : {}) }, { signal: controller.signal })
       .then((response: ApiResult<NumberedListRecordsResult>) => {
         if (controller.signal.aborted || currentRequest !== requestId.current) return;
         if (response.ok) {
@@ -193,7 +207,7 @@ function RecordListSession({ menu, request = listNumberedRecords }: RecordListPr
   const visibleError = currentSession ? error : null;
   const busy = !currentSession || loading || (navigation.target !== null && visibleError === null);
 
-  return <RecordListView searchState={menu.list.query && (menu.list.query.searchEnabled || menu.list.query.filters.length > 0) ? searchState : undefined} menu={menu} activeConditions={Boolean(conditions.q || conditions.filters?.length)} limit={limit} page={currentSession ? navigation.page : 1} loading={busy} result={visibleResult} error={visibleError}
+  return <RecordListView searchState={menu.list.query && (menu.list.query.searchEnabled || menu.list.query.filters.length > 0) ? searchState : undefined} menu={menu} activeConditions={Boolean(conditions.q || conditions.filters?.length)} sort={sort} onSortChange={setSort} limit={limit} page={currentSession ? navigation.page : 1} loading={busy} result={visibleResult} error={visibleError}
     onLimitChange={value => setLimit(value)}
     onPageChange={page => {
       if (!busy && visibleResult && page >= 1 && page <= visibleResult.pageInfo.totalPages && page !== navigation.page) {
