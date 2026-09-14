@@ -82,9 +82,10 @@ for (const dialect of (process.env.SEARCH_DB_TYPE ? [process.env.SEARCH_DB_TYPE]
     await page.getByRole('button', { name: '마지막 페이지', exact: true }).click();
     await expect(page.locator('tbody tr')).toHaveCount(5);
     await page.getByLabel('영향 여부', { exact: true }).selectOption('0');
+    await page.getByRole('button', { name: '점수 범위 선택' }).click();
     await page.getByLabel('점수 최솟값').fill('9');
     await page.getByLabel('점수 최댓값').fill('10');
-    await page.getByRole('button', { name: '관측 시각 기간 선택' }).click();
+    await page.getByRole('button', { name: '관측 시각 범위 선택' }).click();
     await page.getByLabel('관측 시각 시작일 (UTC)').fill('2024-02-29');
     await page.getByLabel('관측 시각 종료일 (UTC)').fill('2024-02-29');
     await page.getByLabel('취약점명', { exact: false }).selectOption(['0', '1']);
@@ -93,6 +94,7 @@ for (const dialect of (process.env.SEARCH_DB_TYPE ? [process.env.SEARCH_DB_TYPE]
     const applied = JSON.parse(requests.at(-1).searchParams.get('filters'));
     assert.equal(applied.find(filter => filter.field === 'affected').value, true);
     assert.deepEqual(applied.find(filter => filter.field === 'name').values, ['Alpha', 'Beta']);
+    await page.getByRole('button', { name: '9 ~ 10' }).click();
     await page.getByLabel('점수 최솟값').fill('11');
     const beforeInvalid = requests.length;
     await page.getByRole('button', { name: '적용', exact: true }).click();
