@@ -3,8 +3,8 @@ import assert from 'node:assert/strict';
 import { expect } from '@playwright/test';
 
 export async function chooseTheme(page, theme) {
-  await page.getByRole('button', { name: /^화면 테마:/ }).click();
-  await page.getByRole('group', { name: '화면 테마 선택' }).getByRole('button', { name: { system: '시스템 설정', light: '라이트', dark: '다크' }[theme], exact: true }).click();
+  const button = page.getByRole('button', { name: /모드로 전환$/ });
+  if (await button.locator('[data-theme-icon]').getAttribute('data-theme-icon') !== theme) await button.click();
 }
 
 export async function testTheme(browser, url) {
@@ -14,8 +14,8 @@ export async function testTheme(browser, url) {
   await expect(page.getByRole('banner').getByRole('status')).toBeVisible();
   await expect(page.getByRole('banner').locator('.version')).toBeVisible();
   await expect(page.locator('aside').getByRole('status')).toHaveCount(0);
-  const picker = page.getByRole('button', { name: /^화면 테마:/ });
-  await expect(picker).toHaveAttribute('aria-label', '화면 테마: 시스템 설정');
+  const picker = page.getByRole('button', { name: /모드로 전환$/ });
+  await expect(picker).toHaveAttribute('aria-label', '라이트 모드로 전환');
   await expect(page.getByRole('banner').locator('[data-theme-icon]')).toHaveAttribute('data-theme-icon', 'dark');
   const root = page.locator('html');
   await expect(root).toHaveAttribute('data-theme', 'dark');
@@ -24,27 +24,21 @@ export async function testTheme(browser, url) {
   await picker.focus();
   await expect(picker).toBeFocused();
   await page.keyboard.press('Enter');
-  await expect(picker).toHaveAttribute('aria-expanded', 'true');
-  await page.keyboard.press('Escape');
-  await expect(picker).toBeFocused();
-  await expect(picker).toHaveAttribute('aria-expanded', 'false');
-  await page.keyboard.press('Enter');
-  await page.keyboard.press('Tab');
-  await page.keyboard.press('Tab');
-  await page.keyboard.press('Tab');
-  await page.keyboard.press('Enter');
-  await expect(picker).toHaveAttribute('aria-label', '화면 테마: 다크');
+  await expect(picker).toHaveAttribute('aria-label', '라이트 모드로 전환');
   await expect(page.getByRole('banner').locator('[data-theme-icon]')).toHaveAttribute('data-theme-icon', 'dark');
+  await page.keyboard.press('Space');
+  await expect(page.getByRole('banner').locator('[data-theme-icon]')).toHaveAttribute('data-theme-icon', 'light');
+  await picker.click();
   await expect(root).toHaveAttribute('data-theme', 'dark');
   await page.emulateMedia({ colorScheme: 'dark' });
   await page.emulateMedia({ colorScheme: 'light' });
   await expect(root).toHaveAttribute('data-theme', 'dark');
   await page.reload();
-  await expect(picker).toHaveAttribute('aria-label', '화면 테마: 다크');
+  await expect(picker).toHaveAttribute('aria-label', '라이트 모드로 전환');
   await page.close();
   const revisit = await context.newPage();
   await revisit.goto(url);
-  await expect(revisit.getByRole('button', { name: '화면 테마: 다크' })).toBeVisible();
+  await expect(revisit.getByRole('button', { name: '라이트 모드로 전환' })).toBeVisible();
   for (const theme of ['light', 'dark']) {
     await chooseTheme(revisit, theme);
     await expect(revisit.getByRole('banner').locator('[data-theme-icon]')).toHaveAttribute('data-theme-icon', theme);
@@ -67,7 +61,7 @@ export async function testTheme(browser, url) {
       assert.ok((values[0] + .05) / (values[1] + .05) >= (['focus', 'sidebar-focus', 'control-border'].includes(name) ? 3 : 4.5), `${theme}: ${name} contrast`);
     }
     await revisit.setViewportSize({ width: 390, height: 844 });
-    await expect(revisit.getByRole('button', { name: /^화면 테마:/ })).toBeVisible();
+    await expect(revisit.getByRole('button', { name: /모드로 전환$/ })).toBeVisible();
     await revisit.screenshot({ path: `/tmp/oss-scp-theme-${theme}.png`, fullPage: true });
   }
   await context.close();

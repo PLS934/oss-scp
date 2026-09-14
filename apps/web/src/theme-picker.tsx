@@ -1,7 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
-import { useTheme, type ThemePreference } from './theme';
-
-const choices = [{ value: 'system', label: '시스템 설정' }, { value: 'light', label: '라이트' }, { value: 'dark', label: '다크' }] as const;
+import { useTheme } from './theme';
 
 export function ThemeIcon({ theme }: { theme: 'light' | 'dark' }) {
   return <svg data-theme-icon={theme} width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
@@ -10,27 +7,8 @@ export function ThemeIcon({ theme }: { theme: 'light' | 'dark' }) {
 }
 
 export function ThemePicker() {
-  const [preference, selectTheme, resolved] = useTheme();
-  const [open, setOpen] = useState(false);
-  const container = useRef<HTMLDivElement>(null);
-  const trigger = useRef<HTMLButtonElement>(null);
-  useEffect(() => {
-    if (!open) return;
-    const outside = (event: PointerEvent) => { if (event.target instanceof Node && !container.current?.contains(event.target)) setOpen(false); };
-    const escape = (event: KeyboardEvent) => { if (event.key === 'Escape') { setOpen(false); trigger.current?.focus(); } };
-    document.addEventListener('pointerdown', outside);
-    document.addEventListener('keydown', escape);
-    return () => { document.removeEventListener('pointerdown', outside); document.removeEventListener('keydown', escape); };
-  }, [open]);
-  const choose = (value: ThemePreference) => { selectTheme(value); setOpen(false); trigger.current?.focus(); };
-  const label = choices.find(choice => choice.value === preference)!.label;
-  return <div className="theme-control" ref={container} onBlur={event => { if (!event.currentTarget.contains(event.relatedTarget)) setOpen(false); }}>
-    <button ref={trigger} className="theme-trigger" type="button" aria-label={`화면 테마: ${label}`} title={`화면 테마: ${label}`} aria-expanded={open} aria-controls="theme-options" onClick={() => setOpen(value => !value)}><ThemeIcon theme={resolved} /></button>
-    {open ? <div id="theme-options" className="theme-options" role="group" aria-label="화면 테마 선택">
-      {choices.map(choice => <button key={choice.value} type="button" aria-pressed={preference === choice.value} onClick={() => choose(choice.value)}>
-        {choice.value === 'system' ? <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" aria-hidden="true"><rect x="3" y="4" width="18" height="13" rx="2" /><path d="M8 21h8m-4-4v4" /></svg> : <ThemeIcon theme={choice.value} />}
-        <span>{choice.label}</span><span className="theme-check" aria-hidden="true">{preference === choice.value ? '✓' : ''}</span>
-      </button>)}
-    </div> : null}
-  </div>;
+  const [, selectTheme, resolved] = useTheme();
+  const next = resolved === 'light' ? 'dark' : 'light';
+  const label = next === 'dark' ? '다크 모드로 전환' : '라이트 모드로 전환';
+  return <button className="theme-trigger" type="button" aria-label={label} title={label} onClick={() => selectTheme(next)}><ThemeIcon theme={resolved} /></button>;
 }

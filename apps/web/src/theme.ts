@@ -32,6 +32,7 @@ export function useTheme() {
   useEffect(() => observeTheme(preference, setResolved), [preference]);
   const selectTheme = (value: ThemePreference) => {
     applyTheme(value, typeof window.matchMedia === 'function' && window.matchMedia('(prefers-color-scheme: dark)').matches);
+    setResolved(resolveTheme(value, typeof window.matchMedia === 'function' && window.matchMedia('(prefers-color-scheme: dark)').matches));
     setPreference(value);
     saveTheme(value);
   };
