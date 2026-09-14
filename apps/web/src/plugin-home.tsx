@@ -10,6 +10,14 @@ const sourceLabels: Record<PluginSummary['sourceType'], string> = {
   'local-csv': '로컬 CSV',
 };
 
+function LinkIcon() {
+  return <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M10 13a5 5 0 0 0 7 .1l3-3a5 5 0 0 0-7.1-7.1l-1.7 1.7" /><path d="M14 11a5 5 0 0 0-7-.1l-3 3a5 5 0 0 0 7.1 7.1l1.7-1.7" /></svg>;
+}
+
+function DownloadIcon() {
+  return <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M12 3v12m-5-5 5 5 5-5M5 16v4h14v-4" /></svg>;
+}
+
 export function PluginHomeContent({ plugins, state, menus, menuState }: {
   plugins: readonly PluginSummary[];
   state: LoadState;
@@ -25,22 +33,23 @@ export function PluginHomeContent({ plugins, state, menus, menuState }: {
       : <ul className="plugin-cards">{plugins.map(plugin => {
         const targets = plugin.enabled && menuState === 'success' ? menus.filter(menu => menu.pluginId === plugin.id) : [];
         return <li className="plugin-card" key={plugin.id}>
-          <div className="plugin-heading"><h3>{plugin.name}</h3><span className={`plugin-badge ${plugin.enabled ? 'enabled' : 'disabled'}`}>{plugin.enabled ? '활성화' : '비활성화'}</span></div>
-          <p className="plugin-description">{plugin.description?.trim() || '등록된 설명이 없습니다.'}</p>
+          <div className="plugin-heading"><div className="plugin-title"><h3>{plugin.name}</h3>
+            {targets.map(menu => <Link key={menu.path} className="plugin-icon-link" to={menu.path} aria-label={`${plugin.name} · ${menu.title} 데이터 보기`} title={`${menu.title} 데이터 보기`}><LinkIcon /></Link>)}
+          </div><span className={`plugin-badge ${plugin.enabled ? 'enabled' : 'disabled'}`}>{plugin.enabled ? '활성화' : '비활성화'}</span></div>
+          {plugin.description?.trim() ? <p className="plugin-description">{plugin.description}</p> : null}
           <dl className="plugin-source">
+            {targets.length > 0 ? <div><dt>메뉴 이름</dt><dd>{targets.map(menu => menu.title).join(', ')}</dd></div> : null}
             <div><dt>데이터 출처</dt><dd>{sourceLabels[plugin.sourceType]}</dd></div>
             {plugin.endpoint ? <div><dt>API 주소</dt><dd><span className="plugin-method">{plugin.endpoint.method}</span> <code>{plugin.endpoint.url}</code></dd></div> : null}
-            {plugin.fileName ? <div><dt>파일명</dt><dd>{plugin.fileName}</dd></div> : null}
+            {plugin.fileName ? <div><dt>파일명</dt><dd className="plugin-file"><span>{plugin.fileName}</span>
+              {plugin.enabled && plugin.sourceType === 'local-csv' ? <a className="plugin-icon-link" href={`/api/v1/plugins/${encodeURIComponent(plugin.id)}/source-file`} download={plugin.fileName} aria-label="원본 내려받기" title="원본 내려받기"><DownloadIcon /></a> : null}
+            </dd></div> : null}
           </dl>
           {!plugin.enabled ? <p className="plugin-unavailable">비활성 플러그인입니다.</p>
             : menuState === 'loading' ? <p role="status">조회 메뉴를 확인하는 중입니다.</p>
             : menuState === 'failure' ? <p role="alert">조회 메뉴를 불러오지 못했습니다.</p>
             : targets.length === 0 ? <p className="plugin-unavailable">조회 가능한 메뉴가 없습니다.</p>
-            : <ul className="plugin-links">{targets.map(menu => <li key={menu.path}><Link to={menu.path} aria-label={`${plugin.name} · ${menu.title} 데이터 보기`}>{menu.title} · 데이터 보기 <span aria-hidden="true">→</span></Link></li>)}</ul>}
-          {plugin.enabled && plugin.sourceType === 'local-csv' && plugin.fileName ? <div className="plugin-download">
-            <a href={`/api/v1/plugins/${encodeURIComponent(plugin.id)}/source-file`} download={plugin.fileName}>원본 내려받기</a>
-            <p>현재 등록된 CSV 파일 원본입니다.</p>
-          </div> : null}
+            : null}
         </li>;
       })}</ul>}
   </section>;

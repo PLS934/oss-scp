@@ -14,6 +14,8 @@ export async function checkPluginHome(page, url, menus, root) {
   const localCard = main.locator('.plugin-card').filter({ hasText: 'Vulnerabilities Local CSV' });
   await expect(localCard.getByText('vulnerabilities.csv', { exact: true })).toBeVisible();
   await expect(main.getByRole('link', { name: '원본 내려받기', exact: true })).toHaveCount(1);
+  await expect(localCard.locator('.plugin-file').getByRole('link', { name: '원본 내려받기' })).toBeVisible();
+  await expect(main.getByText('현재 등록된 CSV 파일 원본입니다.')).toHaveCount(0);
   const downloaded = page.waitForEvent('download');
   await localCard.getByRole('link', { name: '원본 내려받기', exact: true }).click();
   const download = await downloaded;
@@ -35,7 +37,9 @@ export async function checkPluginHome(page, url, menus, root) {
   await expect(main.getByRole('link', { name: '자산 플러그인 · 추가 자산 데이터 보기' })).toHaveAttribute('href', '/extra-assets');
   await expect(main.locator('.plugin-card').filter({ hasText: '비활성 CSV' }).getByRole('link')).toHaveCount(0);
   await expect(main.getByText('조회 가능한 메뉴가 없습니다.')).toBeVisible();
-  await expect(main.getByText('등록된 설명이 없습니다.')).toHaveCount(2);
+  await expect(main.getByText('등록된 설명이 없습니다.')).toHaveCount(0);
+  await expect(main.locator('.plugin-description')).toHaveCount(1);
+  await expect(main.locator('.plugin-title').getByRole('link')).toHaveCount(2);
   await mkdir(path.join(root, 'test-results'), { recursive: true });
   await page.screenshot({ path: path.join(root, 'test-results/plugin-home-desktop.png'), fullPage: true });
   await page.setViewportSize({ width: 390, height: 844 });

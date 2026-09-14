@@ -18,14 +18,18 @@ test('등록 정보와 메뉴별 데이터 조회 링크를 표시한다', () =>
   expect(html).toContain('&lt;script&gt;설명&lt;/script&gt;');
   expect(html).toContain('href="/servers"');
   expect(html).toContain('href="/repositories"');
-  expect(html).toContain('서버 · 데이터 보기');
-  expect(html).toContain('저장소 · 데이터 보기');
+  expect(html).toContain('aria-label="샘플 · 서버 데이터 보기"');
+  expect(html).toMatch(/class="plugin-title"[\s\S]*href="\/servers"/);
+  expect(html.indexOf('<dt>메뉴 이름</dt>')).toBeLessThan(html.indexOf('<dt>데이터 출처</dt>'));
+  expect(html).toContain('<dd>서버, 저장소</dd>');
+  expect(html).toContain('aria-label="샘플 · 저장소 데이터 보기"');
   expect(html).toContain('연결·수집 성공을 의미하지 않습니다');
 });
 
 test('선택 설명 누락, 비활성 및 메뉴 없는 플러그인을 처리한다', () => {
   const html = render([{ ...plugin, enabled: false }, { ...plugin, id: 'no-menu', sourceType: 'local-csv' }]);
-  expect(html).toContain('등록된 설명이 없습니다');
+  expect(html).not.toContain('등록된 설명이 없습니다');
+  expect(html).not.toContain('class="plugin-description"');
   expect(html).toContain('비활성화');
   expect(html).toContain('로컬 CSV');
   expect(html).toContain('조회 가능한 메뉴가 없습니다');
@@ -71,10 +75,17 @@ test('API 주소와 CSV 파일명을 표시하고 활성 로컬 CSV만 내려받
   expect(html).toContain('원본.csv');
   expect(html).toContain('remote.csv');
   expect(html).toContain('href="/api/v1/plugins/local/source-file"');
-  expect(html).toContain('현재 등록된 CSV 파일 원본입니다.');
-  expect(html.match(/원본 내려받기/g)).toHaveLength(1);
+  expect(html).not.toContain('현재 등록된 CSV 파일 원본입니다.');
+  expect(html).toMatch(/class="plugin-file"><span>원본.csv<\/span><a[^>]*source-file/);
+  expect(html.match(/aria-label="원본 내려받기"/g)).toHaveLength(1);
+  expect(html).not.toContain('>원본 내려받기<');
 });
 
 test.each(['https://user:secret@example.test/api', 'https://example.test/api?token=secret', 'https://example.test/api#secret', 'javascript:alert(1)'])('민감하거나 유효하지 않은 endpoint를 거부한다: %s', async url => {
   await expect(loadPlugins({ request: vi.fn<typeof fetch>().mockResolvedValue(Response.json([{ ...plugin, endpoint: { url, method: 'GET' } }])) })).rejects.toThrow('plugin_invalid_response');
+});
+
+
+test('공백뿐인 설명은 영역을 생략한다', () => {
+  expect(render([{ ...plugin, description: '   ' }])).not.toContain('class="plugin-description"');
 });
