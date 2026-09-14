@@ -4,6 +4,18 @@ export interface PluginSummary {
   description?: string;
   enabled: boolean;
   sourceType: 'http-json' | 'http-csv' | 'local-csv';
+  endpoint?: { url: string; method: 'GET' };
+  fileName?: string;
+}
+
+function isEndpoint(value: unknown): boolean {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
+  const item = value as Record<string, unknown>;
+  if (item.method !== 'GET' || typeof item.url !== 'string') return false;
+  try {
+    const url = new URL(item.url);
+    return ['http:', 'https:'].includes(url.protocol) && !url.username && !url.password && !url.search && !url.hash;
+  } catch { return false; }
 }
 
 function isPlugin(value: unknown): value is PluginSummary {
@@ -12,6 +24,8 @@ function isPlugin(value: unknown): value is PluginSummary {
   return typeof item.id === 'string' && item.id.length > 0
     && typeof item.name === 'string' && item.name.length > 0
     && (item.description === undefined || typeof item.description === 'string')
+    && (item.endpoint === undefined || isEndpoint(item.endpoint))
+    && (item.fileName === undefined || (typeof item.fileName === 'string' && item.fileName.length > 0 && !/[\\/]/.test(item.fileName)))
     && typeof item.enabled === 'boolean'
     && ['http-json', 'http-csv', 'local-csv'].includes(item.sourceType as string);
 }

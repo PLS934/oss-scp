@@ -1,7 +1,7 @@
 import Ajv2020, { type ErrorObject, type ValidateFunction } from 'ajv/dist/2020';
 import { existsSync, readFileSync, realpathSync } from 'node:fs';
 import { createRequire } from 'node:module';
-import { isAbsolute, join, relative, resolve, sep } from 'node:path';
+import { basename, isAbsolute, join, relative, resolve, sep } from 'node:path';
 import { loadSourceDefinition } from './source-loader';
 import { loadLocalCsvSource } from './source-loaders/file';
 import { loadHttpCsvSource } from './source-loaders/http-csv';
@@ -352,12 +352,32 @@ function loadPlugins(
     ) {
       continue;
     }
+    let endpoint: ClientPluginSummary['endpoint'];
+    let fileName: string | undefined;
+    if (sourceValue.format === 'csv' && sourceValue.transport === 'file') {
+      fileName = basename(sourceValue.path);
+    } else {
+      const connection = connections.get(sourceValue.connectionRef);
+      if (connection) {
+        let url: URL;
+        try { url = new URL(sourceValue.path, connection.value.config.baseUrl); }
+        catch {
+          issue(errors, root, sourceFile, '/path', 'invalid HTTP endpoint');
+          continue;
+        }
+        // 공개 표시값에는 인증정보·쿼리·fragment를 포함하지 않는다.
+        endpoint = { url: `${url.origin}${url.pathname}`, method: sourceValue.method };
+        if (sourceValue.format === 'csv') fileName = basename(url.pathname);
+      }
+    }
     plugins.push({
       id: pluginValue.id,
       name: pluginValue.name,
       ...(pluginValue.description === undefined ? {} : { description: pluginValue.description }),
       enabled: pluginValue.enabled ?? true,
       sourceType: sourceValue.format === 'csv' ? (sourceValue.transport === 'file' ? 'local-csv' : 'http-csv') : 'http-json',
+      ...(endpoint ? { endpoint } : {}),
+      ...(fileName === undefined ? {} : { fileName }),
     });
     if (pluginValue.enabled === false) continue;
     if (sourceValue.format === 'csv' && sourceValue.transport === 'file') {

@@ -9,13 +9,16 @@
 ## Decisions
 
 - 검증 결과에 별도의 공개 plugins 요약을 추가하고 runtime registry에서 불변 snapshot으로 보존한다. API는 명시한 필드만 투영한다.
-- source schema에서 유형을 도출한다. 경로·Connection·모듈 정보를 응답에 포함하지 않는다.
+- source schema에서 유형을 도출한다. HTTP 주소는 userinfo·query·fragment를 제거해 표시하고 메서드를 제공한다. CSV는 basename만 표시한다. 서버 파일 절대 경로·Connection 원문·모듈 정보는 응답에 포함하지 않는다.
 - enabled 생략은 true이며 false는 실행 정의와 메뉴에서 제외한다. 설정 파일의 기본 정합성은 검증하고 모듈 로딩은 하지 않는다.
 - menu는 선택 속성으로 완화한다. data와 source 계약을 그대로 유지하여 메뉴 없는 수집을 허용한다.
 - 홈은 독립적인 등록 조회 상태를 갖고 App의 기존 메뉴 상태를 받아 링크를 구성한다. 등록·메뉴 요청 실패를 빈 결과로 해석하지 않는다.
 - 복수 메뉴 응답은 pluginId로 그룹화하고 메뉴 제목으로 구분한다. plugin.json의 메뉴 배열 확장은 이번 범위에 포함하지 않는다.
 
 - 홈의 제목·안내는 페이지 배경에 직접 배치하고 플러그인 항목만 카드로 표시하여 카드 중첩을 피한다.
+
+- 로컬 CSV 원본은 `/api/v1/plugins/:id/source-file`에서 제공한다. 클라이언트 입력 경로 대신 활성 registry 정의의 파일만 사용하며 다운로드 시 실제 경로가 설정 루트 안인지 재확인한다. 일반 파일만 허용하고 source의 maxBytes(생략 시 1 GiB)를 적용한다. attachment로 스트리밍하고 캐시하지 않는다.
+- 원본은 현재 파일이며 수집 시점 snapshot이 아니다. 비활성·미등록·HTTP 플러그인에는 다운로드를 제공하지 않는다. 파일 누락·경로 이탈·읽기 실패는 내부 경로를 숨긴 오류로 응답한다.
 
 ## Risks / Trade-offs
 

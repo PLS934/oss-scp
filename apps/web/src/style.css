@@ -97,7 +97,14 @@ main .plugin-home { background: transparent; border: 0; border-radius: 0; paddin
 .plugin-badge { border-radius: 20px; padding: 3px 10px; font-size: 13px; white-space: nowrap; }
 .plugin-badge.enabled { color: #22533c; background: #e6f4ec; }
 .plugin-badge.disabled { color: #516372; background: #eef1f4; }
-.plugin-source { display: flex; flex-wrap: wrap; gap: 8px 16px; font-size: 14px; }
+.plugin-source { display: grid; gap: 8px; font-size: 14px; }
+.plugin-source > div { display: flex; flex-wrap: wrap; gap: 8px 16px; }
+.plugin-source dt { min-width: 80px; }
+.plugin-source dd { min-width: 0; }
+.plugin-method { font-size: 12px; font-weight: 700; color: #245c83; }
+.plugin-download { margin-top: 16px; }
+.plugin-download a { color: #245c83; text-underline-offset: 3px; }
+.plugin-download p { margin: 6px 0 0; color: #516372; font-size: 13px; }
 .plugin-source dt { font-weight: 600; } .plugin-source dd { margin: 0; }
 .plugin-links { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 16px; }
 .plugin-links a { color: #245c83; background: #eef4f8; }

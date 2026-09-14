@@ -57,3 +57,24 @@ test('등록 API HTTP 오류와 네트워크 오류를 전파한다', async () =
   await expect(loadPlugins({ request: vi.fn<typeof fetch>().mockResolvedValue(new Response('', { status: 503 })) })).rejects.toThrow('plugin_request_failed');
   await expect(loadPlugins({ request: vi.fn<typeof fetch>().mockRejectedValue(new Error('offline')) })).rejects.toThrow('offline');
 });
+
+
+test('API 주소와 CSV 파일명을 표시하고 활성 로컬 CSV만 내려받는다', () => {
+  const html = render([
+    { ...plugin, endpoint: { url: 'https://example.test/api/assets', method: 'GET' } },
+    { ...plugin, id: 'local', sourceType: 'local-csv', fileName: '원본.csv' },
+    { ...plugin, id: 'http', sourceType: 'http-csv', fileName: 'remote.csv', endpoint: { url: 'https://example.test/remote.csv', method: 'GET' } },
+    { ...plugin, id: 'disabled', sourceType: 'local-csv', fileName: 'disabled.csv', enabled: false },
+  ]);
+  expect(html).toContain('https://example.test/api/assets');
+  expect(html).toContain('GET');
+  expect(html).toContain('원본.csv');
+  expect(html).toContain('remote.csv');
+  expect(html).toContain('href="/api/v1/plugins/local/source-file"');
+  expect(html).toContain('현재 등록된 CSV 파일 원본입니다.');
+  expect(html.match(/원본 내려받기/g)).toHaveLength(1);
+});
+
+test.each(['https://user:secret@example.test/api', 'https://example.test/api?token=secret', 'https://example.test/api#secret', 'javascript:alert(1)'])('민감하거나 유효하지 않은 endpoint를 거부한다: %s', async url => {
+  await expect(loadPlugins({ request: vi.fn<typeof fetch>().mockResolvedValue(Response.json([{ ...plugin, endpoint: { url, method: 'GET' } }])) })).rejects.toThrow('plugin_invalid_response');
+});

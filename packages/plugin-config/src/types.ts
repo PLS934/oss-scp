@@ -164,6 +164,8 @@ export interface ClientPluginSummary {
   description?: string;
   enabled: boolean;
   sourceType: 'http-json' | 'http-csv' | 'local-csv';
+  endpoint?: { url: string; method: 'GET' };
+  fileName?: string;
 }
 
 export type ConfigurationResult =

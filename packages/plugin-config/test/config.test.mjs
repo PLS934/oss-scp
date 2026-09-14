@@ -725,7 +725,12 @@ test('등록 요약은 실제 출처와 기본 활성화를 제공하며 원천 
     ['vulnerabilities-http-csv', 'http-csv', true],
     ['sample2-single-api', 'http-json', true],
   ]);
-  for (const plugin of result.plugins) expect(Object.keys(plugin).sort()).toEqual(['enabled', 'id', 'name', 'sourceType']);
+  expect(result.plugins[0].endpoint).toEqual({ url: 'http://127.0.0.1:3001/sample1', method: 'GET' });
+  expect(result.plugins[1].fileName).toBe('vulnerabilities.csv');
+  expect(result.plugins[1].endpoint).toBeUndefined();
+  expect(result.plugins[2].endpoint).toEqual({ url: 'http://127.0.0.1:3001/vulnerabilities.csv', method: 'GET' });
+  expect(result.plugins[2].fileName).toBe('vulnerabilities.csv');
+  expect(JSON.stringify(result.plugins)).not.toMatch(/transformPath|fixtures\/csv|connectionRef/);
 });
 
 test('비활성 플러그인은 등록 목록에 남고 수집 정의·메뉴·transform 로딩에서 제외한다', async () => {
@@ -738,7 +743,7 @@ test('비활성 플러그인은 등록 목록에 남고 수집 정의·메뉴·t
   writeFileSync(join(root, 'plugins/sample1-offset-api/dist/transform.js'), "throw new Error('disabled module must not run');");
   const result = await preflightConfiguration(root);
   expect(result.ok).toBe(true);
-  expect(result.plugins.find(item => item.id === plugin.id)).toEqual({ id: plugin.id, name: plugin.name, description: plugin.description, enabled: false, sourceType: 'http-json' });
+  expect(result.plugins.find(item => item.id === plugin.id)).toEqual({ id: plugin.id, name: plugin.name, description: plugin.description, enabled: false, sourceType: 'http-json', endpoint: { url: 'http://127.0.0.1:3001/sample1', method: 'GET' } });
   expect(result.definitions.some(item => item.plugin.id === plugin.id)).toBe(false);
   expect(result.menus.some(item => item.pluginId === plugin.id)).toBe(false);
 });
@@ -754,4 +759,17 @@ test('메뉴 없는 플러그인은 수집 정의와 등록 목록만 제공한�
   expect(result.plugins.some(item => item.id === plugin.id)).toBe(true);
   expect(result.definitions.some(item => item.plugin.id === plugin.id)).toBe(true);
   expect(result.menus.some(item => item.pluginId === plugin.id)).toBe(false);
+});
+
+
+test('공개 endpoint에서 URL 인증정보를 제거한다', () => {
+  const root = temporaryRepository();
+  const file = 'connections/mock-api-sample1.json';
+  const connection = readJson(root, file);
+  connection.config.baseUrl = 'https://user:do-not-expose@example.test:8443';
+  writeJson(root, file, connection);
+  const result = validateRepository(root);
+  expect(result.ok).toBe(true);
+  expect(result.plugins[0].endpoint).toEqual({ url: 'https://example.test:8443/sample1', method: 'GET' });
+  expect(JSON.stringify(result.plugins)).not.toContain('do-not-expose');
 });

@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { mkdir } from 'node:fs/promises';
+import { mkdir, readFile } from 'node:fs/promises';
 import path from 'node:path';
 import { expect } from '@playwright/test';
 
@@ -9,10 +9,19 @@ export async function checkPluginHome(page, url, menus, root) {
   await expect(main.locator('.plugin-card')).toHaveCount(4);
   const apiPlugins = await (await page.request.get(`${url}/api/v1/plugins`)).json();
   assert.equal(apiPlugins.length, 4);
-  for (const plugin of apiPlugins) assert.deepEqual(Object.keys(plugin).sort(), ['enabled', 'id', 'name', 'sourceType']);
+  for (const plugin of apiPlugins) assert.equal(Object.keys(plugin).every(key => ['enabled', 'id', 'name', 'sourceType', 'endpoint', 'fileName', 'description'].includes(key)), true);
+  await expect(main.getByText('http://127.0.0.1:3001/sample1', { exact: true })).toBeVisible();
+  const localCard = main.locator('.plugin-card').filter({ hasText: 'Vulnerabilities Local CSV' });
+  await expect(localCard.getByText('vulnerabilities.csv', { exact: true })).toBeVisible();
+  await expect(main.getByRole('link', { name: '원본 내려받기', exact: true })).toHaveCount(1);
+  const downloaded = page.waitForEvent('download');
+  await localCard.getByRole('link', { name: '원본 내려받기', exact: true }).click();
+  const download = await downloaded;
+  assert.equal(download.suggestedFilename(), 'vulnerabilities.csv');
+  assert.deepEqual(await readFile(await download.path()), await readFile(path.join(root, 'fixtures/csv/vulnerabilities.csv')));
 
   const plugins = [
-    { id: menus[0].pluginId, name: '자산 플러그인', description: '외부 API에서 서버 자산 정보를 제공합니다.', enabled: true, sourceType: 'http-json' },
+    { id: menus[0].pluginId, name: '자산 플러그인', description: '외부 API에서 서버 자산 정보를 제공합니다.', enabled: true, sourceType: 'http-json', endpoint: { url: 'https://api.example.test/assets', method: 'GET' } },
     { id: 'disabled', name: '비활성 CSV', enabled: false, sourceType: 'local-csv' },
     { id: 'no-menu', name: '메뉴 없는 플러그인', enabled: true, sourceType: 'http-csv' },
   ];
