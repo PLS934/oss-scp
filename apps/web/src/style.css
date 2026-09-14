@@ -2,7 +2,7 @@
   --background: #f4f6f8; --surface: #ffffff; --text: #182c3c; --muted: #516372;
   --border: #dce2e7; --control-border: #697b89; --focus: #226596;
   --sidebar-focus: #83c8ff; --sidebar: #122536; --sidebar-text: #ffffff; --sidebar-muted: #b9c7d3; --sidebar-active: #27445b;
-  --success: #71d6a8; --failure: #ff9a96; --info: #eef4f8; --error-background: #fff0ef; --error-text: #7d2420;
+  --success: #166534; --failure: #b42318; --info: #eef4f8; --error-background: #fff0ef; --error-text: #7d2420;
 }
 :root[data-theme="dark"] {
   --background: #101820; --surface: #1b2833; --text: #edf3f8; --muted: #b8c8d5;
@@ -19,9 +19,6 @@ h1 { font-size: 30px; margin: 4px 0 30px; } h1 a { text-decoration: none; }
 .menu-group h2 { color: var(--sidebar-muted); font-size: 13px; letter-spacing: .06em; }
 ul { list-style: none; padding: 0; margin: 0; } li a { display: block; padding: 8px 10px; border-radius: 7px; text-decoration: none; }
 li a:hover, li a.active { background: var(--sidebar-active); }
-.sidebar-meta { margin-top: 32px; }
-aside .status { margin: 0; font-size: 13px; }
-aside .version { margin: 3px 0 0; color: var(--sidebar-muted); font-size: 12px; }
 main { max-width: 900px; width: calc(100% - 48px); margin: 8vh auto; }
 main section { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 28px; }
 .eyebrow { color: var(--muted); margin-bottom: 4px; } h2 { margin-top: 0; } .status { font-weight: 700; }
@@ -68,3 +65,9 @@ aside a:focus-visible { outline-color: var(--sidebar-focus); }
 .theme-options button:hover, .theme-options button[aria-pressed="true"] { background: var(--info); }
 .theme-check { margin-left: auto; min-width: 12px; }
 @media (max-width: 700px) { .app-header { padding: 0 24px; height: 56px; } }
+
+.header-actions { display: flex; align-items: center; gap: 18px; }
+.header-actions .status { margin: 0; font-size: 12px; white-space: nowrap; }
+.header-actions .status::before { content: ''; display: inline-block; width: 6px; height: 6px; margin-right: 7px; border-radius: 50%; background: currentColor; vertical-align: middle; }
+.header-actions .version { color: var(--muted); font-size: 12px; white-space: nowrap; }
+@media (max-width: 700px) { .header-actions { gap: 12px; } .header-title { display: none; } .app-header { justify-content: flex-end; } }

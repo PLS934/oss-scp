@@ -11,6 +11,9 @@ export async function testTheme(browser, url) {
   const context = await browser.newContext({ colorScheme: 'dark' });
   const page = await context.newPage();
   await page.goto(url);
+  await expect(page.getByRole('banner').getByRole('status')).toBeVisible();
+  await expect(page.getByRole('banner').locator('.version')).toBeVisible();
+  await expect(page.locator('aside').getByRole('status')).toHaveCount(0);
   const picker = page.getByRole('button', { name: /^화면 테마:/ });
   await expect(picker).toHaveAttribute('aria-label', '화면 테마: 시스템 설정');
   await expect(page.getByRole('banner').locator('[data-theme-icon]')).toHaveAttribute('data-theme-icon', 'dark');
@@ -52,7 +55,7 @@ export async function testTheme(browser, url) {
     const pairs = await revisit.evaluate(() => {
       const css = getComputedStyle(document.documentElement);
       const value = name => css.getPropertyValue(`--${name}`).trim();
-      return [['text', 'background'], ['text', 'surface'], ['muted', 'surface'], ['text', 'info'], ['error-text', 'error-background'], ['error-text', 'surface'], ['sidebar-text', 'sidebar'], ['sidebar-muted', 'sidebar'], ['sidebar-text', 'sidebar-active'], ['success', 'sidebar'], ['failure', 'sidebar'], ['control-border', 'surface'], ['focus', 'surface'], ['focus', 'background'], ['sidebar-focus', 'sidebar']].map(([a, b]) => [a, value(a), value(b)]);
+      return [['text', 'background'], ['text', 'surface'], ['muted', 'surface'], ['text', 'info'], ['error-text', 'error-background'], ['error-text', 'surface'], ['sidebar-text', 'sidebar'], ['sidebar-muted', 'sidebar'], ['sidebar-text', 'sidebar-active'], ['success', 'surface'], ['failure', 'surface'], ['control-border', 'surface'], ['focus', 'surface'], ['focus', 'background'], ['sidebar-focus', 'sidebar']].map(([a, b]) => [a, value(a), value(b)]);
     });
     const luminance = hex => {
       if (/^#[a-f\d]{3}$/i.test(hex)) hex = '#' + [...hex.slice(1)].map(value => value + value).join('');
