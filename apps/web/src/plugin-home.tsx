@@ -33,7 +33,6 @@ export function PluginHomeContent({ plugins, state, menus, menuState }: {
     <p className="plugin-intro">등록된 플러그인과 제공 데이터를 확인하세요. 활성화 여부는 설정 기준이며, 연결·수집 성공을 의미하지 않습니다.</p>
     <div className="plugin-sort-toolbar">
       <button type="button" className="plugin-sort-toggle" aria-pressed={sort === 'name'} onClick={() => setSort(sort === 'name' ? 'default' : 'name')} disabled={state !== 'success' || plugins.length === 0} title={sort === 'name' ? '등록된 순서로 되돌리기' : '이름 순으로 정렬'}>
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M4 6h16M4 12h10M4 18h4m10-6v8m-3-3 3 3 3-3" /></svg>
         이름 순
       </button>
     </div>
