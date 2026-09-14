@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { testTheme } from './test-theme-browser.mjs';
 import { execFileSync } from 'node:child_process';
 import { readFile, writeFile, rm } from 'node:fs/promises';
 import { createConnection } from 'node:net';
@@ -61,6 +62,7 @@ try {
     await assert.rejects(fetch(`http://${address.address}:${webPort}/`, { signal: AbortSignal.timeout(2000) }));
   }
   browser = await chromium.launch();
+  await testTheme(browser, url);
   const page = await browser.newPage();
   const browserMenus = [
     { title: '서버 자산', icon: 'server', group: '자산 관리', order: 10, path: '/assets/servers', dataType: 'asset', pluginId: 'sample1-offset-api', sourceId: 'mock-api-sample1', list: { columns: [{ key: 'hostname', label: '호스트명', type: 'string' }, { key: 'score', label: '점수', type: 'number' }, { key: 'enabled', label: '활성', type: 'boolean' }, { key: 'observedAt', label: '관측 시각', type: 'datetime' }] }, detail: { sections: [{ title: '기본 정보', fields: [{ key: 'hostname', label: '호스트명', type: 'string' }] }] } },
@@ -179,6 +181,18 @@ try {
   await expect(page.getByRole('heading', { name: '저장소 상세' })).toBeVisible();
   await page.getByRole('link', { name: '목록으로 돌아가기' }).click();
   await expect(page.getByRole('cell', { name: 'example/another-repository' })).toBeVisible();
+
+  for (const theme of ['light', 'dark']) {
+    await page.getByLabel('화면 테마').selectOption(theme);
+    await expect(page.locator('html')).toHaveAttribute('data-theme', theme);
+    await page.goto(`${url}/assets/repositories`);
+    await expect(page.getByRole('cell', { name: 'example/another-repository' })).toBeVisible();
+    await expect(page.getByLabel('화면 테마')).toHaveValue(theme);
+    await page.getByRole('link', { name: '보기' }).first().click();
+    await expect(page.getByRole('heading', { name: '저장소 상세' })).toBeVisible();
+    await expect(page.locator('html')).toHaveAttribute('data-theme', theme);
+    await page.screenshot({ path: `/tmp/oss-scp-theme-detail-${theme}.png`, fullPage: true });
+  }
 
   const beforeInvalid = detailRequests.length;
   await page.goto(`${url}/assets/repositories/not-a-uuid`);
