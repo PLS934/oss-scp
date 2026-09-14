@@ -64,12 +64,12 @@ export function RecordListView({ menu, limit, page, loading, result, error, onLi
     {!loading && !error && result?.collection.status === 'never_collected' && !hasItems ? <p className="empty-state">아직 수집된 데이터가 없습니다.</p> : null}
     {!loading && !error && result?.collection.status === 'success' && !hasItems ? <p className="empty-state">수집이 완료됐지만 표시할 결과가 없습니다.</p> : null}
     {!loading && !error && result && result.collection.status !== 'never_collected' && result.collection.status !== 'success' && !hasItems ? <p className="empty-state">현재 표시할 저장 데이터가 없습니다.</p> : null}
+    <p className="record-total" aria-live="polite">전체 {numberFormat.format(result?.pageInfo.totalItems ?? 0)}건</p>
     {result && hasItems ? <div className="record-table-wrap"><table>
       <thead><tr>{menu.list.columns.map(column => <th key={column.key} scope="col">{column.label}</th>)}<th scope="col">상세</th></tr></thead>
       <tbody>{result.items.map(item => <tr key={item.id}>{menu.list.columns.map(column => <td key={column.key}>{formatColumnValue(column.type, item.sourceValues[column.key])}</td>)}<td><Link to={recordDetailPath(menu.path, item.id)}>보기</Link></td></tr>)}</tbody>
     </table></div> : null}
     <nav className="pagination" aria-label="목록 페이지 탐색">
-      <span className="pagination-summary" aria-live="polite">{page} / {totalPages} 페이지 · 전체 {numberFormat.format(result?.pageInfo.totalItems ?? 0)}건{result ? ` · ${result.items.length}개 항목` : ''}</span>
       <div className="pagination-controls">
       <button type="button" aria-label="첫 페이지" disabled={navigationDisabled || page <= 1} onClick={() => onPageChange(1)}><svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"><path d="m11 5-7 7 7 7m9-14-7 7 7 7" /></svg></button>
       <button type="button" aria-label="이전 페이지" disabled={navigationDisabled || page <= 1} onClick={() => onPageChange(page - 1)}><svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"><path d="m15 5-7 7 7 7" /></svg></button>

@@ -75,7 +75,7 @@ test('로딩과 조회 실패를 안전하게 표시한다', () => {
 test('첫 페이지에서 번호·전체 건수와 접근 가능한 탐색을 표시한다', () => {
   const html = render();
   expect(html).toContain('aria-label="목록 페이지 탐색"');
-  expect(html).toContain('1 / 3 페이지 · 전체 45건');
+  expect(html).toContain('전체 45건');
   expect(html).toMatch(/aria-label="첫 페이지" disabled=""/);
   expect(html).toMatch(/aria-label="이전 페이지" disabled=""/);
   expect(html).toContain('aria-label="1페이지" aria-current="page"');
@@ -87,7 +87,7 @@ test('마지막 페이지에서는 다음과 마지막 이동을 막는다', () 
   const last = result('success');
   last.pageInfo = { page: 3, pageSize: 20, totalItems: 45, totalPages: 3, hasNextPage: false };
   const html = render({ page: 3, result: last });
-  expect(html).toContain('3 / 3 페이지');
+  expect(html).toContain('aria-label="3페이지" aria-current="page"');
   expect(html).toMatch(/aria-label="다음 페이지" disabled=""/);
   expect(html).toMatch(/aria-label="마지막 페이지" disabled=""/);
   expect(html).not.toMatch(/aria-label="이전 페이지" disabled/);
@@ -95,14 +95,14 @@ test('마지막 페이지에서는 다음과 마지막 이동을 막는다', () 
 
 test('로딩·빈 결과·조회 실패는 위치와 행을 보존하며 이동을 막는다', () => {
   const loading = render({ page: 2, loading: true });
-  expect(loading).toContain('2 / 3 페이지');
+  expect(loading).toContain('aria-label="2페이지" aria-current="page"');
   expect(loading).toContain('server-1');
   expect(loading.match(/disabled=""/g)?.length).toBe(8);
   const empty = render({ result: result('success', false) });
   expect(empty).toContain('전체 0건');
   expect(empty.match(/disabled=""/g)?.length).toBe(4);
   const failed = render({ page: 2, error: { kind: 'API_ERROR', message: '조회 실패' } });
-  expect(failed).toContain('2 / 3 페이지');
+  expect(failed).toContain('aria-label="2페이지" aria-current="page"');
   expect(failed).toContain('server-1');
   expect(failed).toContain('다시 시도');
 });

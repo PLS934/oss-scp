@@ -138,10 +138,10 @@ try {
   await expect(page.getByRole('heading', { name: '서버 자산', exact: true })).toBeVisible();
   await expect(page.getByRole('columnheader', { name: '호스트명' })).toBeVisible();
   await expect(page.getByRole('cell', { name: 'test-host-1', exact: true })).toBeVisible();
-  await expect(page.getByText(/20개 항목/)).toBeVisible();
+  await expect(page.getByText(/20개 항목/)).toHaveCount(0);
   const pagination = page.getByRole('navigation', { name: '목록 페이지 탐색' });
   await expect(pagination).toBeVisible();
-  await expect(pagination).toContainText('1 / 13 페이지 · 전체 245건');
+  await expect(page.getByText('전체 245건', { exact: true })).toBeVisible();
   await expect(page.getByRole('button', { name: '첫 페이지', exact: true })).toBeDisabled();
   await expect(page.getByRole('button', { name: '이전 페이지', exact: true })).toBeDisabled();
   await expect(pagination.locator('[aria-current="page"]')).toHaveText('1');
@@ -179,11 +179,12 @@ try {
   // 마지막 페이지 요청 사이 삭제가 발생하면 서버가 반환한 페이지로 보정한다.
   recordTotal = 25;
   await page.getByRole('button', { name: '마지막 페이지', exact: true }).click();
-  await expect(pagination).toContainText('2 / 2 페이지 · 전체 25건');
+  await expect(page.getByText('전체 25건', { exact: true })).toBeVisible();
+  await expect(pagination.getByRole('button', { name: '2페이지', exact: true })).toHaveAttribute('aria-current', 'page');
   await expect(page.getByRole('cell', { name: 'test-host-25', exact: true })).toBeVisible();
   recordTotal = 0;
   await page.getByRole('button', { name: '첫 페이지', exact: true }).click();
-  await expect(pagination).toContainText('전체 0건');
+  await expect(page.getByText('전체 0건', { exact: true })).toBeVisible();
   await expect(pagination.getByRole('button', { disabled: false })).toHaveCount(0);
   recordTotal = 245;
   await page.getByLabel('페이지 크기').selectOption('50');
