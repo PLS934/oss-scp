@@ -1,4 +1,4 @@
-import { useEffect, useReducer, useRef, useState } from 'react';
+import { useEffect, useReducer, useRef, useState, type MouseEvent } from 'react';
 import { Link } from 'react-router-dom';
 import { recordDetailPath, type ListColumn, type MenuItem } from './menu';
 import {
@@ -45,6 +45,14 @@ interface RecordListViewProps {
   onRetry: () => void;
 }
 
+function activateRowLink(event: MouseEvent<HTMLTableRowElement>) {
+  const target = event.target;
+  if (!(target instanceof Element) || target.closest('a, button, input, select, textarea')) return;
+  if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+  if (window.getSelection()?.toString()) return;
+  event.currentTarget.querySelector<HTMLAnchorElement>('a')?.click();
+}
+
 export function RecordListView({ menu, limit, page, loading, result, error, onLimitChange, onPageChange, onRetry }: RecordListViewProps) {
   const collectionMessage = result ? collectionMessages[result.collection.status] : undefined;
   const hasItems = Boolean(result?.items.length);
@@ -69,8 +77,13 @@ export function RecordListView({ menu, limit, page, loading, result, error, onLi
       </select><svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"><path d="m7 10 5 5 5-5" /></svg></label>
     </div>
     {result && hasItems ? <div className="record-table-wrap"><table>
-      <thead><tr>{menu.list.columns.map(column => <th key={column.key} scope="col">{column.label}</th>)}<th scope="col">상세</th></tr></thead>
-      <tbody>{result.items.map(item => <tr key={item.id}>{menu.list.columns.map(column => <td key={column.key}>{formatColumnValue(column.type, item.sourceValues[column.key])}</td>)}<td><Link to={recordDetailPath(menu.path, item.id)}>보기</Link></td></tr>)}</tbody>
+      <thead><tr>{menu.list.columns.map(column => <th key={column.key} scope="col">{column.label}</th>)}</tr></thead>
+      <tbody>{result.items.map(item => <tr key={item.id} className="record-row" onClick={activateRowLink}>{menu.list.columns.map((column, index) => {
+        const value = formatColumnValue(column.type, item.sourceValues[column.key]);
+        return <td key={column.key} aria-label={index === 0 ? value : undefined}>{index === 0
+          ? <Link className="record-row-link" to={recordDetailPath(menu.path, item.id)} aria-label={`${menu.title} ${value} (${item.id}) 상세`}>{value}</Link>
+          : value}</td>;
+      })}</tr>)}</tbody>
     </table></div> : null}
     <nav className="pagination" aria-label="목록 페이지 탐색">
       <div className="pagination-controls">
