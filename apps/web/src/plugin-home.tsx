@@ -30,9 +30,10 @@ export function PluginHomeContent({ plugins, state, menus, menuState }: {
   const displayedPlugins = sort === 'name' ? [...plugins].sort((a, b) => nameCollator.compare(a.name, b.name)) : plugins;
   return <section className="plugin-home" aria-labelledby="plugin-home-title">
     <div className="plugin-home-heading"><h2 id="plugin-home-title">플러그인 목록</h2>
-      <select aria-label="플러그인 정렬" value={sort} onChange={event => setSort(event.target.value)} disabled={state !== 'success' || plugins.length === 0}>
-        <option value="default">기본 순</option><option value="name">이름 순</option>
-      </select>
+      <button type="button" className="plugin-sort-toggle" aria-pressed={sort === 'name'} onClick={() => setSort(sort === 'name' ? 'default' : 'name')} disabled={state !== 'success' || plugins.length === 0} title={sort === 'name' ? '등록된 순서로 되돌리기' : '이름 순으로 정렬'}>
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M4 6h16M4 12h10M4 18h4m10-6v8m-3-3 3 3 3-3" /></svg>
+        이름 순
+      </button>
     </div>
     <p className="plugin-intro">등록된 플러그인과 제공 데이터를 확인하세요. 활성화 여부는 설정 기준이며, 연결·수집 성공을 의미하지 않습니다.</p>
     {state === 'loading' ? <p role="status">플러그인 목록을 불러오는 중입니다.</p>

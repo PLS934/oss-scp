@@ -114,5 +114,8 @@ a.plugin-icon-link:focus-visible { outline: 3px solid var(--focus); outline-offs
 
 .plugin-home-heading { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px; }
 .plugin-home-heading h2 { margin: 0; }
-.plugin-home-heading select { padding: 8px 12px; border-color: var(--border); border-radius: 8px; font: inherit; font-size: 13px; cursor: pointer; }
-.plugin-home-heading select:disabled { opacity: .55; cursor: not-allowed; }
+.plugin-sort-toggle { display: inline-flex; align-items: center; gap: 6px; padding: 8px 12px; border-color: var(--border); border-radius: 8px; font: inherit; font-size: 13px; cursor: pointer; }
+.plugin-sort-toggle:disabled { opacity: .55; cursor: not-allowed; }
+
+.plugin-sort-toggle:hover:not(:disabled) { background: var(--info); }
+.plugin-sort-toggle[aria-pressed="true"] { background: var(--info); color: var(--focus); border-color: var(--focus); }

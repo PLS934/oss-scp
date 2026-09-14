@@ -40,10 +40,13 @@ export async function checkPluginHome(page, url, menus, root) {
   await expect(main.getByText('등록된 설명이 없습니다.')).toHaveCount(0);
   await expect(main.locator('.plugin-description')).toHaveCount(1);
   await expect(main.locator('.plugin-title').getByRole('link')).toHaveCount(2);
-  const sort = main.getByRole('combobox', { name: '플러그인 정렬' });
-  await sort.selectOption('name');
+  const sort = main.getByRole('button', { name: '이름 순', exact: true });
+  await expect(sort).toHaveAttribute('aria-pressed', 'false');
+  await sort.click();
+  await expect(sort).toHaveAttribute('aria-pressed', 'true');
   await expect(main.locator('.plugin-card h3')).toHaveText(['메뉴 없는 플러그인', '비활성 CSV', '자산 플러그인']);
-  await sort.selectOption('default');
+  await sort.click();
+  await expect(sort).toHaveAttribute('aria-pressed', 'false');
   await expect(main.locator('.plugin-card h3')).toHaveText(plugins.map(plugin => plugin.name));
 
   await mkdir(path.join(root, 'test-results'), { recursive: true });
