@@ -201,3 +201,25 @@ describe('저장 레코드 조회 API', () => {
     try { await fetch(`${url}/api/v1/records?pluginId=p&sourceId=s&dataType=asset`); await fetch(`${url}/api/v1/records/${id}`); expect({ reads, writes }).toEqual({ reads: 2, writes: 0 }); } finally { await app.close(); }
   });
 });
+
+describe('등록 플러그인 API', () => {
+  it('활성·비활성 등록 정보를 반환하고 내부 속성은 제외한다', async () => {
+    const connection = { checkReady: async () => true, close: async () => undefined };
+    const plugins = [
+      { id: 'active', name: 'API', description: '외부 데이터', enabled: true, sourceType: 'http-json', password: 'never-expose', connection: { baseUrl: 'https://secret.invalid' } },
+      { id: 'disabled', name: 'CSV', enabled: false, sourceType: 'local-csv', transformPath: '/private/transform.js' },
+    ];
+    const registry = createPluginRuntimeRegistry({ definitions: [], menus: [], plugins });
+    plugins[0].name = '변경';
+    const module = await Test.createTestingModule({ imports: [AppModule.register(connection, undefined, registry)] }).compile();
+    const app = module.createNestApplication(); await app.listen(0, '127.0.0.1');
+    try {
+      const response = await fetch(`${await app.getUrl()}/api/v1/plugins`);
+      expect(response.status).toBe(200);
+      expect(await response.json()).toEqual([
+        { id: 'active', name: 'API', description: '외부 데이터', enabled: true, sourceType: 'http-json' },
+        { id: 'disabled', name: 'CSV', enabled: false, sourceType: 'local-csv' },
+      ]);
+    } finally { await app.close(); }
+  });
+});

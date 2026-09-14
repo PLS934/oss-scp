@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import { testTheme, chooseTheme } from './test-theme-browser.mjs';
+import { checkPluginHome } from './test-plugin-home-browser.mjs';
 import { execFileSync } from 'node:child_process';
 import { readFile, writeFile, rm } from 'node:fs/promises';
 import { createConnection } from 'node:net';
@@ -133,10 +134,11 @@ try {
     } });
   });
   await page.goto(url);
+  await checkPluginHome(page, url, browserMenus, root);
   await expect(page.getByRole('heading', { name: 'OSS-SCP', exact: true })).toBeVisible();
-  await expect(page.getByRole('status')).toHaveText('서버 연결 성공');
+  await expect(page.locator('.app-header').getByRole('status')).toHaveText('서버 연결 성공');
   await expect(page.getByText('vdev', { exact: true })).toBeVisible();
-  await page.getByRole('link', { name: /서버 자산/ }).click();
+  await page.getByRole('main').getByRole('link', { name: /서버 자산 데이터 보기/ }).click();
   await expect(page.getByRole('heading', { name: '서버 자산', exact: true })).toBeVisible();
   await expect(page.getByRole('columnheader', { name: '호스트명' })).toBeVisible();
   await expect(page.getByRole('cell', { name: 'test-host-1', exact: true })).toBeVisible();
@@ -290,11 +292,11 @@ try {
   // 응답을 보류해 로딩을 관찰한 다음 5초 제한 시간으로 실패하는지 확인한다.
   await page.route('**/api/v1/health', () => {});
   await page.reload();
-  await expect(page.getByRole('status')).toHaveText('서버 연결 확인 중');
-  await expect(page.getByRole('status')).toHaveText('서버 연결 실패', { timeout: 7000 });
+  await expect(page.locator('.app-header').getByRole('status')).toHaveText('서버 연결 확인 중');
+  await expect(page.locator('.app-header').getByRole('status')).toHaveText('서버 연결 실패', { timeout: 7000 });
   await page.unrouteAll({ behavior: 'ignoreErrors' });
   await page.reload();
-  await expect(page.getByRole('status')).toHaveText('서버 연결 성공');
+  await expect(page.locator('.app-header').getByRole('status')).toHaveText('서버 연결 성공');
 
   const collisionArgs = ['--filter', '@oss-scp/web', 'exec', 'vite', '--port', String(webPort), '--strictPort'];
   collision = start('pnpm', collisionArgs, { cwd: dir });
@@ -304,7 +306,7 @@ try {
   assert.match(collision.output(), /already in use/);
   await stop(api);
   await page.reload();
-  await expect(page.getByRole('status')).toHaveText('서버 연결 실패');
+  await expect(page.locator('.app-header').getByRole('status')).toHaveText('서버 연결 실패');
   await expect(page.getByRole('heading', { name: 'OSS-SCP HMR 확인', exact: true })).toBeVisible();
   console.log('브라우저: 선언형 목록·상세 이동·직접 URL·새로고침·복귀·상세 오류·번호 직접 이동·첫/마지막 페이지·페이지 크기·조회 실패 재시도·빈 결과·서버 페이지 보정·요청 경합·플러그인 재사용·원천 미호출·not-found·health·API 404·포트 충돌·HMR 통과');
 } catch (error) {

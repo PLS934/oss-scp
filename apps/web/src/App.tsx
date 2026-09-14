@@ -1,9 +1,10 @@
 import { useEffect, useState } from 'react';
-import { NavLink, Route, Routes, useParams } from 'react-router-dom';
+import { NavLink, Route, Routes, useLocation, useParams } from 'react-router-dom';
 import { RecordDetail } from './detail';
 import { observeHealth, type ConnectionState } from './health';
 import { groupMenus, type MenuItem } from './menu';
 import { loadPluginMenus } from './plugin-menus';
+import { PluginHome } from './plugin-home';
 import { RecordList } from './record-list';
 import { ThemePicker } from './theme-picker';
 
@@ -27,12 +28,15 @@ export default function App({ menus: providedMenus }: { menus?: readonly MenuIte
   }, [providedMenus]);
   const menus = providedMenus ?? loadedMenus;
   const groups = groupMenus(menus);
+  const { pathname } = useLocation();
+  const activeMenu = menus.filter(menu => pathname === menu.path || pathname.startsWith(`${menu.path}/`))
+    .reduce<MenuItem | undefined>((active, menu) => !active || menu.path.length > active.path.length ? menu : active, undefined);
   return <div className="app-shell"><aside><p className="eyebrow">오픈소스 취약점 관리 플랫폼</p><h1><NavLink to="/">OSS-SCP</NavLink></h1>
     {menuState === 'loading' ? <p>플러그인 메뉴 로딩 중</p> : menuState === 'failure' ? <p role="alert">플러그인 메뉴를 불러오지 못했습니다.</p> : null}
     <nav aria-label="플러그인 메뉴">{[...groups].map(([group, entries]) => <section className="menu-group" key={group} aria-labelledby={`group-${group}`}><h2 id={`group-${group}`}>{group}</h2><ul>
-      {entries.map(menu => <li key={menu.path}><NavLink to={menu.path}>{menu.title}</NavLink></li>)}</ul></section>)}</nav>
+      {entries.map(menu => <li key={menu.path}><NavLink to={menu.path} end={menu !== activeMenu}>{menu.title}</NavLink></li>)}</ul></section>)}</nav>
     </aside><div className="workspace"><header className="app-header"><div className="header-actions"><p role="status" className={`status ${state}`}>{labels[state]}</p><span className="version">v{productVersion}</span><ThemePicker /></div></header><main><Routes>
-      <Route path="/" element={<section><h2>플러그인 메뉴</h2><p>조회할 데이터 메뉴를 선택해 주세요.</p></section>} />
+      <Route path="/" element={<PluginHome menus={menus} menuState={menuState} />} />
       {menuState === 'success' ? menus.flatMap(menu => [
         <Route key={menu.path} path={menu.path} element={<RecordList key={`${menu.pluginId}:${menu.sourceId}:${menu.dataType}`} menu={menu} />} />,
         <Route key={`${menu.path}/:recordId`} path={`${menu.path}/:recordId`} element={<DetailRoute menu={menu} />} />,

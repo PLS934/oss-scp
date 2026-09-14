@@ -19,7 +19,7 @@ async function bootstrap() {
   if (!configuration.ok) {
     throw new Error(`플러그인 설정 검증 실패\n${formatConfigurationIssues(configuration.errors)}`);
   }
-  const registry = createPluginRuntimeRegistry(configuration);
+  const registry = createPluginRuntimeRegistry({ ...configuration, configRoot });
   const adapters = [postgresAdapter, mysqlAdapter] as const;
   const dbConfig = readPlatformDbConfig(process.env, adapters);
   const connection = await selectPlatformDbAdapter(dbConfig.type, adapters).connect(dbConfig);

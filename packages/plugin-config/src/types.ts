@@ -3,10 +3,12 @@ export interface PluginConfig {
   id: string;
   name: string;
   version: string;
+  description?: string;
+  enabled?: boolean;
   source: string;
   transform: string;
   data: PluginDataDefinition;
-  menu: PluginMenuDefinition;
+  menu?: PluginMenuDefinition;
 }
 
 export type PluginMenuIcon = 'server' | 'shield' | 'repository';
@@ -31,7 +33,7 @@ export interface DataTypeDefinition {
 }
 export interface RelationDefinition { from: { types: string[] }; to: { types: string[] }; }
 export interface PluginDataDefinition { types: Record<string, DataTypeDefinition>; relations?: Record<string, RelationDefinition>; }
-export interface PluginRuntimeDefinition { id: string; name: string; version: string; transformPath: string; data: PluginDataDefinition; menu: PluginMenuDefinition; }
+export interface PluginRuntimeDefinition { id: string; name: string; version: string; transformPath: string; data: PluginDataDefinition; menu?: PluginMenuDefinition; }
 
 export interface SourceConfigBase {
   apiVersion: 'oss-scp/source-v1';
@@ -156,6 +158,16 @@ export interface ConfigurationIssue {
   message: string;
 }
 
+export interface ClientPluginSummary {
+  id: string;
+  name: string;
+  description?: string;
+  enabled: boolean;
+  sourceType: 'http-json' | 'http-csv' | 'local-csv';
+  endpoint?: { url: string; method: 'GET' };
+  fileName?: string;
+}
+
 export type ConfigurationResult =
-  | { ok: true; definitions: CollectionDefinition[]; menus: ClientMenuItem[] }
+  | { ok: true; definitions: CollectionDefinition[]; menus: ClientMenuItem[]; plugins: ClientPluginSummary[] }
   | { ok: false; errors: ConfigurationIssue[] };

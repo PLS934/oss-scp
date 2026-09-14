@@ -1,9 +1,11 @@
-import type { ClientMenuItem, CollectionDefinition } from '@oss-scp/plugin-config';
+import type { ClientPluginSummary, ClientMenuItem, CollectionDefinition } from '@oss-scp/plugin-config';
 import { createHash } from 'node:crypto';
 
 export const PLUGIN_RUNTIME_REGISTRY = Symbol('PLUGIN_RUNTIME_REGISTRY');
 
 export interface PluginRuntimeRegistry {
+  readonly configRoot?: string;
+  readonly plugins: readonly ClientPluginSummary[];
   readonly definitions: readonly CollectionDefinition[];
   readonly menus: readonly ClientMenuItem[];
   getDefinition(pluginId: string): CollectionDefinition | undefined;
@@ -33,7 +35,7 @@ function deepFreeze<T>(value: T): T {
 }
 
 export function createPluginRuntimeRegistry(
-  input: Pick<PluginRuntimeRegistry, 'definitions' | 'menus'>,
+  input: Pick<PluginRuntimeRegistry, 'definitions' | 'menus'> & Partial<Pick<PluginRuntimeRegistry, 'plugins' | 'configRoot'>>,
 ): PluginRuntimeRegistry {
   const definitions = deepFreeze(structuredClone(input.definitions));
   const menus = deepFreeze(structuredClone(input.menus));
@@ -44,6 +46,8 @@ export function createPluginRuntimeRegistry(
   return Object.freeze({
     definitions,
     menus,
+    configRoot: input.configRoot,
+    plugins: deepFreeze(structuredClone(input.plugins ?? [])),
     getDefinition: (pluginId: string) => definitionsByPluginId.get(pluginId),
   });
 }
