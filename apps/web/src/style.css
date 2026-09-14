@@ -148,11 +148,15 @@ main .repository-members { padding: 20px; }
 .record-search label { display: flex; flex-direction: column; gap: .35rem; font-size: .875rem; }
 .record-search-query { display: flex; flex: 0 0 100%; flex-direction: column; align-items: flex-start; }
 .record-search-input { position: relative; width: min(28rem, 100%); }
-.record-search-input svg { position: absolute; top: 50%; left: .7rem; width: 1rem; height: 1rem; color: var(--muted); pointer-events: none; transform: translateY(-50%); }
-.record-search .record-search-input input { width: 100%; padding-right: 2rem; padding-left: 2rem; }
+.record-search-icon { position: absolute; top: 50%; left: .7rem; width: 1rem; height: 1rem; color: var(--muted); pointer-events: none; transform: translateY(-50%); }
+.record-search .record-search-input input { width: 100%; padding-right: 4.5rem; padding-left: 2rem; }
 .record-search-input input::-webkit-search-cancel-button { appearance: none; }
-.record-search .record-search-clear { position: absolute; top: 50%; right: .35rem; width: 1.5rem; min-height: 1.5rem; padding: 0; border: 0; border-radius: 50%; background: transparent; color: var(--muted); font-size: 1.2rem; line-height: 1; transform: translateY(-50%); }
+.record-search .record-search-clear { position: absolute; top: 50%; right: 2.35rem; width: 1.5rem; min-height: 1.5rem; padding: 0; border: 0; border-radius: 50%; background: transparent; color: var(--muted); font-size: 1.2rem; line-height: 1; transform: translateY(-50%); }
 .record-search .record-search-clear:hover { border: 0; background: var(--info); color: var(--text); }
+.record-search .record-search-submit { position: absolute; top: 50%; right: .35rem; display: grid; place-items: center; width: 1.75rem; min-height: 1.75rem; padding: 0; border: 0; border-radius: 50%; background: transparent; color: var(--text); transform: translateY(-50%); }
+.record-search .record-search-submit:hover:not(:disabled) { border: 0; background: var(--info); }
+.record-search .record-search-submit:disabled { color: var(--muted); cursor: default; opacity: .4; }
+.record-search-submit svg { width: 1rem; height: 1rem; }
 .filter-chips { display: flex; flex: 0 0 100%; flex-wrap: wrap; gap: .5rem; }
 .filter-chip { display: inline-flex; align-items: center; overflow: hidden; border: 1px solid var(--border); border-radius: 999px; background: var(--info); font-size: .8rem; }
 .filter-chip > span { padding: .25rem .15rem .25rem .7rem; }
@@ -162,10 +166,8 @@ main .repository-members { padding: 20px; }
 .record-search input:focus-visible, .record-search select:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
 .record-search p { width: 100%; margin: 0; }
 .record-search small { color: var(--muted); }
-.search-actions { display: flex; gap: .5rem; }
 .record-search input, .record-search select { box-sizing: border-box; }
 .record-search button, .empty-state button { min-height: 36px; padding: 7px 14px; border: 1px solid var(--control-border); border-radius: 6px; background: var(--surface); color: var(--text); font: inherit; font-size: .875rem; cursor: pointer; }
-.record-search button[type="submit"] { background: var(--text); border-color: var(--text); color: var(--surface); }
 .record-search button:hover, .empty-state button:hover { border-color: var(--focus); }
 .record-search button:focus-visible, .empty-state button:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
 

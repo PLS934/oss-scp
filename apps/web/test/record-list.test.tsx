@@ -53,7 +53,7 @@ test('기본 컬럼 순서와 표시명만 렌더링한다', () => {
 
 test('필터가 선언된 컬럼명만 필터 버튼으로 렌더링한다', () => {
   const filteredMenu: MenuItem = { ...menu, list: { ...menu.list, query: { searchEnabled: true, filters: [{ key: 'score', label: '점수', type: 'number', kind: 'numberRange' }] } } };
-  const searchState: RecordSearchState = { query: filteredMenu.list.query!, q: '', draft: {}, dirty: false, error: null, setQ: vi.fn(), update: vi.fn(), clearFilter: vi.fn(), apply: vi.fn(), reset: vi.fn() };
+  const searchState: RecordSearchState = { query: filteredMenu.list.query!, q: '', appliedQ: '', draft: {}, error: null, setQ: vi.fn(), update: vi.fn(), clearFilter: vi.fn(), submitSearch: vi.fn(), clearSearch: vi.fn(), reset: vi.fn() };
   const html = render({ menu: filteredMenu, searchState });
   expect(html).toContain('aria-label="점수 필터"');
   expect(html).not.toContain('aria-label="호스트명 필터"');

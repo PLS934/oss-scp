@@ -26,17 +26,16 @@ export async function testAssetSearch(browser, url) {
       await search.press('Enter');
       const expected = initial.items.filter(item => item.sourceValues[searchKey].toLowerCase().includes(first[searchKey].toLowerCase())).length;
       await expect(page.getByText(`전체 ${expected.toLocaleString('ko-KR')}건`, { exact: true })).toBeVisible();
-      await page.getByRole('button', { name: '초기화', exact: true }).click();
+      await page.getByRole('button', { name: '검색어 지우기', exact: true }).click();
       await expect(search).toHaveValue('');
       await expect(page.getByText(`전체 ${initial.pageInfo.totalItems.toLocaleString('ko-KR')}건`, { exact: true })).toBeVisible();
       await page.getByRole('button', { name: '활성 상태 필터', exact: true }).click();
       await page.getByLabel('활성 상태', { exact: true }).selectOption(first[activeKey] ? '0' : '1');
       await page.getByRole('button', { name: `${optionLabel} 필터`, exact: true }).click();
       await page.getByLabel(optionLabel, { exact: true }).selectOption('0');
-      await page.getByRole('button', { name: '적용', exact: true }).click();
       const filtered = initial.items.filter(item => item.sourceValues[activeKey] === first[activeKey] && (pluginId === 'sample1-offset-api' ? item.sourceValues.environment === 'sandbox' : item.sourceValues.feed === 'true')).length;
       await expect(page.getByText(`전체 ${filtered.toLocaleString('ko-KR')}건`, { exact: true })).toBeVisible();
-      console.log(`${menu.title}: 기존 ${initial.pageInfo.totalItems}건 검색·필터·초기화 통과`);
+      console.log(`${menu.title}: 기존 ${initial.pageInfo.totalItems}건 검색·필터·개별 해제 통과`);
     }
   } finally { await page.close(); }
 }

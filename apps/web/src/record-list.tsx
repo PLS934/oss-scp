@@ -84,12 +84,12 @@ export function RecordListView({ menu, limit, page, loading, result, error, onLi
         {limits.map(value => <option key={value} value={value}>{value}개씩 보기</option>)}
       </select><svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"><path d="m7 10 5 5 5-5" /></svg></label>
     </div>
-    {result ? <div className="record-table-wrap"><table>
+    {result || searchState ? <div className="record-table-wrap"><table>
       <thead><tr>{menu.list.columns.map(column => {
         const filter = menu.list.query?.filters.find(candidate => candidate.key === column.key);
         return <th key={column.key} scope="col">{filter && searchState ? <RecordFilterHeader field={filter} state={searchState} /> : column.label}</th>;
       })}</tr></thead>
-      <tbody>{result.items.map(item => <tr key={item.id} className="record-row" onClick={activateRowLink}>{menu.list.columns.map((column, index) => {
+      <tbody>{(result?.items ?? []).map(item => <tr key={item.id} className="record-row" onClick={activateRowLink}>{menu.list.columns.map((column, index) => {
         const value = formatColumnValue(column.type, item.sourceValues[column.key]);
         return <td key={column.key} aria-label={index === 0 ? value : undefined}>{index === 0
           ? <Link className="record-row-link" to={recordDetailPath(menu.path, item.id)} aria-label={`${menu.title} ${value} (${item.id}) 상세`}>{value}</Link>

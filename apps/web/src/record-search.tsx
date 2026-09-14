@@ -69,38 +69,59 @@ export function buildSearchConditions(query: ListQuery, q: string, draft: Filter
 }
 
 export interface RecordSearchState {
-  query: ListQuery; q: string; draft: FilterDraft; dirty: boolean; error: string | null;
+  query: ListQuery; q: string; appliedQ: string; draft: FilterDraft; error: string | null;
   setQ: (value: string) => void;
   update: (key: string, value: string | string[]) => void;
   clearFilter: (field: QueryFilter) => void;
-  apply: (event?: FormEvent) => void;
+  submitSearch: (event?: FormEvent) => void;
+  clearSearch: () => void;
   reset: () => void;
 }
 
 export function useRecordSearchState(query: ListQuery, onApply: (conditions: SearchConditions) => void): RecordSearchState {
   const [q, setQuery] = useState('');
+  const [appliedQ, setAppliedQ] = useState('');
   const [draft, setDraft] = useState<FilterDraft>({});
-  const [appliedDraft, setAppliedDraft] = useState(JSON.stringify(['', {}]));
   const [error, setError] = useState<string | null>(null);
-  const setQ = (value: string) => { setQuery(value); setError(null); };
-  const update = (key: string, value: string | string[]) => { setDraft(previous => ({ ...previous, [key]: value })); setError(null); };
-  const clearFilter = (field: QueryFilter) => {
-    setDraft(previous => {
-      const next = { ...previous };
-      for (const part of ['value', 'start', 'end']) delete next[filterDraftKey(field.key, part)];
-      return next;
-    });
-    setError(null);
-  };
-  const apply = (event?: FormEvent) => {
-    event?.preventDefault();
+  const appliedQRef = useRef('');
+  const draftRef = useRef<FilterDraft>({});
+  const applyConditions = (search: string, nextDraft: FilterDraft): boolean => {
     try {
-      const conditions = buildSearchConditions(query, q, draft);
-      setError(null); setAppliedDraft(JSON.stringify([q, draft])); onApply(conditions);
-    } catch (caught) { setError(caught instanceof Error ? caught.message : '입력을 확인해 주세요.'); }
+      onApply(buildSearchConditions(query, search, nextDraft));
+      setError(null);
+      return true;
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : '입력을 확인해 주세요.');
+      return false;
+    }
   };
-  const reset = () => { setQuery(''); setDraft({}); setAppliedDraft(JSON.stringify(['', {}])); setError(null); onApply({}); };
-  return { query, q, draft, dirty: JSON.stringify([q, draft]) !== appliedDraft, error, setQ, update, clearFilter, apply, reset };
+  const setQ = (value: string) => { setQuery(value); setError(null); };
+  const update = (key: string, value: string | string[]) => {
+    const next = { ...draftRef.current, [key]: value };
+    draftRef.current = next;
+    setDraft(next);
+    applyConditions(appliedQRef.current, next);
+  };
+  const clearFilter = (field: QueryFilter) => {
+    const next = { ...draftRef.current };
+    for (const part of ['value', 'start', 'end']) delete next[filterDraftKey(field.key, part)];
+    draftRef.current = next;
+    setDraft(next);
+    applyConditions(appliedQRef.current, next);
+  };
+  const submitSearch = (event?: FormEvent) => {
+    event?.preventDefault();
+    if (applyConditions(q, draftRef.current)) { appliedQRef.current = q; setAppliedQ(q); }
+  };
+  const clearSearch = () => {
+    setQuery(''); setAppliedQ(''); appliedQRef.current = '';
+    applyConditions('', draftRef.current);
+  };
+  const reset = () => {
+    setQuery(''); setAppliedQ(''); setDraft({}); setError(null);
+    appliedQRef.current = ''; draftRef.current = {}; onApply({});
+  };
+  return { query, q, appliedQ, draft, error, setQ, update, clearFilter, submitSearch, clearSearch, reset };
 }
 
 export function RecordSearch({ query, onApply, resetVersion = 0 }: { query: ListQuery; onApply: (conditions: SearchConditions) => void; resetVersion?: number }) {
@@ -113,11 +134,9 @@ function RecordSearchStandalone({ query, onApply }: { query: ListQuery; onApply:
 
 export function RecordSearchToolbar({ state }: { state: RecordSearchState }) {
   const chips = state.query.filters.map(field => ({ field, summary: filterDraftSummary(field, state.draft) })).filter(item => item.summary);
-  return <form className="record-search" aria-label="검색 및 필터" onSubmit={state.apply}>
-    {state.query.searchEnabled ? <div className="record-search-query"><span className="record-search-input"><svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="7" /><path d="m16 16 4 4" /></svg><input type="search" aria-label="검색" value={state.q} onChange={event => state.setQ(event.target.value)} />{state.q ? <button className="record-search-clear" type="button" aria-label="검색어 지우기" onClick={() => state.setQ('')}>×</button> : null}</span></div> : null}
+  return <form className="record-search" aria-label="검색 및 필터" onSubmit={state.submitSearch}>
+    {state.query.searchEnabled ? <div className="record-search-query"><span className="record-search-input"><svg className="record-search-icon" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="7" /><path d="m16 16 4 4" /></svg><input type="search" aria-label="검색" value={state.q} onChange={event => state.setQ(event.target.value)} />{state.q ? <button className="record-search-clear" type="button" aria-label="검색어 지우기" onClick={state.clearSearch}>×</button> : null}<button className="record-search-submit" type="submit" aria-label="검색 실행" disabled={state.q === state.appliedQ}><svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M5 12h14m-6-6 6 6-6 6" /></svg></button></span></div> : null}
     {chips.length ? <div className="filter-chips" aria-label="선택한 필터">{chips.map(({ field, summary }) => <span className="filter-chip" key={field.key}><span>{field.label}: {summary}</span><button type="button" aria-label={`${field.label} 조건 삭제`} onClick={() => state.clearFilter(field)}>×</button></span>)}</div> : null}
-    <div className="search-actions"><button type="submit">적용</button><button type="button" onClick={state.reset}>초기화</button></div>
-    {state.dirty ? <p role="status">변경한 조건이 아직 적용되지 않았습니다.</p> : null}
     {state.error ? <p role="alert">{state.error}</p> : null}
   </form>;
 }
@@ -163,7 +182,7 @@ export function RecordFilterHeader({ field, state }: { field: QueryFilter; state
   const close = () => { setOpen(false); setPosition(previous => ({ ...previous, ready: false })); };
   const applyOnEnter = (event: KeyboardEvent<HTMLDivElement>) => {
     if (event.key === 'Escape') { close(); trigger.current?.focus(); return; }
-    if (event.key === 'Enter' && !(event.target instanceof HTMLSelectElement && event.target.multiple)) { event.preventDefault(); state.apply(); close(); }
+    if (event.key === 'Enter' && !(event.target instanceof HTMLSelectElement && event.target.multiple)) { event.preventDefault(); close(); }
   };
   const start = String(state.draft[filterDraftKey(field.key, 'start')] ?? '');
   const end = String(state.draft[filterDraftKey(field.key, 'end')] ?? '');
