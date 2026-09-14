@@ -36,10 +36,9 @@ export function PluginHomeContent({ plugins, state, menus, menuState }: {
           <div className="plugin-heading"><div className="plugin-title"><h3>{plugin.name}</h3>
             {targets.map(menu => <Link key={menu.path} className="plugin-icon-link" to={menu.path} aria-label={`${plugin.name} · ${menu.title} 데이터 보기`} title={`${menu.title} 데이터 보기`}><ArrowIcon /></Link>)}
           </div><span className={`plugin-badge ${plugin.enabled ? 'enabled' : 'disabled'}`}>{plugin.enabled ? '활성화' : '비활성화'}</span></div>
+          {targets.length > 0 ? <ul className="plugin-menu-paths" aria-label="메뉴 위치">{targets.map(menu => <li key={menu.path}>{menu.group} &gt; {menu.title}</li>)}</ul> : null}
           {plugin.description?.trim() ? <p className="plugin-description">{plugin.description}</p> : null}
           <dl className="plugin-source">
-            {targets.length > 0 ? <div><dt>메뉴 그룹</dt><dd>{[...new Set(targets.map(menu => menu.group))].join(', ')}</dd></div> : null}
-            {targets.length > 0 ? <div><dt>메뉴 이름</dt><dd>{targets.map(menu => menu.title).join(', ')}</dd></div> : null}
             <div><dt>데이터 출처</dt><dd>{sourceLabels[plugin.sourceType]}</dd></div>
             {plugin.endpoint ? <div><dt>API 주소</dt><dd><span className="plugin-method">{plugin.endpoint.method}</span> <code>{plugin.endpoint.url}</code></dd></div> : null}
             {plugin.fileName ? <div><dt>파일명</dt><dd className="plugin-file"><span>{plugin.fileName}</span>
