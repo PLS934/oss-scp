@@ -84,6 +84,7 @@ for (const dialect of (process.env.SEARCH_DB_TYPE ? [process.env.SEARCH_DB_TYPE]
     await page.getByLabel('영향 여부', { exact: true }).selectOption('0');
     await page.getByLabel('점수 최솟값').fill('9');
     await page.getByLabel('점수 최댓값').fill('10');
+    await page.getByRole('button', { name: '관측 시각 기간 선택' }).click();
     await page.getByLabel('관측 시각 시작일 (UTC)').fill('2024-02-29');
     await page.getByLabel('관측 시각 종료일 (UTC)').fill('2024-02-29');
     await page.getByLabel('취약점명', { exact: false }).selectOption(['0', '1']);

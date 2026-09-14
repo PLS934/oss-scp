@@ -1,6 +1,6 @@
 import { renderToStaticMarkup } from 'react-dom/server';
 import { expect, test, vi } from 'vitest';
-import { RecordSearch, buildSearchConditions, filterDraftKey, type FilterDraft } from '../src/record-search';
+import { RecordSearch, buildSearchConditions, dateRangeSummary, filterDraftKey, type FilterDraft } from '../src/record-search';
 import type { ListQuery } from '../src/menu';
 const encodeDraft = (draft: FilterDraft): FilterDraft => Object.fromEntries(Object.entries(draft).map(([key, value]) => { const [field, part = 'value'] = key.split(':'); return [filterDraftKey(field!, part), value]; }));
 const query: ListQuery = { searchEnabled: true, filters: [
@@ -23,6 +23,12 @@ test('선택값 타입과 범위를 보존하며 빈 입력을 제거한다', ()
     { field: 'date', kind: 'dateRange', to: '2024-02-29' },
   ] });
   expect(buildSearchConditions(query, ' ', encodeDraft({ enabled: '', state: [], 'score:start': '' }))).toEqual({});
+});
+test('날짜 범위 배지는 양쪽 및 한쪽 날짜를 요약한다', () => {
+  expect(dateRangeSummary('1999-09-01', '2000-09-01')).toBe('1999.09.01 ~ 2000.09.01');
+  expect(dateRangeSummary('1999-09-01', '')).toBe('1999.09.01 이후');
+  expect(dateRangeSummary('', '2000-09-01')).toBe('2000.09.01 이전');
+  expect(dateRangeSummary('', '')).toBe('');
 });
 test.each([
   { 'score:start': '10', 'score:end': '1' },
