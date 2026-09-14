@@ -88,9 +88,10 @@ aside a:focus-visible { outline-color: var(--sidebar-focus); }
 .record-row-link { text-decoration: none; }
 .record-row-link:focus-visible { outline: 2px solid var(--focus, #2f6f9f); outline-offset: 2px; }
 
+main .plugin-home { background: transparent; border: 0; border-radius: 0; padding: 0; }
 .plugin-intro, .plugin-description, .plugin-unavailable { color: #516372; }
 .plugin-cards { display: grid; gap: 16px; margin-top: 24px; }
-.plugin-card { border: 1px solid #dce2e7; border-radius: 10px; padding: 20px; overflow-wrap: anywhere; min-width: 0; }
+.plugin-card { background: white; border: 1px solid #dce2e7; border-radius: 10px; padding: 20px; overflow-wrap: anywhere; min-width: 0; }
 .plugin-heading { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; }
 .plugin-heading h3 { margin: 0; font-size: 18px; }
 .plugin-badge { border-radius: 20px; padding: 3px 10px; font-size: 13px; white-space: nowrap; }

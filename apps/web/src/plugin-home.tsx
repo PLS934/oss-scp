@@ -16,7 +16,7 @@ export function PluginHomeContent({ plugins, state, menus, menuState }: {
   menus: readonly MenuItem[];
   menuState: LoadState;
 }) {
-  return <section aria-labelledby="plugin-home-title">
+  return <section className="plugin-home" aria-labelledby="plugin-home-title">
     <h2 id="plugin-home-title">플러그인 목록</h2>
     <p className="plugin-intro">등록된 플러그인과 제공 데이터를 확인하세요. 활성화 여부는 설정 기준이며, 연결·수집 성공을 의미하지 않습니다.</p>
     {state === 'loading' ? <p role="status">플러그인 목록을 불러오는 중입니다.</p>
