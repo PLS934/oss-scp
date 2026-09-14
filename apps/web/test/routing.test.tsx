@@ -19,7 +19,7 @@ test('아이콘 렌더러가 없으면 아이콘 영역 없이 메뉴 제목만 
   const html = render('/');
   expect(html).toMatch(/href="\/assets\/servers"[^>]*>서버 자산<\/a>/);
   expect(html).toMatch(/href="\/assets\/repositories"[^>]*>저장소<\/a>/);
-  expect(html).not.toContain('aria-hidden="true"');
+  expect(html.match(/<nav aria-label="플러그인 메뉴">[\s\S]*?<\/nav>/)?.[0]).not.toContain('aria-hidden="true"');
   expect(html).not.toContain('서버 서버 자산');
   expect(html).not.toContain('저장소 저장소');
 });

@@ -19,20 +19,21 @@ export function applyTheme(preference: ThemePreference, dark: boolean) {
 export function saveTheme(preference: ThemePreference) {
   try { window.localStorage.setItem(themeStorageKey, preference); } catch { /* Current session remains usable when storage is unavailable. */ }
 }
-export function observeTheme(preference: ThemePreference) {
+export function observeTheme(preference: ThemePreference, onChange?: (theme: 'light' | 'dark') => void) {
   const media = typeof window.matchMedia === 'function' ? window.matchMedia('(prefers-color-scheme: dark)') : undefined;
-  const update = () => applyTheme(preference, media?.matches ?? false);
+  const update = () => { applyTheme(preference, media?.matches ?? false); onChange?.(resolveTheme(preference, media?.matches ?? false)); };
   update();
   media?.addEventListener('change', update);
   return () => media?.removeEventListener('change', update);
 }
 export function useTheme() {
   const [preference, setPreference] = useState<ThemePreference>(readTheme);
-  useEffect(() => observeTheme(preference), [preference]);
+  const [resolved, setResolved] = useState<'light' | 'dark'>(() => typeof document !== 'undefined' && document.documentElement.dataset.theme === 'dark' ? 'dark' : 'light');
+  useEffect(() => observeTheme(preference, setResolved), [preference]);
   const selectTheme = (value: ThemePreference) => {
     applyTheme(value, typeof window.matchMedia === 'function' && window.matchMedia('(prefers-color-scheme: dark)').matches);
     setPreference(value);
     saveTheme(value);
   };
-  return [preference, selectTheme] as const;
+  return [preference, selectTheme, resolved] as const;
 }

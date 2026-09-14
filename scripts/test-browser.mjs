@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { testTheme } from './test-theme-browser.mjs';
+import { testTheme, chooseTheme } from './test-theme-browser.mjs';
 import { execFileSync } from 'node:child_process';
 import { readFile, writeFile, rm } from 'node:fs/promises';
 import { createConnection } from 'node:net';
@@ -183,11 +183,11 @@ try {
   await expect(page.getByRole('cell', { name: 'example/another-repository' })).toBeVisible();
 
   for (const theme of ['light', 'dark']) {
-    await page.getByLabel('화면 테마').selectOption(theme);
+    await chooseTheme(page, theme);
     await expect(page.locator('html')).toHaveAttribute('data-theme', theme);
     await page.goto(`${url}/assets/repositories`);
     await expect(page.getByRole('cell', { name: 'example/another-repository' })).toBeVisible();
-    await expect(page.getByLabel('화면 테마')).toHaveValue(theme);
+    await expect(page.getByRole('banner').locator('[data-theme-icon]')).toHaveAttribute('data-theme-icon', theme);
     await page.getByRole('row').filter({ hasText: 'example/another-repository' }).getByRole('link').first().click();
     await expect(page.getByRole('heading', { name: '저장소 상세' })).toBeVisible();
     await expect(page.locator('html')).toHaveAttribute('data-theme', theme);

@@ -2,39 +2,49 @@
 import assert from 'node:assert/strict';
 import { expect } from '@playwright/test';
 
+export async function chooseTheme(page, theme) {
+  await page.getByRole('button', { name: /^화면 테마:/ }).click();
+  await page.getByRole('group', { name: '화면 테마 선택' }).getByRole('button', { name: { system: '시스템 설정', light: '라이트', dark: '다크' }[theme], exact: true }).click();
+}
+
 export async function testTheme(browser, url) {
   const context = await browser.newContext({ colorScheme: 'dark' });
   const page = await context.newPage();
   await page.goto(url);
-  const picker = page.getByLabel('화면 테마');
-  await expect(picker).toHaveValue('system');
+  const picker = page.getByRole('button', { name: /^화면 테마:/ });
+  await expect(picker).toHaveAttribute('aria-label', '화면 테마: 시스템 설정');
+  await expect(page.getByRole('banner').locator('[data-theme-icon]')).toHaveAttribute('data-theme-icon', 'dark');
   const root = page.locator('html');
   await expect(root).toHaveAttribute('data-theme', 'dark');
   await page.emulateMedia({ colorScheme: 'light' });
   await expect(root).toHaveAttribute('data-theme', 'light');
   await picker.focus();
   await expect(picker).toBeFocused();
-  if (process.platform === 'darwin') {
-    // macOS headless Chromium does not drive the native select popup. Linux CI covers arrow-key selection.
-    await picker.selectOption('dark');
-  } else {
-    await page.keyboard.press('ArrowDown');
-    await page.keyboard.press('ArrowDown');
-    await page.keyboard.press('Enter');
-  }
-  await expect(picker).toHaveValue('dark');
+  await page.keyboard.press('Enter');
+  await expect(picker).toHaveAttribute('aria-expanded', 'true');
+  await page.keyboard.press('Escape');
+  await expect(picker).toBeFocused();
+  await expect(picker).toHaveAttribute('aria-expanded', 'false');
+  await page.keyboard.press('Enter');
+  await page.keyboard.press('Tab');
+  await page.keyboard.press('Tab');
+  await page.keyboard.press('Tab');
+  await page.keyboard.press('Enter');
+  await expect(picker).toHaveAttribute('aria-label', '화면 테마: 다크');
+  await expect(page.getByRole('banner').locator('[data-theme-icon]')).toHaveAttribute('data-theme-icon', 'dark');
   await expect(root).toHaveAttribute('data-theme', 'dark');
   await page.emulateMedia({ colorScheme: 'dark' });
   await page.emulateMedia({ colorScheme: 'light' });
   await expect(root).toHaveAttribute('data-theme', 'dark');
   await page.reload();
-  await expect(picker).toHaveValue('dark');
+  await expect(picker).toHaveAttribute('aria-label', '화면 테마: 다크');
   await page.close();
   const revisit = await context.newPage();
   await revisit.goto(url);
-  await expect(revisit.getByLabel('화면 테마')).toHaveValue('dark');
+  await expect(revisit.getByRole('button', { name: '화면 테마: 다크' })).toBeVisible();
   for (const theme of ['light', 'dark']) {
-    await revisit.getByLabel('화면 테마').selectOption(theme);
+    await chooseTheme(revisit, theme);
+    await expect(revisit.getByRole('banner').locator('[data-theme-icon]')).toHaveAttribute('data-theme-icon', theme);
     await revisit.evaluate(() => {
       const section = document.querySelector('main section');
       section.insertAdjacentHTML('beforeend', '<p class="empty-state">빈 목록</p><p class="list-message">안내</p><p class="list-message error">오류</p><p class="invalid-value">잘못된 값</p><p class="empty-value">빈 값</p><button>확인</button>');
@@ -54,7 +64,7 @@ export async function testTheme(browser, url) {
       assert.ok((values[0] + .05) / (values[1] + .05) >= (['focus', 'sidebar-focus', 'control-border'].includes(name) ? 3 : 4.5), `${theme}: ${name} contrast`);
     }
     await revisit.setViewportSize({ width: 390, height: 844 });
-    await expect(revisit.getByLabel('화면 테마')).toBeVisible();
+    await expect(revisit.getByRole('button', { name: /^화면 테마:/ })).toBeVisible();
     await revisit.screenshot({ path: `/tmp/oss-scp-theme-${theme}.png`, fullPage: true });
   }
   await context.close();
@@ -76,7 +86,7 @@ export async function testTheme(browser, url) {
   });
   const failure = await blocked.newPage();
   await failure.goto(url);
-  await failure.getByLabel('화면 테마').selectOption('dark');
+  await chooseTheme(failure, 'dark');
   await expect(failure.locator('html')).toHaveAttribute('data-theme', 'dark');
   await blocked.close();
 }
