@@ -7,7 +7,7 @@ React 화면이 플랫폼 DB의 저장 레코드 목록과 상세를 동일한 �
 ## Requirements
 
 ### Requirement: 저장 레코드 목록을 타입 안전하게 조회한다
-클라이언트는 pluginId, sourceId, dataType, 선택적 limit과 cursor를 받아 동일 출처 `GET /api/v1/records`를 호출하고, 검증된 items, pageInfo, collection과 lastStoredAt을 성공 결과로 반환해야 한다(SHALL). limit은 생략하거나 20·50·100·200 중 하나여야 하며 필수 식별자는 비어 있지 않아야 한다.
+클라이언트는 pluginId, sourceId, dataType, 선택적 limit과 cursor 또는 page를 받아 동일 출처 `GET /api/v1/records`를 호출하고, 검증된 items, pageInfo, collection과 lastStoredAt을 성공 결과로 반환해야 한다(SHALL). limit은 생략하거나 20·50·100·200 중 하나여야 하며 필수 식별자는 비어 있지 않아야 한다.
 
 #### Scenario: 첫 묶음 조회
 - **WHEN** 호출자가 유효한 조회 범위와 cursor 없이 목록을 요청한다
@@ -24,6 +24,10 @@ React 화면이 플랫폼 DB의 저장 레코드 목록과 상세를 동일한 �
 #### Scenario: 잘못된 목록 입력
 - **WHEN** 필수 식별자가 누락·공백이거나 limit이 허용 목록 밖이다
 - **THEN** 클라이언트는 네트워크 요청 전에 `INVALID_INPUT` 실패 결과를 반환한다
+
+#### Scenario: Numbered response validation
+- **WHEN** 호출자가 page를 지정한다
+- **THEN** 클라이언트는 page와 limit을 인코딩하고 번호형 pageInfo의 안전 정수·범위·총 건수와 총 페이지 수 관계·items 수·hasNextPage 일관성을 검증한다. 잘못된 입력은 INVALID_INPUT, 잘못된 응답은 INVALID_RESPONSE로 반환한다
 
 ### Requirement: 저장 레코드 상세를 타입 안전하게 조회한다
 클라이언트는 플랫폼 내부 레코드 UUID를 안전하게 경로 인코딩하여 동일 출처 `GET /api/v1/records/:id`를 호출하고 검증된 상세 레코드를 성공 결과로 반환해야 한다(SHALL).
@@ -79,4 +83,4 @@ React 화면이 플랫폼 DB의 저장 레코드 목록과 상세를 동일한 �
 
 #### Scenario: 후속 기능 제외
 - **WHEN** 현재 조회 함수를 사용한다
-- **THEN** 정확한 전체 건수, 임의 페이지, 이전 cursor, 검색·필터·사용자 지정 정렬 파라미터를 생성하거나 추정하지 않는다
+- **THEN** 서버가 제공하지 않은 전체 건수나 페이지를 추정하지 않고 이전 cursor, 검색·필터·사용자 지정 정렬 파라미터를 생성하지 않는다
