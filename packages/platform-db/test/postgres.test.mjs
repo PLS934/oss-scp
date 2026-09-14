@@ -10,7 +10,7 @@ import {
   discoverMigrations, MigrationError,
   postgresAdapter, postgresPoolConfig, runMigrations,
 } from '../dist/index.js';
-import { verifyRecordContract } from './record-contract.mjs';
+import { verifyRecordContract, verifyNumberedSnapshot } from './record-contract.mjs';
 
 const password = 'integration-password';
 let container;
@@ -123,6 +123,10 @@ describe('PostgreSQL 공통 레코드 저장 계약', () => {
     nextCheckpoint: { offset: 1 }, processedCount: 1, acceptedCount: 1,
     records: [{ type: 'asset', key: 'server-1', values: { hostname: 'old' } }],
     relations: [], issues: [], ...patch,
+  });
+
+  it('count 이후 수집이 추가돼도 번호형 items는 같은 snapshot을 사용한다', async () => {
+    await verifyNumberedSnapshot(storage, connection, createPostgresRecordQuery, testScope('numbered-snapshot'));
   });
 
   it('제품 중립 공통 fixture를 통과한다', async () => {

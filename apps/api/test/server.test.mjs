@@ -175,6 +175,25 @@ describe('저장 레코드 조회 API', () => {
     } finally { await app.close(); }
   });
 
+  it('번호형 page 입력과 응답을 보존하고 중복·혼합·잘못된 숫자를 거부한다', async () => {
+    const { validateListRecordsInput } = await import('@oss-scp/platform-db');
+    const calls = [];
+    const numbered = { ...list, pageInfo: { page: 2, pageSize: 20, totalItems: 45, totalPages: 3, hasNextPage: true } };
+    const { app, url } = await start({ listRecords: async input => { validateListRecordsInput(input); calls.push(input); return numbered; }, getRecord: async () => null });
+    const endpoint = `${url}/api/v1/records?pluginId=sample&sourceId=source&dataType=asset`;
+    try {
+      const response = await fetch(`${endpoint}&page=2&limit=20`);
+      expect(response.status).toBe(200); expect(await response.json()).toEqual(numbered);
+      expect(calls).toEqual([{ pluginId: 'sample', sourceId: 'source', dataType: 'asset', page: 2, limit: 20 }]);
+      for (const suffix of ['page=', 'page=0', 'page=-1', 'page=1.5', 'page=abc', 'page=1e2', 'page=9007199254740992', 'page=9007199254740991', 'page=1&page=2', 'page=1&cursor=', 'page=1&cursor=bad']) {
+        const invalid = await fetch(`${endpoint}&${suffix}`);
+        expect(invalid.status, suffix).toBe(400);
+        expect(await invalid.json()).toMatchObject({ code: 'INVALID_QUERY' });
+      }
+      expect(calls).toHaveLength(1);
+    } finally { await app.close(); }
+  });
+
   it('조회 요청은 조회 계약 외의 수집·저장 기능을 호출하지 않는다', async () => {
     let reads = 0; let writes = 0;
     const query = { listRecords: async () => { reads += 1; return list; }, getRecord: async () => { reads += 1; return record; }, startRun: async () => { writes += 1; } };

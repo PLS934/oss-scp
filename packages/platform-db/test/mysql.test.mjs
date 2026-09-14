@@ -10,7 +10,7 @@ import {
   recordIdentity, recordQueryScopeIdentity,
   runMysqlMigrations,
 } from '../dist/index.js';
-import { verifyRecordContract } from './record-contract.mjs';
+import { verifyRecordContract, verifyNumberedSnapshot } from './record-contract.mjs';
 
 const image = 'mysql:8.4.6';
 const password = 'integration-password';
@@ -136,6 +136,10 @@ describe('MySQL 공통 레코드 저장·조회 계약', () => {
   const commit = (runId, scope, patch = {}) => storage.commitBatch({
     runId, scope, observedAt: '2026-09-11T01:01:00.000Z', expectedCheckpoint: null, nextCheckpoint: { offset: 1 },
     processedCount: 1, acceptedCount: 1, records: [{ type: 'asset', key: 'server-1', values: { hostname: 'old' } }], relations: [], issues: [], ...patch,
+  });
+
+  it('count 이후 수집이 추가돼도 번호형 items는 같은 snapshot을 사용한다', async () => {
+    await verifyNumberedSnapshot(storage, connection, createMysqlRecordQuery, scopeFor('numbered-snapshot'));
   });
 
   it('제품 중립 공통 fixture를 통과한다', async () => {
