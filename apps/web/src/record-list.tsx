@@ -48,7 +48,6 @@ interface RecordListViewProps {
   searchControls?: ReactNode;
   searchState?: RecordSearchState;
   activeConditions?: boolean;
-  onClearConditions?: () => void;
 }
 
 function activateRowLink(event: MouseEvent<HTMLTableRowElement>) {
@@ -59,7 +58,7 @@ function activateRowLink(event: MouseEvent<HTMLTableRowElement>) {
   event.currentTarget.querySelector<HTMLAnchorElement>('a')?.click();
 }
 
-export function RecordListView({ menu, limit, page, loading, result, error, onLimitChange, onPageChange, onRetry, searchControls, searchState, activeConditions = false, onClearConditions }: RecordListViewProps) {
+export function RecordListView({ menu, limit, page, loading, result, error, onLimitChange, onPageChange, onRetry, searchControls, searchState, activeConditions = false }: RecordListViewProps) {
   const collectionMessage = result ? collectionMessages[result.collection.status] : undefined;
   const hasItems = Boolean(result?.items.length);
   const navigationDisabled = loading || error !== null || !result || result.pageInfo.totalPages === 0;
@@ -74,7 +73,7 @@ export function RecordListView({ menu, limit, page, loading, result, error, onLi
     {loading ? <p role="status">저장된 목록을 불러오는 중입니다.</p> : null}
     {!loading && error ? <div className="list-message error" role="alert"><p>{error.message}</p><button type="button" onClick={onRetry}>다시 시도</button></div> : null}
     {!loading && !error && collectionMessage ? <p className={`list-message ${result?.collection.status}`} role="status">{collectionMessage}</p> : null}
-    {!loading && !error && result && activeConditions && !hasItems ? <p className="empty-state">검색·필터 결과가 없습니다. <button type="button" onClick={onClearConditions}>조건 초기화</button></p> : null}
+    {!loading && !error && result && activeConditions && !hasItems ? <p className="empty-state">검색·필터 결과가 없습니다.</p> : null}
     {!loading && !error && result?.collection.status === 'never_collected' && !hasItems ? <p className="empty-state">아직 수집된 데이터가 없습니다.</p> : null}
     {!loading && !error && !activeConditions && result?.collection.status === 'success' && !hasItems ? <p className="empty-state">수집이 완료됐지만 표시할 결과가 없습니다.</p> : null}
     {!loading && !error && !activeConditions && result && result.collection.status !== 'never_collected' && result.collection.status !== 'success' && !hasItems ? <p className="empty-state">현재 표시할 저장 데이터가 없습니다.</p> : null}
@@ -194,7 +193,7 @@ function RecordListSession({ menu, request = listNumberedRecords }: RecordListPr
   const visibleError = currentSession ? error : null;
   const busy = !currentSession || loading || (navigation.target !== null && visibleError === null);
 
-  return <RecordListView searchState={menu.list.query && (menu.list.query.searchEnabled || menu.list.query.filters.length > 0) ? searchState : undefined} menu={menu} activeConditions={Boolean(conditions.q || conditions.filters?.length)} onClearConditions={searchState.reset} limit={limit} page={currentSession ? navigation.page : 1} loading={busy} result={visibleResult} error={visibleError}
+  return <RecordListView searchState={menu.list.query && (menu.list.query.searchEnabled || menu.list.query.filters.length > 0) ? searchState : undefined} menu={menu} activeConditions={Boolean(conditions.q || conditions.filters?.length)} limit={limit} page={currentSession ? navigation.page : 1} loading={busy} result={visibleResult} error={visibleError}
     onLimitChange={value => setLimit(value)}
     onPageChange={page => {
       if (!busy && visibleResult && page >= 1 && page <= visibleResult.pageInfo.totalPages && page !== navigation.page) {

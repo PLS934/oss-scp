@@ -181,9 +181,9 @@ test('저장 행이 없는 로딩·빈 결과·실패에는 상세 링크를 만
 });
 
 test.each(['never_collected', 'running', 'partial', 'failed', 'success'] as const)('활성 조건의 빈 결과와 %s 수집 상태를 구분한다', collection => {
-  const html = render({ result: result(collection, false), activeConditions: true, onClearConditions: vi.fn() });
+  const html = render({ result: result(collection, false), activeConditions: true });
   expect(html).toContain('검색·필터 결과가 없습니다.');
-  expect(html).toContain('조건 초기화');
+  expect(html).not.toContain('조건 초기화');
   if (collection === 'partial') expect(html).toContain('부분 완료');
   if (collection === 'failed') expect(html).toContain('마지막 수집이 실패');
   if (collection === 'running') expect(html).toContain('수집이 진행 중');

@@ -124,7 +124,8 @@ for (const dialect of (process.env.SEARCH_DB_TYPE ? [process.env.SEARCH_DB_TYPE]
     await search.fill('missing'); await search.press('Enter');
     await expect(page.getByText('검색·필터 결과가 없습니다.', { exact: false })).toBeVisible();
     await expect(page.getByText('현재 수집이 진행 중입니다.', { exact: false })).toBeVisible();
-    await page.getByRole('button', { name: '조건 초기화', exact: true }).click();
+    await expect(page.getByRole('button', { name: '조건 초기화', exact: true })).toHaveCount(0);
+    await page.getByRole('button', { name: '검색어 지우기', exact: true }).click();
     await expect(search).toHaveValue('');
     await expect(page.getByText('전체 1,000건', { exact: true })).toBeVisible();
     // 첫 요청 실패 뒤 같은 적용 조건을 재시도한다.
