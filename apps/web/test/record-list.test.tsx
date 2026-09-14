@@ -127,3 +127,35 @@ describe('record list cursor navigation', () => {
     expect(state).toEqual(createNavigationState('new'));
   });
 });
+
+
+test('상세 액션 열 없이 행마다 하나의 식별 가능한 네이티브 링크를 제공한다', () => {
+  const html = render();
+  expect(html.match(/scope="col"/g)).toHaveLength(menu.list.columns.length);
+  expect(html).not.toContain('>상세</th>');
+  expect(html).not.toContain('>보기</a>');
+  expect(html.match(/<a /g)).toHaveLength(1);
+  expect(html).toContain(`aria-label="서버 자산 server-1 (${id}) 상세"`);
+  expect(html).toContain('class="record-row"');
+});
+
+test('누락되거나 중복된 표시값도 UUID로 상세 대상을 구분한다', () => {
+  const data = result('success');
+  data.items[0].sourceValues = {};
+  const secondId = '00000000-0000-4000-8000-000000000002';
+  data.items.push({ ...data.items[0], id: secondId });
+  const html = render({ result: data });
+  for (const value of [id, secondId]) {
+    expect(html).toContain(`aria-label="서버 자산 — (${value}) 상세"`);
+    expect(html).toContain(`href="/assets/servers/${value}"`);
+  }
+  expect(html).not.toContain('server-1');
+});
+
+test('저장 행이 없는 로딩·빈 결과·실패에는 상세 링크를 만들지 않는다', () => {
+  for (const props of [
+    { loading: true, result: null },
+    { result: result('success', false) },
+    { result: null, error: { kind: 'API_ERROR' as const, message: '조회 실패' } },
+  ]) expect(render(props)).not.toContain('<a ');
+});
