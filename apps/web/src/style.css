@@ -112,7 +112,8 @@ a.plugin-icon-link:focus-visible { outline: 3px solid var(--focus); outline-offs
 
 .plugin-menu-paths { display: grid; gap: 4px; margin-top: 0; margin-bottom: 20px; color: var(--muted); font-size: 13px; }
 
-.plugin-sort-toolbar { display: flex; align-items: center; }
+.plugin-sort-toolbar { display: flex; align-items: center; margin-top: 24px; }
+.plugin-sort-toolbar + .plugin-cards { margin-top: 8px; }
 .plugin-sort-toggle { display: inline-flex; align-items: center; gap: 5px; padding: 4px 10px; border-color: var(--border); border-radius: 999px; font: inherit; font-size: 12px; line-height: 20px; cursor: pointer; }
 .plugin-sort-toggle:disabled { opacity: .55; cursor: not-allowed; }
 
