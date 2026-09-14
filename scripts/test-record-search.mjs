@@ -1,6 +1,7 @@
+import { testAssetSearch } from './test-asset-search-browser.mjs';
 import assert from 'node:assert/strict';
 import { createRequire } from 'node:module';
-import { mkdir, writeFile } from 'node:fs/promises';
+import { mkdir, writeFile, readFile } from 'node:fs/promises';
 import { URL } from 'node:url';
 import { chromium, expect } from '@playwright/test';
 import { chooseTheme } from './test-theme-browser.mjs';
@@ -37,6 +38,16 @@ for (const dialect of (process.env.SEARCH_DB_TYPE ? [process.env.SEARCH_DB_TYPE]
     const runId = await storage.startRun({ ...scope, startedAt: '2026-09-14T00:00:00Z' });
     const records = Array.from({ length: 1000 }, (_, index) => ({ type: 'vulnerability', key: index, values: { cve: `CVE-${String(index).padStart(4, '0')}`, name: index < 45 ? 'Alpha' : 'Beta', score: index < 45 ? 9.5 : 3, affected: index < 45, observedAt: '2024-02-29T12:00:00+09:00' } }));
     await storage.commitBatch({ runId, scope, observedAt: '2026-09-14T01:00:00Z', expectedCheckpoint: null, nextCheckpoint: { offset: 1000 }, processedCount: 1000, acceptedCount: 1000, records, relations: [], issues: [] });
+    for (const [pluginId, filename, recordsKey] of [['sample1-offset-api', 'sample1.json', 'rows'], ['sample2-single-api', 'sample2.json', 'items']]) {
+      const assetMenu = config.menus.find(item => item.pluginId === pluginId);
+      const plugin = config.definitions.find(item => item.plugin.id === pluginId).plugin;
+      const fixture = JSON.parse(await readFile(`${root}/fixtures/sources/${filename}`, 'utf8'));
+      const transform = apiRequire(plugin.transformPath).transform;
+      const assetScope = { ...scope, pluginId, sourceId: assetMenu.sourceId };
+      const assetRun = await storage.startRun({ ...assetScope, startedAt: '2026-09-14T00:00:00Z' });
+      const assetRecords = fixture[recordsKey].flatMap(record => transform({ record, context: { responseMetadata: { test_field6: fixture.test_field6 } } }).records).map(record => ({ ...record, key: record.values[plugin.data.types[record.type].uniqueKey] }));
+      await storage.commitBatch({ runId: assetRun, scope: assetScope, observedAt: '2026-09-14T01:00:00Z', expectedCheckpoint: null, nextCheckpoint: { offset: assetRecords.length }, processedCount: assetRecords.length, acceptedCount: assetRecords.length, records: assetRecords, relations: [], issues: [] });
+    }
     app = await NestFactory.create(AppModule.register(connection, query, createPluginRuntimeRegistry(config)), { logger: false });
     await app.listen(0, '127.0.0.1');
     const apiUrl = await app.getUrl();
@@ -44,6 +55,7 @@ for (const dialect of (process.env.SEARCH_DB_TYPE ? [process.env.SEARCH_DB_TYPE]
     web = start('pnpm', ['--filter', '@oss-scp/web', 'dev', '--port', String(webPort)], { env: { ...process.env, API_PROXY_TARGET: apiUrl } });
     await waitFor(() => healthy(url), '검색 테스트 웹');
     browser = await chromium.launch();
+    await testAssetSearch(browser, url);
     const page = await browser.newPage();
     const requests = [];
     page.on('request', request => { if (new URL(request.url()).pathname === '/api/v1/records') requests.push(new URL(request.url())); });
@@ -116,7 +128,8 @@ for (const dialect of (process.env.SEARCH_DB_TYPE ? [process.env.SEARCH_DB_TYPE]
     await expect(page.locator('tbody tr')).toHaveCount(20);
     // 메뉴가 바뀌면 draft와 적용 조건을 모두 초기화한다.
     await page.getByRole('link', { name: '저장소', exact: true }).click();
-    await expect(page.getByRole('searchbox')).toHaveCount(0);
+    await expect(page.getByRole('searchbox')).toHaveValue('');
+    await expect(page.getByRole('combobox', { name: '활성 상태', exact: true })).toBeVisible();
     await page.getByRole('link', { name: '취약점', exact: true }).click();
     await expect(search).toHaveValue(''); await expect(page.getByText('전체 1,000건', { exact: true })).toBeVisible();
     await mkdir(new URL('../test-results/', import.meta.url), { recursive: true });

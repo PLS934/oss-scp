@@ -27,3 +27,5 @@
 - [x] 5.1 실제 샘플 취약점 필드에 검색·선택형·숫자·날짜 필터를 선언하고 플러그인 로드 및 표→API→DB 통합 테스트로 확인한다.
 - [x] 5.2 plugin-development, client-development, server-development 문서에 선언·요청 예시·UTC/비교 규칙·제한·롤백을 기록하고 구현 계약과 대조한다.
 - [x] 5.3 관련 자동 검증이 integration-ci.yaml의 양쪽 DB와 웹/API 작업에서 실행되도록 필요한 구성을 보완하고 테스트·lint·typecheck·빌드 결과 및 미검증 항목을 기록한다.
+
+- [x] 5.4 서버 자산·저장소 플러그인에도 검색·필터를 선언하고 기존 수집 데이터로 메뉴·API·화면 동작을 검증한다.
