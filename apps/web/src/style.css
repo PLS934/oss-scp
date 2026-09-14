@@ -76,6 +76,8 @@ aside a:focus-visible { outline-color: var(--sidebar-focus); }
 .sort-chip svg { width: .8rem; height: .8rem; fill: none; stroke: currentColor; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
 .sort-chip:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
 .record-table-toolbar + .record-table-wrap { margin-top: 0; }
+.record-card-filters { display: flex; flex-wrap: wrap; gap: 8px; margin: -10px 0 18px; }
+.record-card-filters .column-filter-trigger { margin: 0; border: 1px solid var(--border); border-radius: 999px; background: var(--surface); font-size: 13px; font-weight: 500; }
 .pagination-controls { display: flex; justify-content: center; gap: 4px; max-width: 100%; flex-wrap: wrap; }
 .pagination button { display: inline-flex; align-items: center; justify-content: center; width: 32px; height: 32px; padding: 0; border: 1px solid transparent; border-radius: 8px; background: transparent; color: var(--muted, #516372); font: inherit; font-size: 13px; font-variant-numeric: tabular-nums; cursor: pointer; transition: background-color .15s, color .15s; }
 .pagination button svg { width: 16px; height: 16px; }
