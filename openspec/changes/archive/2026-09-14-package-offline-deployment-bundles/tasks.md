@@ -35,4 +35,12 @@
 ## 6. 전체 확인과 실제 게시
 
 - [x] 6.1 번들 단위·계약 테스트와 모든 Docker 설치·업데이트·복구 smoke test 및 기존 typecheck·lint·test·build·통합 CI를 실행해 성공 결과를 확인한다.
-- [ ] 6.2 병합 후 새 RC 태그에서 두 번들이 prerelease에 게시되고 개별 자산과 API·웹 digest가 일치하며 다운로드한 번들의 checksum·최초 설치·업데이트·복구가 재현되는 실행 기록을 남긴다.
+- [x] 6.2 병합 후 새 RC 태그에서 두 번들이 prerelease에 게시되고 개별 자산과 API·웹 digest가 일치하며 다운로드한 번들의 checksum·최초 설치·업데이트·복구가 재현되는 실행 기록을 남긴다.
+
+### 6.2 실행 기록
+
+- 태그·커밋: `v0.1.0-rc.1` / `b105d658a665c14a4781e1e5251835b40644efde`
+- GitHub Actions: <https://github.com/PLS934/oss-scp/actions/runs/34798241031> — 태그 검증, PostgreSQL·MySQL·로컬·Docker 전체 검증과 Release 게시 성공
+- GitHub prerelease: <https://github.com/PLS934/oss-scp/releases/tag/v0.1.0-rc.1> — draft가 아닌 prerelease로 개별 자산 5개와 두 오프라인 번들 게시 확인
+- 다운로드 검증: 7개 자산의 GitHub SHA-256 digest, 외부 `SHA256SUMS`, 두 번들의 내부 checksum·manifest·API·웹 OCI digest와 Git revision 일치 확인
+- 실행 검증: 다운로드한 PostgreSQL 포함 번들로 최초 설치, health·ready·핵심 조회, migration 재실행 업데이트, `pg_dump` 복원 확인과 명시적 롤백 후 재검증 성공
