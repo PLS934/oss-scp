@@ -110,4 +110,4 @@ a.plugin-icon-link { display: inline-flex; flex-shrink: 0; align-items: center; 
 a.plugin-icon-link:hover { color: #245c83; background: #e7eef4; }
 a.plugin-icon-link:focus-visible { outline: 3px solid #2f6f9f; outline-offset: 2px; }
 
-.plugin-menu-paths { display: grid; gap: 4px; margin-top: 4px; color: #516372; font-size: 13px; }
+.plugin-menu-paths { display: grid; gap: 4px; margin-top: 0; margin-bottom: 20px; color: #516372; font-size: 13px; }
