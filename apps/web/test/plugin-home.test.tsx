@@ -75,7 +75,9 @@ test('API 주소와 CSV 파일명을 표시하고 활성 로컬 CSV만 내려받
   expect(html).toContain('https://example.test/api/assets');
   expect(html).toContain('GET');
   expect(html).toContain('원본.csv');
-  expect(html).toContain('remote.csv');
+  expect(html).toContain('https://example.test/remote.csv');
+  expect(html).not.toContain('<span>remote.csv</span>');
+  expect(html.match(/<dt>파일명<\/dt>/g)).toHaveLength(2);
   expect(html).toContain('href="/api/v1/plugins/local/source-file"');
   expect(html).not.toContain('현재 등록된 CSV 파일 원본입니다.');
   expect(html).toMatch(/class="plugin-file"><span>원본.csv<\/span><a[^>]*source-file/);

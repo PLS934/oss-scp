@@ -41,7 +41,7 @@ export function PluginHomeContent({ plugins, state, menus, menuState }: {
           <dl className="plugin-source">
             <div><dt>데이터 출처</dt><dd>{sourceLabels[plugin.sourceType]}</dd></div>
             {plugin.endpoint ? <div><dt>API 주소</dt><dd><span className="plugin-method">{plugin.endpoint.method}</span> <code>{plugin.endpoint.url}</code></dd></div> : null}
-            {plugin.fileName ? <div><dt>파일명</dt><dd className="plugin-file"><span>{plugin.fileName}</span>
+            {plugin.sourceType === 'local-csv' && plugin.fileName ? <div><dt>파일명</dt><dd className="plugin-file"><span>{plugin.fileName}</span>
               {plugin.enabled && plugin.sourceType === 'local-csv' ? <a className="plugin-icon-link" href={`/api/v1/plugins/${encodeURIComponent(plugin.id)}/source-file`} download={plugin.fileName} aria-label="원본 내려받기" title="원본 내려받기"><DownloadIcon /></a> : null}
             </dd></div> : null}
           </dl>

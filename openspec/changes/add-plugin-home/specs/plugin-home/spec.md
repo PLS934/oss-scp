@@ -34,11 +34,11 @@
 - **THEN** 등록된 플러그인이 없음을 안내한다
 
 ### Requirement: 실제 출처 정보를 표시한다
-홈은 HTTP 출처의 주소·요청 경로·메서드와 CSV 파일명을 SHALL 표시해야 한다. HTTP 주소는 userinfo·query·fragment를 제거하고 CSV는 basename만 제공해야 한다(MUST).
+홈은 HTTP 출처의 주소·요청 경로·메서드와 로컬 CSV 파일명을 SHALL 표시해야 한다. HTTP CSV에는 별도 파일명 행을 표시하지 않는다. HTTP 주소는 userinfo·query·fragment를 제거하고 CSV는 basename만 제공해야 한다(MUST).
 
 #### Scenario: API와 CSV 출처
 - **WHEN** 등록된 HTTP JSON, HTTP CSV, 로컬 CSV 플러그인을 표시한다
-- **THEN** HTTP 출처는 정제된 endpoint와 GET 메서드를 표시하고 CSV 출처는 파일명을 표시한다
+- **THEN** HTTP 출처는 정제된 endpoint와 GET 메서드를 표시하고 로컬 CSV 출처만 별도 파일명을 표시한다
 
 ### Requirement: 로컬 CSV 원본을 내려받는다
 활성 로컬 CSV 플러그인은 현재 등록 파일 원본 다운로드를 SHALL 제공해야 한다. 다운로드는 파일명 오른쪽 아이콘으로 제공하고 원본 안내 문구를 표시하지 않아야 한다(MUST). 파일은 현재 원본이며 수집 당시 snapshot이 아니다. API JSON·HTTP CSV·비활성·미등록 플러그인은 다운로드 대상이 아니다.
