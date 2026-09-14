@@ -28,6 +28,15 @@ jobs:
       - run: pnpm --filter @oss-scp/platform-db test
       # sample1과 HTTP CSV의 수집·가공·저장·실패 재개 계약을 MySQL에서도 검증
       - run: pnpm test:integration:sample1:mysql
+      - run: pnpm exec playwright install --with-deps chromium
+      - run: pnpm test:browser:search
+        env:
+          SEARCH_DB_TYPE: mysql
+      - uses: actions/upload-artifact@v7.0.0
+        if: always()
+        with:
+          name: record-search-mysql
+          path: test-results/record-search-mysql.json
   postgres:
     name: PostgreSQL 17.6 연결 및 migration
     runs-on: ubuntu-24.04
@@ -43,6 +52,15 @@ jobs:
       - run: pnpm --filter @oss-scp/platform-db test
       # sample1과 HTTP CSV 수집·저장·실패 재개, partial 및 원천 독립 조회 검증
       - run: pnpm test:integration:sample1
+      - run: pnpm exec playwright install --with-deps chromium
+      - run: pnpm test:browser:search
+        env:
+          SEARCH_DB_TYPE: postgres
+      - uses: actions/upload-artifact@v7.0.0
+        if: always()
+        with:
+          name: record-search-postgres
+          path: test-results/record-search-postgres.json
   local:
     name: 로컬 개발 및 배포 빌드
     runs-on: ubuntu-24.04

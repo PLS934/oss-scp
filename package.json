@@ -19,6 +19,7 @@
     "test:docker:workspace": "node scripts/test-docker-workspace.mjs",
     "dev:web": "pnpm --filter @oss-scp/web dev",
     "test:browser": "node scripts/test-browser.mjs",
+    "test:browser:search": "pnpm --filter @oss-scp/api... build && pnpm build:plugin-transforms && node scripts/test-record-search.mjs",
     "test:docker:web": "node scripts/test-web-docker.mjs",
     "dev:mock": "pnpm --filter @oss-scp/mock-api dev",
     "start:mock": "pnpm --filter @oss-scp/mock-api start",

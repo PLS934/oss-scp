@@ -1,0 +1,36 @@
+# 구현 및 검증 기록
+
+- 이슈: #104
+- 작업 브랜치: `codex/issue-104-search-filters`
+- 시작 커밋: `3d0fb96` (최신 main의 #102 번호형 페이지네이션 포함)
+- 환경: macOS, Node.js 24.20.0, pnpm 10.34.5, Docker 29.7.2
+- 실제 DB: PostgreSQL 17.6, MySQL 8.4.6
+
+## 변경 결과
+
+플러그인 검색·필터 선언과 최소 메뉴 메타데이터, 서버 정규화·입력 검증, SQL 조건 적용, v2 cursor 귀속, 웹 입력·적용·초기화를 구현했다. main의 번호형 페이지네이션도 유지하며 조건부 count와 목록을 같은 읽기 전용 snapshot에서 조회한다. 기존 무조건 호출과 v1 무조건 cursor는 유지한다. 저장 schema 변경은 없다.
+
+## 실행한 검증
+
+- `pnpm test`: 전체 workspace 테스트 통과 (575개). 이후 추가한 상태별 화면 테스트를 포함한 웹 테스트 106개도 통과.
+- `pnpm typecheck`, `pnpm lint`, `pnpm build`: 통과. 최종 웹 변경 후 웹 타입 검사·빌드·테스트와 전체 lint 재실행.
+- `pnpm test:browser`: 기존 목록·상세·번호형 페이지·키보드·경합·HMR 회귀 검증 통과.
+- `node scripts/test-record-search.mjs`: 양쪽 실제 DB에서 표→API→DB 검색·필터, 번호형 전체 건수·마지막 페이지, Enter 적용, 미적용 상태, 잘못된 범위, 초기화, 빈 결과와 수집 상태, 동일 조건 재시도, 이전 결과 제거, 늦은 응답 무시, 메뉴 전환 검증 통과.
+- platform-db 공통 fixture: Unicode·ASCII·특수문자·공백·null·잘못된 타입·숫자·윤일·시간대·날짜 양끝, 0001/9999년, 잘못된 날짜·줄바꿈, 첫 무조건 묶음 밖의 결과, 동일 시각의 여러 cursor 묶음, 번호형 조건부 count, 요약 생략·응답 한도 검증 통과.
+- `openspec validate add-record-search-filters --strict`, `git diff --check`: 통과.
+
+## 조회 계획과 측정
+
+1,000건 중 `Alpha`와 점수 9 이상을 만족하는 45건을 조회하는 fixture를 사용했다. limit 20의 cursor 목록 전체 호출(메타데이터 조회 포함)을 단일 측정했다. 로컬 반복 실행에서 PostgreSQL은 약 2.5~4.6ms, MySQL은 약 7.5~8.1ms였으며 두 DB 모두 기존 `platform_records_cursor_index`를 사용하는 계획을 확인했다. MySQL 계획은 filesort 없이 인덱스 순서로 읽었다. JSON 검색 조건은 인덱스 내 후보 행을 읽으며 평가하므로 운영 데이터 크기에서 재측정해야 한다. 이 측정은 운영 성능 보장이 아니다.
+
+재현 명령은 `pnpm test:browser:search`이며 원본 EXPLAIN·소요 시간은 `test-results/record-search-both.json` 또는 DB별 JSON으로 생성된다. CI의 MySQL·PostgreSQL 작업에 같은 브라우저 검증과 측정 결과 artifact 업로드를 추가했다.
+
+## 미실행 범위
+
+원격 GitHub Actions 실행 및 Docker 제품 이미지·폐쇄망 릴리스 검증은 이번 로컬 구현에서 실행하지 않았다. 원격 CI 성공을 주장하지 않는다. 이 구현으로 0.1.0 기술 프리뷰 지원 범위를 변경하지 않는다.
+
+## 최신 main 리베이스 검증
+
+`cce3d4a` (#101 테마 기능) 위로 리베이스했다. `client-development.md`의 충돌은 테마와 검색·필터 설명을 모두 보존해 해결했다. 검색·필터 컨트롤의 고정 색상은 main의 의미 기반 테마 토큰으로 바꾸었다.
+
+리베이스 후 웹 테스트 118개, 웹 타입 검사·빌드, 전체 lint, 기존 브라우저 회귀 테스트를 통과했다. 양쪽 실제 DB의 검색 브라우저 통합 테스트도 재실행했으며 검색 컨트롤의 라이트·다크 전환 검증을 추가했다.

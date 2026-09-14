@@ -1,3 +1,10 @@
+export interface QueryFilter {
+  key: string; label: string; type: ListColumn['type'];
+  kind: 'select' | 'multiSelect' | 'numberRange' | 'dateRange';
+  options?: Array<{ value: string | number | boolean; label: string }>;
+}
+export interface ListQuery { searchEnabled: boolean; filters: QueryFilter[] }
+
 export interface ListColumn {
   key: string;
   label: string;
@@ -24,7 +31,7 @@ export interface MenuItem {
   dataType: string;
   pluginId: string;
   sourceId: string;
-  list: { columns: ListColumn[] };
+  list: { columns: ListColumn[]; query?: ListQuery };
   detail: { sections: DetailSection[] };
 }
 

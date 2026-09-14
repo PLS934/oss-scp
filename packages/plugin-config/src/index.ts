@@ -13,6 +13,7 @@ import type {
   ClientPluginSummary,
   CollectionDefinitionBase,
   ConfigurationIssue,
+  FieldDefinition,
   ConfigurationResult,
   HttpConnectionConfig,
   PluginConfig,
@@ -269,7 +270,36 @@ function loadPlugins(
         }
         columns.push({ key, label: field.label, type: field.type });
       }
-      clientLists.set(type, { columns });
+      const query: NonNullable<ClientListDefinition['query']> = { searchEnabled: false, filters: [] };
+      const inspectField = (field: FieldDefinition, key: string, path: string, topLevel: boolean): void => {
+        if (field.type === 'object') {
+          for (const [child, value] of Object.entries(field.fields)) inspectField(value, child, `${path}/fields/${child}`, false);
+          return;
+        }
+        if (field.type === 'array') { inspectField(field.items, key, `${path}/items`, false); return; }
+        if (!field.searchable && !field.filter) return;
+        const reject = (message: string) => { issue(errors, root, pluginFile, path, message); invalidReference = true; };
+        if (!topLevel || !definition.views.list.columns.includes(key)) { reject('검색·필터는 최상위 목록 필드에만 선언할 수 있습니다.'); return; }
+        if (field.searchable) {
+          if (field.type !== 'string') reject('검색 필드는 string 타입이어야 합니다.');
+          else query.searchEnabled = true;
+        }
+        const filter = field.filter;
+        if (!filter) return;
+        if (filter.kind === 'numberRange' || filter.kind === 'dateRange') {
+          if (field.type !== (filter.kind === 'numberRange' ? 'number' : 'datetime')) reject('범위 필터와 필드 타입이 일치해야 합니다.');
+        } else {
+          const values = new Set<string>();
+          for (const option of filter.options) {
+            const identity = JSON.stringify(option.value);
+            if (typeof option.value !== field.type || (typeof option.value === 'number' && !Number.isFinite(option.value)) || !option.label.trim() || values.has(identity)) reject('선택 옵션은 필드 타입과 일치하고 고유해야 하며 label이 필요합니다.');
+            values.add(identity);
+          }
+        }
+        query.filters.push({ key, label: field.label, type: field.type, ...filter });
+      };
+      for (const [key, field] of Object.entries(definition.fields)) inspectField(field, key, `/data/types/${type}/fields/${key}`, true);
+      clientLists.set(type, { columns, ...(query.searchEnabled || query.filters.length ? { query } : {}) });
 
       const sectionTitles = new Set<string>();
       const detailFields = new Set<string>();

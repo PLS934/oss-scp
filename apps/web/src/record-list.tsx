@@ -1,4 +1,6 @@
-import { useEffect, useReducer, useRef, useState, type MouseEvent } from 'react';
+import { RecordSearch } from './record-search';
+import type { SearchConditions } from './records';
+import { useEffect, useReducer, useRef, useState, type MouseEvent, type ReactNode } from 'react';
 import { Link } from 'react-router-dom';
 import { recordDetailPath, type ListColumn, type MenuItem } from './menu';
 import {
@@ -43,6 +45,9 @@ interface RecordListViewProps {
   onLimitChange: (limit: RecordListLimit) => void;
   onPageChange: (page: number) => void;
   onRetry: () => void;
+  searchControls?: ReactNode;
+  activeConditions?: boolean;
+  onClearConditions?: () => void;
 }
 
 function activateRowLink(event: MouseEvent<HTMLTableRowElement>) {
@@ -53,7 +58,7 @@ function activateRowLink(event: MouseEvent<HTMLTableRowElement>) {
   event.currentTarget.querySelector<HTMLAnchorElement>('a')?.click();
 }
 
-export function RecordListView({ menu, limit, page, loading, result, error, onLimitChange, onPageChange, onRetry }: RecordListViewProps) {
+export function RecordListView({ menu, limit, page, loading, result, error, onLimitChange, onPageChange, onRetry, searchControls, activeConditions = false, onClearConditions }: RecordListViewProps) {
   const collectionMessage = result ? collectionMessages[result.collection.status] : undefined;
   const hasItems = Boolean(result?.items.length);
   const navigationDisabled = loading || error !== null || !result || result.pageInfo.totalPages === 0;
@@ -64,12 +69,14 @@ export function RecordListView({ menu, limit, page, loading, result, error, onLi
       <h2 id="record-list-title">{menu.title}</h2>
 
     </div>
+    {searchControls}
     {loading ? <p role="status">저장된 목록을 불러오는 중입니다.</p> : null}
     {!loading && error ? <div className="list-message error" role="alert"><p>{error.message}</p><button type="button" onClick={onRetry}>다시 시도</button></div> : null}
     {!loading && !error && collectionMessage ? <p className={`list-message ${result?.collection.status}`} role="status">{collectionMessage}</p> : null}
+    {!loading && !error && result && activeConditions && !hasItems ? <p className="empty-state">검색·필터 결과가 없습니다. <button type="button" onClick={onClearConditions}>조건 초기화</button></p> : null}
     {!loading && !error && result?.collection.status === 'never_collected' && !hasItems ? <p className="empty-state">아직 수집된 데이터가 없습니다.</p> : null}
-    {!loading && !error && result?.collection.status === 'success' && !hasItems ? <p className="empty-state">수집이 완료됐지만 표시할 결과가 없습니다.</p> : null}
-    {!loading && !error && result && result.collection.status !== 'never_collected' && result.collection.status !== 'success' && !hasItems ? <p className="empty-state">현재 표시할 저장 데이터가 없습니다.</p> : null}
+    {!loading && !error && !activeConditions && result?.collection.status === 'success' && !hasItems ? <p className="empty-state">수집이 완료됐지만 표시할 결과가 없습니다.</p> : null}
+    {!loading && !error && !activeConditions && result && result.collection.status !== 'never_collected' && result.collection.status !== 'success' && !hasItems ? <p className="empty-state">현재 표시할 저장 데이터가 없습니다.</p> : null}
     <div className="record-table-toolbar">
       <p className="record-total" aria-live="polite">전체 {numberFormat.format(result?.pageInfo.totalItems ?? 0)}건</p>
       <label className="page-size-select"><select aria-label="페이지 크기" value={limit} disabled={loading} onChange={event => onLimitChange(Number(event.target.value) as RecordListLimit)}>
@@ -133,9 +140,16 @@ export interface RecordListProps {
   request?: typeof listNumberedRecords;
 }
 
-export function RecordList({ menu, request = listNumberedRecords }: RecordListProps) {
+export function RecordList(props: RecordListProps) {
+  const { menu } = props;
+  return <RecordListSession key={JSON.stringify([menu.path, menu.pluginId, menu.sourceId, menu.dataType, menu.list.query])} {...props} />;
+}
+function RecordListSession({ menu, request = listNumberedRecords }: RecordListProps) {
+  const [conditions, setConditions] = useState<SearchConditions>({});
+  const [conditionVersion, setConditionVersion] = useState(0);
+  const [resetVersion, setResetVersion] = useState(0);
   const [limit, setLimit] = useState<RecordListLimit>(20);
-  const sessionKey = JSON.stringify([menu.path, menu.pluginId, menu.sourceId, menu.dataType, limit]);
+  const sessionKey = JSON.stringify([menu.path, menu.pluginId, menu.sourceId, menu.dataType, limit, conditions, conditionVersion]);
   const [navigation, dispatchNavigation] = useReducer(navigationReducer, sessionKey, createNavigationState);
   const [retry, setRetry] = useState(0);
   const [loading, setLoading] = useState(true);
@@ -155,7 +169,7 @@ export function RecordList({ menu, request = listNumberedRecords }: RecordListPr
     const page = navigation.target ?? navigation.page;
     setLoading(true);
     setError(null);
-    void request({ pluginId: menu.pluginId, sourceId: menu.sourceId, dataType: menu.dataType, limit, page }, { signal: controller.signal })
+    void request({ pluginId: menu.pluginId, sourceId: menu.sourceId, dataType: menu.dataType, limit, page, ...conditions }, { signal: controller.signal })
       .then((response: ApiResult<NumberedListRecordsResult>) => {
         if (controller.signal.aborted || currentRequest !== requestId.current) return;
         if (response.ok) {
@@ -175,7 +189,9 @@ export function RecordList({ menu, request = listNumberedRecords }: RecordListPr
   const visibleError = currentSession ? error : null;
   const busy = !currentSession || loading || (navigation.target !== null && visibleError === null);
 
-  return <RecordListView menu={menu} limit={limit} page={currentSession ? navigation.page : 1} loading={busy} result={visibleResult} error={visibleError}
+  const applyConditions = (value: SearchConditions) => { setConditions(value); setConditionVersion(version => version + 1); };
+  const clearConditions = () => { applyConditions({}); setResetVersion(version => version + 1); };
+  return <RecordListView searchControls={menu.list.query && (menu.list.query.searchEnabled || menu.list.query.filters.length > 0) ? <RecordSearch query={menu.list.query} onApply={applyConditions} resetVersion={resetVersion} /> : null} menu={menu} activeConditions={Boolean(conditions.q || conditions.filters?.length)} onClearConditions={clearConditions} limit={limit} page={currentSession ? navigation.page : 1} loading={busy} result={visibleResult} error={visibleError}
     onLimitChange={value => setLimit(value)}
     onPageChange={page => {
       if (!busy && visibleResult && page >= 1 && page <= visibleResult.pageInfo.totalPages && page !== navigation.page) {

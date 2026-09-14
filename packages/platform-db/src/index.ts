@@ -24,3 +24,5 @@ export { createPostgresRecordQuery } from './postgres-query';
 export { createMysqlRecordQuery } from './mysql-query';
 export { createPlatformRecordAdapters } from './records';
 export type { PlatformRecordAdapters } from './records';
+
+export * from "./conditions";

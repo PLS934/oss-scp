@@ -20,3 +20,19 @@ describe('plugin menu API client', () => {
     await expect(loadPluginMenus({ request: vi.fn<typeof fetch>().mockResolvedValue(new Response(JSON.stringify([{ ...menu, detail: { sections: [{ title: '기본', fields: [{ key: 'value', label: '값', type: 'unknown' }] }] } }]), { status: 200 })) })).rejects.toThrow('plugin_menu_invalid_response');
   });
 });
+
+it('선언된 필터의 종류·옵션·목록 타입을 검증하고 생략 호환성을 유지한다', async () => {
+  const filter = { key: 'hostname', label: '호스트', type: 'string', kind: 'select', options: [{ value: 'A', label: '서버 A' }] };
+  const query = { searchEnabled: true, filters: [filter] };
+  const load = (value: unknown) => loadPluginMenus({ request: vi.fn<typeof fetch>().mockResolvedValue(new Response(JSON.stringify([{ ...menu, list: { ...menu.list, query: value } }]), { status: 200 })) });
+  await expect(load(query)).resolves.toMatchObject([{ list: { query } }]);
+  for (const invalid of [
+    { searchEnabled: 'true', filters: [] },
+    { searchEnabled: true, filters: [{ ...filter, kind: 'numberRange' }] },
+    { searchEnabled: true, filters: [{ ...filter, key: 'secret' }] },
+    { searchEnabled: true, filters: [{ ...filter, options: [{ value: 1, label: '숫자' }] }] },
+    { searchEnabled: true, filters: [{ ...filter, options: [] }] },
+    { searchEnabled: true, filters: [filter, filter] },
+    { searchEnabled: true, filters: [{ ...filter, options: [...filter.options, ...filter.options] }] },
+  ]) await expect(load(invalid)).rejects.toThrow('plugin_menu_invalid_response');
+});

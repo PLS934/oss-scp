@@ -1,7 +1,13 @@
+export type RecordFilter =
+  | { field: string; kind: 'select'; value: string | number | boolean }
+  | { field: string; kind: 'multiSelect'; values: Array<string | number | boolean> }
+  | { field: string; kind: 'numberRange'; min?: number; max?: number }
+  | { field: string; kind: 'dateRange'; from?: string; to?: string };
+export interface SearchConditions { q?: string; filters?: RecordFilter[] }
 export type JsonValue = null | boolean | number | string | JsonValue[] | { [key: string]: JsonValue };
 export type RecordListLimit = 20 | 50 | 100 | 200;
 
-export interface ListRecordsInput {
+export interface ListRecordsInput extends SearchConditions {
   pluginId: string;
   sourceId: string;
   dataType: string;
@@ -142,6 +148,7 @@ async function requestJson<T>(url: string, validate: (value: unknown) => value i
     try { body = await response.json(); } catch { body = undefined; }
     if (!response.ok) {
       if (response.status === 400 && isObject(body) && body.code === 'INVALID_CURSOR') return failure('INVALID_CURSOR');
+      if (response.status === 400 && isObject(body) && body.code === 'INVALID_QUERY') return failure('INVALID_INPUT');
       if (response.status === 404 && isObject(body) && body.code === 'RECORD_NOT_FOUND') return failure('NOT_FOUND');
       if (response.status === 503) return failure('NOT_READY');
       return failure('API_ERROR');
@@ -165,6 +172,8 @@ export async function listRecords(input: ListRecordsInput, options: RecordReques
   const params = new URLSearchParams({ pluginId: input.pluginId, sourceId: input.sourceId, dataType: input.dataType });
   if (input.limit !== undefined) params.set('limit', String(input.limit));
   if (input.cursor !== undefined) params.set('cursor', input.cursor);
+  if (input.q !== undefined) params.set('q', input.q);
+  if (input.filters !== undefined) params.set('filters', JSON.stringify(input.filters));
   if (input.page !== undefined) {
     params.set('page', String(input.page));
     return requestJson(`/api/v1/records?${params.toString()}`, (value): value is NumberedListRecordsResult => isNumberedListResult(value, input as NumberedListRecordsInput), options);

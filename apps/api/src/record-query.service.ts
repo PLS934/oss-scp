@@ -1,17 +1,31 @@
+import { PLUGIN_RUNTIME_REGISTRY, type PluginRuntimeRegistry } from './plugin-runtime-registry';
 import { Inject, Injectable } from '@nestjs/common';
-import { QueryError } from '@oss-scp/platform-db';
+import { normalizeRecordConditions, QueryError, validateListRecordsInput, type QueryDeclaration } from '@oss-scp/platform-db';
 import type { AnyListRecordsResult, QueryRecord, RecordQuery } from '@oss-scp/platform-db';
 
 export const RECORD_QUERY = Symbol('RECORD_QUERY');
 
 @Injectable()
 export class RecordQueryService {
-  constructor(@Inject(RECORD_QUERY) private readonly query: RecordQuery) {}
-  list(pluginId: string | undefined, sourceId: string | undefined, dataType: string | undefined, rawLimit: string | undefined, cursor: string | undefined, rawPage?: string): Promise<AnyListRecordsResult> {
+  constructor(@Inject(RECORD_QUERY) private readonly query: RecordQuery, @Inject(PLUGIN_RUNTIME_REGISTRY) private readonly registry: PluginRuntimeRegistry) {}
+  list(pluginId: string | undefined, sourceId: string | undefined, dataType: string | undefined, rawLimit: string | undefined, cursor: string | undefined, rawPage?: string, rawQ?: unknown, rawFilters?: unknown): Promise<AnyListRecordsResult> {
+    if ([pluginId, sourceId, dataType, rawLimit, cursor].some(value => value !== undefined && typeof value !== 'string')) throw new QueryError('INVALID_QUERY');
+    if (rawFilters !== undefined && typeof rawFilters !== 'string') throw new QueryError('INVALID_QUERY');
     if (rawPage !== undefined && (typeof rawPage !== 'string' || !/^\d+$/.test(rawPage))) throw new QueryError('INVALID_QUERY');
     const page = rawPage === undefined ? undefined : Number(rawPage);
     const limit = rawLimit === undefined ? undefined : /^\d+$/.test(rawLimit) ? Number(rawLimit) : Number.NaN;
-    return this.query.listRecords({ pluginId: pluginId ?? '', sourceId: sourceId ?? '', dataType: dataType ?? '', ...(limit === undefined ? {} : { limit }), ...(cursor === undefined ? {} : { cursor }), ...(page === undefined ? {} : { page }) });
+    const definition = pluginId ? this.registry.getDefinition(pluginId) : undefined;
+    const matchingSource = this.registry.menus.some(menu => menu.pluginId === pluginId && menu.sourceId === sourceId);
+    const type = definition && matchingSource && dataType && Object.hasOwn(definition.plugin.data.types, dataType) ? definition.plugin.data.types[dataType] : undefined;
+    const declaration: QueryDeclaration = { searchFields: [], filters: [] };
+    if (type) {
+      declaration.searchFields = Object.entries(type.fields).filter(([key, field]) => field.type === 'string' && field.searchable && type.views.list.columns.includes(key)).map(([key]) => key);
+      declaration.filters = Object.entries(type.fields).flatMap(([key, field]) => field.type !== 'object' && field.type !== 'array' && field.filter && type.views.list.columns.includes(key) ? [{ key, type: field.type, ...field.filter }] : []);
+    }
+    const conditions = normalizeRecordConditions(rawQ, rawFilters, declaration);
+    const input = { pluginId: pluginId ?? '', sourceId: sourceId ?? '', dataType: dataType ?? '', ...(limit === undefined ? {} : { limit }), ...(cursor === undefined ? {} : { cursor }), ...(page === undefined ? {} : { page }), ...(conditions.q || conditions.filters.length || declaration.searchFields.length || declaration.filters.length ? { conditions } : {}) };
+    validateListRecordsInput(input);
+    return this.query.listRecords(input);
   }
   get(id: string): Promise<QueryRecord | null> { return this.query.getRecord(id); }
 }

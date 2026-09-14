@@ -60,7 +60,7 @@ test.each([
   ['missing field', json({ ...list, pageInfo: {} }), 'INVALID_RESPONSE'],
   ['invalid JSON value', { ok: true, status: 200, headers: new Headers({ 'content-type': 'application/json' }), json: async () => ({ ...list, items: [{ ...list.items[0], sourceValues: { value: Number.NaN } }] }) } as Response, 'INVALID_RESPONSE'],
   ['invalid cursor', json({ code: 'INVALID_CURSOR', message: 'private cursor content' }, 400), 'INVALID_CURSOR'],
-  ['unknown bad request', json({ code: 'INVALID_QUERY' }, 400), 'API_ERROR'],
+  ['invalid query', json({ code: 'INVALID_QUERY' }, 400), 'INVALID_INPUT'],
   ['missing detail', json({ code: 'RECORD_NOT_FOUND' }, 404), 'NOT_FOUND'],
   ['not ready', json({ code: 'QUERY_FAILED', detail: 'password=private' }, 503), 'NOT_READY'],
   ['other API error', json({ detail: 'private response' }, 500), 'API_ERROR'],
@@ -126,4 +126,17 @@ test('초과 요청의 마지막 페이지 보정과 빈 범위를 검증한다'
   expect(await listRecords({ ...scope, page: 99 }, { request: vi.fn<typeof fetch>().mockResolvedValue(json(numbered)) })).toMatchObject({ ok: true });
   const empty = { ...list, items: [], pageInfo: { page: 1, pageSize: 20, totalItems: 0, totalPages: 0, hasNextPage: false } };
   expect(await listRecords({ ...scope, page: 99 }, { request: vi.fn<typeof fetch>().mockResolvedValue(json(empty)) })).toMatchObject({ ok: true });
+});
+
+test('검색 특수문자와 타입을 보존한 필터를 URL로 전달한다', async () => {
+  const request = vi.fn<typeof fetch>().mockResolvedValue(json(list));
+  const filters = [{ field: 'affected', kind: 'select' as const, value: false }, { field: 'score', kind: 'numberRange' as const, min: 0, max: 9.5 }];
+  await listRecords({ pluginId: 'p', sourceId: 's', dataType: 'asset', q: '한글 %_\\+&', filters }, { request });
+  const url = new URL(String(request.mock.calls[0][0]), 'http://localhost');
+  expect(url.searchParams.get('q')).toBe('한글 %_\\+&');
+  expect(JSON.parse(url.searchParams.get('filters')!)).toEqual(filters);
+});
+test('서버 조건 검증 오류를 입력 오류로 표시한다', async () => {
+  const request = vi.fn<typeof fetch>().mockResolvedValue(json({ code: 'INVALID_QUERY' }, 400));
+  expect(await listRecords({ pluginId: 'p', sourceId: 's', dataType: 'asset' }, { request })).toMatchObject({ ok: false, error: { kind: 'INVALID_INPUT' } });
 });

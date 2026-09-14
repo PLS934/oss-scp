@@ -292,3 +292,28 @@ MOCK_PORT=3002 pnpm start:mock
 ```
 
 그다음 `http://127.0.0.1:3001/sample1?offset=0&limit=20`과 `http://127.0.0.1:3002/sample2`를 호출합니다.
+
+## 목록 검색·필터 선언
+
+최상위 기본 목록 `columns`에 포함된 string 필드는 `searchable: true`로 검색을 허용한다. scalar 필드는 `filter`로 사용할 입력을 명시한다. 선언을 생략하면 기존 목록을 유지한다.
+
+```json
+{
+  "name": { "type": "string", "label": "취약점명", "searchable": true },
+  "affected": {
+    "type": "boolean", "label": "영향 여부",
+    "filter": { "kind": "select", "options": [
+      { "value": true, "label": "영향 있음" },
+      { "value": false, "label": "영향 없음" }
+    ] }
+  },
+  "score": { "type": "number", "label": "점수", "filter": { "kind": "numberRange" } },
+  "observedAt": { "type": "datetime", "label": "관측 시각", "filter": { "kind": "dateRange" } }
+}
+```
+
+`select`와 `multiSelect`는 string/number/boolean에서만 사용하며 필드 타입과 일치하는 고유한 옵션 1~100개를 지정한다. 옵션 label은 공백만으로 구성할 수 없다. `numberRange`는 number, `dateRange`는 datetime에서만 사용한다. 중첩 객체·배열 또는 목록 밖 필드 선언은 설정 오류다. 메뉴의 `list.query`에는 검색 가능 여부와 선언 순서의 필터 key/label/type/kind/options만 공개한다. 기존 `columns` 형식은 유지한다.
+
+검색은 앞뒤 공백을 제거하고 ASCII 대소문자만 무시하는 리터럴 부분 문자열 비교다. `%`, `_`, 역슬래시와 내부 공백은 그대로 비교한다. 선택값 문자열은 대소문자와 공백을 구분한다. 날짜는 UTC 달력일이며 종료일 다음 날 00:00 미만까지 포함한다. 저장 datetime은 유효한 `YYYY-MM-DDTHH:mm:ss[.fraction](Z|±HH:mm)`로 비교하며 소수 초는 1~9자리, 연도는 0001~9999를 지원한다. 누락·null·잘못된 타입·유효하지 않은 날짜는 활성 조건에 일치하지 않는다.
+
+저장 스키마 migration은 필요하지 않다. 서버·웹·플러그인 선언을 함께 배포하며 이전 서버로 롤백할 때는 새 선언도 제거한다. 이전 서버가 v2 cursor를 해석하지 못하면 첫 묶음부터 다시 조회한다. 이 기능 추가만으로 0.1.0 기술 프리뷰의 지원 범위를 변경하지 않는다.
