@@ -10,8 +10,8 @@ const sourceLabels: Record<PluginSummary['sourceType'], string> = {
   'local-csv': '로컬 CSV',
 };
 
-function LinkIcon() {
-  return <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M10 13a5 5 0 0 0 7 .1l3-3a5 5 0 0 0-7.1-7.1l-1.7 1.7" /><path d="M14 11a5 5 0 0 0-7-.1l-3 3a5 5 0 0 0 7.1 7.1l1.7-1.7" /></svg>;
+function ArrowIcon() {
+  return <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M5 12h14m-6-6 6 6-6 6" /></svg>;
 }
 
 function DownloadIcon() {
@@ -34,7 +34,7 @@ export function PluginHomeContent({ plugins, state, menus, menuState }: {
         const targets = plugin.enabled && menuState === 'success' ? menus.filter(menu => menu.pluginId === plugin.id) : [];
         return <li className="plugin-card" key={plugin.id}>
           <div className="plugin-heading"><div className="plugin-title"><h3>{plugin.name}</h3>
-            {targets.map(menu => <Link key={menu.path} className="plugin-icon-link" to={menu.path} aria-label={`${plugin.name} · ${menu.title} 데이터 보기`} title={`${menu.title} 데이터 보기`}><LinkIcon /></Link>)}
+            {targets.map(menu => <Link key={menu.path} className="plugin-icon-link" to={menu.path} aria-label={`${plugin.name} · ${menu.title} 데이터 보기`} title={`${menu.title} 데이터 보기`}><ArrowIcon /></Link>)}
           </div><span className={`plugin-badge ${plugin.enabled ? 'enabled' : 'disabled'}`}>{plugin.enabled ? '활성화' : '비활성화'}</span></div>
           {plugin.description?.trim() ? <p className="plugin-description">{plugin.description}</p> : null}
           <dl className="plugin-source">
