@@ -4,8 +4,9 @@ import { expect, test } from 'vitest';
 import { resolveCustomPluginViews, type CustomPluginListProps } from '../src/custom-plugin-views';
 import { CustomViewBoundary, CustomViewFailure } from '../src/custom-view-boundary';
 import type { MenuItem } from '../src/menu';
+import { Sample2RepositoryDetailView } from '../src/sample2-repository-detail';
 import { Sample2RepositoryListView } from '../src/sample2-repository-list';
-import type { NumberedListRecordsResult } from '../src/records';
+import type { NumberedListRecordsResult, QueryRecord } from '../src/records';
 
 const menu: MenuItem = {
   title: '저장소', icon: 'repository', group: '자산 관리', order: 20, path: '/assets/repositories',
@@ -43,4 +44,23 @@ test('샘플 사용자 정의 목록은 공개 조회 결과를 카드와 공통
   expect(html).toContain('team/repository');
   expect(html).toContain('활성');
   expect(html).toContain('href="/assets/repositories/00000000-0000-4000-8000-000000000001"');
+});
+
+test('샘플 사용자 정의 상세는 저장소 요약과 구성원을 표시한다', () => {
+  const record: QueryRecord = {
+    id: '00000000-0000-4000-8000-000000000001', pluginId: menu.pluginId, sourceId: menu.sourceId, dataType: menu.dataType,
+    externalKey: 'repo-1', sourceValues: {
+      assetKey: 'team:repository', fullName: 'team/repository', active: true, feed: 'sample2',
+      details: { label: 'sample-repository', observedAt: '2026-09-14T00:00:00.000Z' },
+      members: [{ login: 'sally' }, { login: 'codex' }],
+    },
+    firstSeenAt: '2026-09-14T00:00:00.000Z', lastSeenAt: '2026-09-14T00:00:00.000Z',
+  };
+  const html = renderToStaticMarkup(<MemoryRouter><Sample2RepositoryDetailView menu={menu} recordId={record.id} state={{ kind: 'success', record }} /></MemoryRouter>);
+  expect(html).toContain('team/repository');
+  expect(html).toContain('team:repository');
+  expect(html).toContain('sample-repository');
+  expect(html).toContain('sally');
+  expect(html).toContain('codex');
+  expect(html).not.toContain('<script');
 });

@@ -94,7 +94,7 @@ try {
     await route.fulfill({ json: {
       id, pluginId: mismatch ? 'sample1-offset-api' : 'sample2-single-api',
       sourceId: mismatch ? 'mock-api-sample1' : 'mock-api-sample2', dataType: mismatch ? 'asset' : 'repository',
-      externalKey: 'source-visible-key', sourceValues: { fullName: '<b>example/another-repository</b>', secret: 'never-render' },
+      externalKey: 'source-visible-key', sourceValues: { assetKey: 'example:another-repository', fullName: '<b>example/another-repository</b>', active: true, feed: 'sample2', details: { label: 'another-repository', observedAt: '2026-09-11T01:00:00.000Z' }, members: [{ login: 'sample-user' }], secret: 'never-render' },
       firstSeenAt: '2026-09-11T01:00:00.000Z', lastSeenAt: '2026-09-11T01:01:00.000Z',
     } });
   });
@@ -212,18 +212,19 @@ try {
   const detailLink = page.getByRole('link', { name: /example\/another-repository.*활성.*sample2/ });
   await expect(detailLink).toHaveAttribute('href', '/assets/repositories/00000000-0000-4000-8000-000000000001');
   await detailLink.click();
-  await expect(page.getByRole('heading', { name: '저장소 상세' })).toBeVisible();
-  await page.getByRole('link', { name: '목록으로 돌아가기' }).click();
+  await expect(page.getByRole('heading', { name: '<b>example/another-repository</b>' })).toBeVisible();
+  await expect(page.getByText('sample-user', { exact: true })).toBeVisible();
+  await page.getByRole('link', { name: '← 저장소 목록' }).click();
   await expect(page.getByRole('heading', { name: '저장소 카드', exact: true })).toBeVisible();
   await page.getByRole('link', { name: /example\/another-repository.*활성.*sample2/ }).click();
   await expect(page).toHaveURL(`${url}/assets/repositories/00000000-0000-4000-8000-000000000001`);
-  await expect(page.getByRole('heading', { name: '저장소 상세' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: '<b>example/another-repository</b>' })).toBeVisible();
   await expect(page.getByText('<b>example/another-repository</b>')).toBeVisible();
   await expect(page.locator('b')).toHaveCount(0);
   await expect(page.getByText('never-render')).toHaveCount(0);
   await page.reload();
-  await expect(page.getByRole('heading', { name: '저장소 상세' })).toBeVisible();
-  await page.getByRole('link', { name: '목록으로 돌아가기' }).click();
+  await expect(page.getByRole('heading', { name: '<b>example/another-repository</b>' })).toBeVisible();
+  await page.getByRole('link', { name: '← 저장소 목록' }).click();
   await expect(page.getByRole('heading', { name: '저장소 카드', exact: true })).toBeVisible();
 
   for (const theme of ['light', 'dark']) {
@@ -233,7 +234,7 @@ try {
     await expect(page.getByText('example/another-repository', { exact: true })).toBeVisible();
     await expect(page.getByRole('banner').locator('[data-theme-icon]')).toHaveAttribute('data-theme-icon', theme);
     await page.getByRole('link', { name: /example\/another-repository.*활성.*sample2/ }).click();
-    await expect(page.getByRole('heading', { name: '저장소 상세' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: '<b>example/another-repository</b>' })).toBeVisible();
     await expect(page.locator('html')).toHaveAttribute('data-theme', theme);
     await page.screenshot({ path: `/tmp/oss-scp-theme-detail-${theme}.png`, fullPage: true });
   }
@@ -282,7 +283,7 @@ try {
   await page.reload();
   await expect(page.locator('.app-header').getByRole('status')).toHaveText('서버 연결 실패');
   await expect(page.getByRole('heading', { name: 'OSS-SCP HMR 확인', exact: true })).toBeVisible();
-  console.log('브라우저: 공통 목록·사용자 정의 저장소 카드·공통 상세 fallback·직접 URL·새로고침·복귀·상세 오류·번호 직접 이동·페이지 크기·조회 실패 재시도·빈 결과·서버 페이지 보정·요청 경합·원천 미호출·not-found·health·API 404·포트 충돌·HMR 통과');
+  console.log('브라우저: 공통 목록·사용자 정의 저장소 카드·사용자 정의 저장소 상세·직접 URL·새로고침·복귀·상세 오류·번호 직접 이동·페이지 크기·조회 실패 재시도·빈 결과·서버 페이지 보정·요청 경합·원천 미호출·not-found·health·API 404·포트 충돌·HMR 통과');
 } catch (error) {
   console.error(api.output(), web?.output());
   throw error;

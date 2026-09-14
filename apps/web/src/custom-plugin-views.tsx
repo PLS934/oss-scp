@@ -1,5 +1,6 @@
 import type { ComponentType } from 'react';
 import type { MenuItem } from './menu';
+import { Sample2RepositoryDetail } from './sample2-repository-detail';
 import { Sample2RepositoryList } from './sample2-repository-list';
 
 export interface CustomPluginListProps {
@@ -19,7 +20,7 @@ export interface CustomPluginViewSet {
 export type CustomPluginViewRegistry = Readonly<Record<string, CustomPluginViewSet | undefined>>;
 
 export const customPluginViews: CustomPluginViewRegistry = {
-  'sample2-single-api': { List: Sample2RepositoryList },
+  'sample2-single-api': { List: Sample2RepositoryList, Detail: Sample2RepositoryDetail },
 };
 
 export function resolveCustomPluginViews(registry: CustomPluginViewRegistry, pluginId: string): CustomPluginViewSet {

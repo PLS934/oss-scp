@@ -43,11 +43,11 @@ test('화면 종류별 미등록 항목은 공통 화면으로 fallback한다', 
   expect(render('/assets/repositories', { 'sample2-single-api': { Detail } })).toContain('저장된 목록을 불러오는 중입니다');
 });
 
-test('기본 registry는 sample2 목록만 카드 화면으로 교체하고 상세는 공통 화면을 유지한다', () => {
+test('기본 registry는 sample2 목록과 상세를 사용자 정의 화면으로 교체한다', () => {
   const list = renderToStaticMarkup(<MemoryRouter initialEntries={['/assets/repositories']}><App menus={pluginMenus} /></MemoryRouter>);
   const detail = renderToStaticMarkup(<MemoryRouter initialEntries={['/assets/repositories/00000000-0000-4000-8000-000000000001']}><App menus={pluginMenus} /></MemoryRouter>);
   expect(list).toContain('저장소 카드를 불러오는 중입니다.');
-  expect(detail).toContain('상세 정보를 불러오는 중입니다.');
+  expect(detail).toContain('저장소 상세 정보를 불러오는 중입니다.');
 });
 
 test.each([

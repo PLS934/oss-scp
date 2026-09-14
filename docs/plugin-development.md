@@ -162,7 +162,7 @@ packages/plugin-config/
 export const customPluginViews: CustomPluginViewRegistry = {
   'sample2-single-api': {
     List: Sample2RepositoryList,
-    // Detail: Sample2RepositoryDetail,
+    Detail: Sample2RepositoryDetail,
   },
 };
 ```
