@@ -17,4 +17,7 @@
 ## 4. 통합 검증과 릴리스 준비
 
 - [x] 4.1 `openspec validate publish-bundle-only-release-assets --strict`와 저장소의 릴리스·번들 검증 명령을 실행해 변경 계약과 구현이 모두 통과하는지 확인한다
-- [ ] 4.2 다음 RC의 draft Release에서 공개 자산이 두 번들과 외부 `SHA256SUMS`만 포함하고 외부·내부 checksum 검증이 모두 성공하는지 실행 기록으로 확인한다
+
+## 후속 릴리스 검증
+
+PR 병합 후 다음 RC의 draft Release에서 공개 자산이 두 번들과 외부 `SHA256SUMS`만 포함하고 외부·내부 checksum 검증이 모두 성공하는지 확인한다. 이 실행 기록은 병합 전 구현 완료 조건이 아니며, 해당 RC의 후속 배포 검증 기록으로 남긴다.
