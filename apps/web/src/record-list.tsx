@@ -2,10 +2,10 @@ import { useEffect, useReducer, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { recordDetailPath, type ListColumn, type MenuItem } from './menu';
 import {
-  listRecords,
+  listNumberedRecords,
   type ApiResult,
   type JsonValue,
-  type ListRecordsResult,
+  type NumberedListRecordsResult,
   type RecordApiError,
   type RecordListLimit,
 } from './records';
@@ -27,7 +27,7 @@ export function formatColumnValue(type: ListColumn['type'], value: JsonValue | u
   return Number.isNaN(timestamp) ? '—' : dateTimeFormat.format(new Date(timestamp));
 }
 
-const collectionMessages: Partial<Record<ListRecordsResult['collection']['status'], string>> = {
+const collectionMessages: Partial<Record<NumberedListRecordsResult['collection']['status'], string>> = {
   running: '현재 수집이 진행 중입니다. 아래 목록은 마지막으로 저장된 데이터입니다.',
   partial: '마지막 수집이 부분 완료되었습니다. 저장된 데이터만 표시합니다.',
   failed: '마지막 수집이 실패했습니다. 마지막으로 저장된 데이터가 있으면 계속 표시합니다.',
@@ -36,25 +36,25 @@ const collectionMessages: Partial<Record<ListRecordsResult['collection']['status
 interface RecordListViewProps {
   menu: MenuItem;
   limit: RecordListLimit;
-  pageIndex: number;
+  page: number;
   loading: boolean;
-  result: ListRecordsResult | null;
+  result: NumberedListRecordsResult | null;
   error: RecordApiError | null;
   onLimitChange: (limit: RecordListLimit) => void;
-  onPrevious: () => void;
-  onNext: () => void;
+  onPageChange: (page: number) => void;
   onRetry: () => void;
 }
 
-export function RecordListView({ menu, limit, pageIndex, loading, result, error, onLimitChange, onPrevious, onNext, onRetry }: RecordListViewProps) {
+export function RecordListView({ menu, limit, page, loading, result, error, onLimitChange, onPageChange, onRetry }: RecordListViewProps) {
   const collectionMessage = result ? collectionMessages[result.collection.status] : undefined;
   const hasItems = Boolean(result?.items.length);
-  const navigationDisabled = loading || error !== null;
+  const navigationDisabled = loading || error !== null || !result || result.pageInfo.totalPages === 0;
+  const totalPages = result?.pageInfo.totalPages ?? 0;
   return <section aria-labelledby="record-list-title">
     <p className="eyebrow">{menu.group}</p>
     <div className="list-heading">
       <h2 id="record-list-title">{menu.title}</h2>
-      <label>묶음 크기 <select value={limit} disabled={loading} onChange={event => onLimitChange(Number(event.target.value) as RecordListLimit)}>
+      <label>페이지 크기 <select value={limit} disabled={loading} onChange={event => onLimitChange(Number(event.target.value) as RecordListLimit)}>
         {limits.map(value => <option key={value} value={value}>{value}</option>)}
       </select></label>
     </div>
@@ -69,66 +69,59 @@ export function RecordListView({ menu, limit, pageIndex, loading, result, error,
       <tbody>{result.items.map(item => <tr key={item.id}>{menu.list.columns.map(column => <td key={column.key}>{formatColumnValue(column.type, item.sourceValues[column.key])}</td>)}<td><Link to={recordDetailPath(menu.path, item.id)}>보기</Link></td></tr>)}</tbody>
     </table></div> : null}
     <nav className="pagination" aria-label="목록 페이지 탐색">
-      <span>{pageIndex + 1}번째 묶음{result ? ` · ${result.items.length}개 항목` : ''}</span>
-      <button type="button" disabled={navigationDisabled || pageIndex === 0} onClick={onPrevious}>이전 묶음</button>
-      <button type="button" disabled={navigationDisabled || !result?.pageInfo.hasNextPage} onClick={onNext}>다음 묶음</button>
-      {!loading && !error && result && !result.pageInfo.hasNextPage ? <span>마지막 묶음입니다.</span> : null}
+      <span aria-live="polite">{page} / {totalPages} 페이지 · 전체 {numberFormat.format(result?.pageInfo.totalItems ?? 0)}건{result ? ` · ${result.items.length}개 항목` : ''}</span>
+      <button type="button" aria-label="첫 페이지" disabled={navigationDisabled || page <= 1} onClick={() => onPageChange(1)}>{'<<'}</button>
+      <button type="button" aria-label="이전 페이지" disabled={navigationDisabled || page <= 1} onClick={() => onPageChange(page - 1)}>{'<'}</button>
+      {pageNumbers(page, totalPages).map(number => <button key={number} type="button" aria-label={`${number}페이지`} aria-current={page === number ? 'page' : undefined} disabled={navigationDisabled} onClick={() => onPageChange(number)}>{number}</button>)}
+      <button type="button" aria-label="다음 페이지" disabled={navigationDisabled || page >= totalPages} onClick={() => onPageChange(page + 1)}>{'>'}</button>
+      <button type="button" aria-label="마지막 페이지" disabled={navigationDisabled || page >= totalPages} onClick={() => onPageChange(totalPages)}>{'>>'}</button>
     </nav>
   </section>;
 }
 
-export interface NavigationTarget { cursor: string | undefined; index: number }
+export function pageNumbers(page: number, totalPages: number): number[] {
+  const first = Math.floor((page - 1) / 10) * 10 + 1;
+  return Array.from({ length: Math.max(0, Math.min(10, totalPages - first + 1)) }, (_, index) => first + index);
+}
+
 export interface NavigationState {
   sessionKey: string;
-  history: (string | undefined)[];
-  index: number;
-  target: NavigationTarget | null;
+  page: number;
+  target: number | null;
   requestVersion: number;
 }
 export type NavigationAction =
   | { type: 'reset'; sessionKey: string }
-  | { type: 'next'; cursor: string }
-  | { type: 'previous' }
-  | { type: 'success' }
+  | { type: 'navigate'; page: number }
+  | { type: 'success'; page: number }
   | { type: 'failure' };
 
 export function createNavigationState(sessionKey: string): NavigationState {
-  return { sessionKey, history: [undefined], index: 0, target: null, requestVersion: 0 };
+  return { sessionKey, page: 1, target: null, requestVersion: 0 };
 }
 
 export function navigationReducer(state: NavigationState, action: NavigationAction): NavigationState {
   if (action.type === 'reset') return createNavigationState(action.sessionKey);
   if (action.type === 'failure') return state;
-  if (action.type === 'next') {
-    return { ...state, target: { cursor: action.cursor, index: state.index + 1 }, requestVersion: state.requestVersion + 1 };
+  if (action.type === 'navigate') {
+    if (!Number.isSafeInteger(action.page) || action.page < 1) return state;
+    return { ...state, target: action.page, requestVersion: state.requestVersion + 1 };
   }
-  if (action.type === 'previous') {
-    if (state.index === 0) return state;
-    return { ...state, target: { cursor: state.history[state.index - 1], index: state.index - 1 }, requestVersion: state.requestVersion + 1 };
-  }
-  if (!state.target) return state;
-  const history = state.target.index > state.index
-    ? [...state.history.slice(0, state.index + 1), state.target.cursor]
-    : state.history;
-  return { ...state, history, index: state.target.index, target: null };
-}
-
-export function requestedCursor(state: NavigationState): string | undefined {
-  return state.target ? state.target.cursor : state.history[state.index];
+  return { ...state, page: action.page, target: null };
 }
 
 export interface RecordListProps {
   menu: MenuItem;
-  request?: typeof listRecords;
+  request?: typeof listNumberedRecords;
 }
 
-export function RecordList({ menu, request = listRecords }: RecordListProps) {
+export function RecordList({ menu, request = listNumberedRecords }: RecordListProps) {
   const [limit, setLimit] = useState<RecordListLimit>(20);
-  const sessionKey = JSON.stringify([menu.pluginId, menu.sourceId, menu.dataType, limit]);
+  const sessionKey = JSON.stringify([menu.path, menu.pluginId, menu.sourceId, menu.dataType, limit]);
   const [navigation, dispatchNavigation] = useReducer(navigationReducer, sessionKey, createNavigationState);
   const [retry, setRetry] = useState(0);
   const [loading, setLoading] = useState(true);
-  const [result, setResult] = useState<ListRecordsResult | null>(null);
+  const [result, setResult] = useState<NumberedListRecordsResult | null>(null);
   const [error, setError] = useState<RecordApiError | null>(null);
   const requestId = useRef(0);
 
@@ -141,15 +134,15 @@ export function RecordList({ menu, request = listRecords }: RecordListProps) {
     }
     const controller = new AbortController();
     const currentRequest = ++requestId.current;
-    const cursor = requestedCursor(navigation);
+    const page = navigation.target ?? navigation.page;
     setLoading(true);
     setError(null);
-    void request({ pluginId: menu.pluginId, sourceId: menu.sourceId, dataType: menu.dataType, limit, cursor }, { signal: controller.signal })
-      .then((response: ApiResult<ListRecordsResult>) => {
+    void request({ pluginId: menu.pluginId, sourceId: menu.sourceId, dataType: menu.dataType, limit, page }, { signal: controller.signal })
+      .then((response: ApiResult<NumberedListRecordsResult>) => {
         if (controller.signal.aborted || currentRequest !== requestId.current) return;
         if (response.ok) {
           setResult(response.data);
-          dispatchNavigation({ type: 'success' });
+          dispatchNavigation({ type: 'success', page: response.data.pageInfo.page });
         } else if (response.error.kind !== 'ABORTED') {
           setError(response.error);
           dispatchNavigation({ type: 'failure' });
@@ -164,9 +157,12 @@ export function RecordList({ menu, request = listRecords }: RecordListProps) {
   const visibleError = currentSession ? error : null;
   const busy = !currentSession || loading || (navigation.target !== null && visibleError === null);
 
-  return <RecordListView menu={menu} limit={limit} pageIndex={currentSession ? navigation.index : 0} loading={busy} result={visibleResult} error={visibleError}
+  return <RecordListView menu={menu} limit={limit} page={currentSession ? navigation.page : 1} loading={busy} result={visibleResult} error={visibleError}
     onLimitChange={value => setLimit(value)}
-    onPrevious={() => { if (!busy && navigation.index > 0) { setError(null); dispatchNavigation({ type: 'previous' }); } }}
-    onNext={() => { if (!busy && visibleResult?.pageInfo.hasNextPage && visibleResult.pageInfo.nextCursor) { setError(null); dispatchNavigation({ type: 'next', cursor: visibleResult.pageInfo.nextCursor }); } }}
+    onPageChange={page => {
+      if (!busy && visibleResult && page >= 1 && page <= visibleResult.pageInfo.totalPages && page !== navigation.page) {
+        setError(null); dispatchNavigation({ type: 'navigate', page });
+      }
+    }}
     onRetry={() => { setError(null); setRetry(value => value + 1); }} />;
 }

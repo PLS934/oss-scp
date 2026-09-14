@@ -7,6 +7,7 @@ export interface ListRecordsInput {
   dataType: string;
   limit?: RecordListLimit;
   cursor?: string;
+  page?: number;
 }
 
 export interface QueryRecord {
@@ -22,6 +23,9 @@ export interface QueryRecord {
 
 export interface QueryRecordSummary extends QueryRecord { omittedFields: string[] }
 export interface RecordPageInfo { nextCursor: string | null; hasNextPage: boolean }
+export interface NumberedPageInfo { page: number; pageSize: RecordListLimit; totalItems: number; totalPages: number; hasNextPage: boolean }
+export interface NumberedListRecordsInput extends ListRecordsInput { page: number; cursor?: never }
+export interface NumberedListRecordsResult extends Omit<ListRecordsResult, 'pageInfo'> { pageInfo: NumberedPageInfo }
 export interface CollectionStatus {
   scope: 'source';
   status: 'never_collected' | 'running' | 'success' | 'partial' | 'failed';
@@ -99,10 +103,27 @@ function isListResult(value: unknown): value is ListRecordsResult {
   const pageInfo = value.pageInfo;
   if (!isObject(pageInfo) || typeof pageInfo.hasNextPage !== 'boolean' || (pageInfo.nextCursor !== null && typeof pageInfo.nextCursor !== 'string')) return false;
   if ((pageInfo.hasNextPage && (typeof pageInfo.nextCursor !== 'string' || pageInfo.nextCursor.length === 0)) || (!pageInfo.hasNextPage && pageInfo.nextCursor !== null)) return false;
+  return isListMetadata(value);
+}
+
+function isListMetadata(value: Record<string, unknown>): boolean {
   const collection = value.collection;
   if (!isObject(collection) || collection.scope !== 'source' || typeof collection.status !== 'string' || !collectionStatuses.has(collection.status)) return false;
   if ((collection.runId !== null && typeof collection.runId !== 'string') || !isNullableTimestamp(collection.startedAt) || !isNullableTimestamp(collection.finishedAt)) return false;
   return isNullableTimestamp(value.lastStoredAt);
+}
+
+function isNumberedListResult(value: unknown, input: NumberedListRecordsInput): value is NumberedListRecordsResult {
+  if (!isObject(value) || !Array.isArray(value.items) || !value.items.every(isRecordSummary) || !isListMetadata(value)) return false;
+  const info = value.pageInfo;
+  if (!isObject(info) || 'nextCursor' in info) return false;
+  const { page, pageSize, totalItems, totalPages, hasNextPage } = info;
+  if (typeof page !== 'number' || !Number.isSafeInteger(page) || page < 1 || pageSize !== (input.limit ?? 20)) return false;
+  if (typeof totalItems !== 'number' || !Number.isSafeInteger(totalItems) || totalItems < 0) return false;
+  if (typeof totalPages !== 'number' || totalPages !== Math.ceil(totalItems / (pageSize as number))) return false;
+  if (page !== Math.min(input.page, Math.max(1, totalPages)) || hasNextPage !== (page < totalPages)) return false;
+  const expectedItems = Math.min(pageSize as number, Math.max(0, totalItems - (page - 1) * (pageSize as number)));
+  return value.items.length === expectedItems;
 }
 
 function validIdentifier(value: string): boolean {
@@ -134,16 +155,28 @@ async function requestJson<T>(url: string, validate: (value: unknown) => value i
   }
 }
 
-export async function listRecords(input: ListRecordsInput, options: RecordRequestOptions = {}): Promise<ApiResult<ListRecordsResult>> {
+export function listRecords(input: NumberedListRecordsInput, options?: RecordRequestOptions): Promise<ApiResult<NumberedListRecordsResult>>;
+export function listRecords(input: ListRecordsInput & { page?: undefined }, options?: RecordRequestOptions): Promise<ApiResult<ListRecordsResult>>;
+export function listRecords(input: ListRecordsInput, options?: RecordRequestOptions): Promise<ApiResult<ListRecordsResult | NumberedListRecordsResult>>;
+export async function listRecords(input: ListRecordsInput, options: RecordRequestOptions = {}): Promise<ApiResult<ListRecordsResult | NumberedListRecordsResult>> {
   if (!validIdentifier(input.pluginId) || !validIdentifier(input.sourceId) || !validIdentifier(input.dataType)) return failure('INVALID_INPUT');
   if (input.limit !== undefined && !allowedLimits.has(input.limit)) return failure('INVALID_INPUT');
+  if (input.page !== undefined && (!Number.isSafeInteger(input.page) || input.page < 1 || !Number.isSafeInteger((input.page - 1) * (input.limit ?? 20)) || input.cursor !== undefined)) return failure('INVALID_INPUT');
   const params = new URLSearchParams({ pluginId: input.pluginId, sourceId: input.sourceId, dataType: input.dataType });
   if (input.limit !== undefined) params.set('limit', String(input.limit));
   if (input.cursor !== undefined) params.set('cursor', input.cursor);
+  if (input.page !== undefined) {
+    params.set('page', String(input.page));
+    return requestJson(`/api/v1/records?${params.toString()}`, (value): value is NumberedListRecordsResult => isNumberedListResult(value, input as NumberedListRecordsInput), options);
+  }
   return requestJson(`/api/v1/records?${params.toString()}`, isListResult, options);
 }
 
 export async function getRecord(id: string, options: RecordRequestOptions = {}): Promise<ApiResult<QueryRecord>> {
   if (!uuidPattern.test(id)) return failure('INVALID_INPUT');
   return requestJson(`/api/v1/records/${encodeURIComponent(id)}`, isRecord, options);
+}
+
+export function listNumberedRecords(input: NumberedListRecordsInput, options: RecordRequestOptions = {}): Promise<ApiResult<NumberedListRecordsResult>> {
+  return listRecords(input, options);
 }

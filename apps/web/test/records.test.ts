@@ -87,3 +87,43 @@ test('네트워크 오류와 취소를 구분하고 signal을 전달한다', asy
   expect(await getRecord(id, { request, signal: controller.signal })).toMatchObject({ ok: false, error: { kind: 'ABORTED' } });
   expect(request).toHaveBeenCalledTimes(1);
 });
+
+const scope = { pluginId: 'sample', sourceId: 'source', dataType: 'asset' };
+const numbered = { ...list, pageInfo: { page: 2, pageSize: 20, totalItems: 21, totalPages: 2, hasNextPage: false } };
+
+test('번호형 입력을 직렬화하고 마지막 페이지 응답을 검증한다', async () => {
+  const request = vi.fn<typeof fetch>().mockResolvedValue(json(numbered));
+  expect(await listRecords({ ...scope, page: 2, limit: 20 }, { request })).toEqual({ ok: true, data: numbered });
+  expect(request.mock.calls[0][0]).toBe('/api/v1/records?pluginId=sample&sourceId=source&dataType=asset&limit=20&page=2');
+});
+
+test.each([0, -1, 1.5, Number.NaN, Number.MAX_SAFE_INTEGER, Number.MAX_SAFE_INTEGER + 1])('잘못된 page %s는 요청 전에 거부한다', async page => {
+  const request = vi.fn<typeof fetch>();
+  expect(await listRecords({ ...scope, page }, { request })).toMatchObject({ ok: false, error: { kind: 'INVALID_INPUT' } });
+  expect(request).not.toHaveBeenCalled();
+});
+
+test('page와 cursor를 함께 지정하면 요청 전에 거부한다', async () => {
+  const request = vi.fn<typeof fetch>();
+  expect(await listRecords({ ...scope, page: 1, cursor: '' }, { request })).toMatchObject({ ok: false, error: { kind: 'INVALID_INPUT' } });
+  expect(request).not.toHaveBeenCalled();
+});
+
+test.each([
+  { page: 0 }, { page: 1 }, { pageSize: 50 }, { totalItems: -1 }, { totalItems: 22 },
+  { totalPages: 3 }, { totalPages: 2.5 }, { hasNextPage: true }, { nextCursor: null },
+])('번호형 메타데이터 불일치를 거부한다: %o', async invalid => {
+  const request = vi.fn<typeof fetch>().mockResolvedValue(json({ ...numbered, pageInfo: { ...numbered.pageInfo, ...invalid } }));
+  expect(await listRecords({ ...scope, page: 2 }, { request })).toMatchObject({ ok: false, error: { kind: 'INVALID_RESPONSE' } });
+});
+
+test('요청한 모드와 다른 응답을 거부한다', async () => {
+  expect(await listRecords({ ...scope, page: 2 }, { request: vi.fn<typeof fetch>().mockResolvedValue(json(list)) })).toMatchObject({ ok: false, error: { kind: 'INVALID_RESPONSE' } });
+  expect(await listRecords(scope, { request: vi.fn<typeof fetch>().mockResolvedValue(json(numbered)) })).toMatchObject({ ok: false, error: { kind: 'INVALID_RESPONSE' } });
+});
+
+test('초과 요청의 마지막 페이지 보정과 빈 범위를 검증한다', async () => {
+  expect(await listRecords({ ...scope, page: 99 }, { request: vi.fn<typeof fetch>().mockResolvedValue(json(numbered)) })).toMatchObject({ ok: true });
+  const empty = { ...list, items: [], pageInfo: { page: 1, pageSize: 20, totalItems: 0, totalPages: 0, hasNextPage: false } };
+  expect(await listRecords({ ...scope, page: 99 }, { request: vi.fn<typeof fetch>().mockResolvedValue(json(empty)) })).toMatchObject({ ok: true });
+});

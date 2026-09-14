@@ -2,8 +2,8 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { MemoryRouter } from 'react-router-dom';
 import { describe, expect, test, vi } from 'vitest';
 import type { MenuItem } from '../src/menu';
-import { createNavigationState, formatColumnValue, navigationReducer, RecordListView, requestedCursor } from '../src/record-list';
-import type { CollectionStatus, ListRecordsResult } from '../src/records';
+import { createNavigationState, formatColumnValue, navigationReducer, RecordListView, pageNumbers } from '../src/record-list';
+import type { CollectionStatus, NumberedListRecordsResult } from '../src/records';
 
 const menu: MenuItem = {
   title: '서버 자산', icon: 'server', group: '자산 관리', order: 10, path: '/assets/servers',
@@ -18,12 +18,12 @@ const menu: MenuItem = {
 };
 const id = '00000000-0000-4000-8000-000000000001';
 const status = (value: CollectionStatus['status']): CollectionStatus => ({ scope: 'source', status: value, runId: value === 'never_collected' ? null : id, startedAt: value === 'never_collected' ? null : '2026-09-11T01:00:00.000Z', finishedAt: value === 'running' || value === 'never_collected' ? null : '2026-09-11T01:02:00.000Z' });
-const result = (collection: CollectionStatus['status'], withItems = true): ListRecordsResult => ({
+const result = (collection: CollectionStatus['status'], withItems = true): NumberedListRecordsResult => ({
   items: withItems ? [{ id, pluginId: menu.pluginId, sourceId: menu.sourceId, dataType: menu.dataType, externalKey: 'server-1', sourceValues: { hostname: 'server-1', score: 12345.6, enabled: true, observedAt: '2026-09-11T01:00:00.000Z', secret: 'not-visible' }, firstSeenAt: '2026-09-11T01:00:00.000Z', lastSeenAt: '2026-09-11T01:01:00.000Z', omittedFields: ['details'] }] : [],
-  pageInfo: { nextCursor: withItems ? 'next' : null, hasNextPage: withItems }, collection: status(collection), lastStoredAt: withItems ? '2026-09-11T01:01:00.000Z' : null,
+  pageInfo: { page: 1, pageSize: 20, totalItems: withItems ? 45 : 0, totalPages: withItems ? 3 : 0, hasNextPage: withItems }, collection: status(collection), lastStoredAt: withItems ? '2026-09-11T01:01:00.000Z' : null,
 });
-const handlers = { onLimitChange: vi.fn(), onPrevious: vi.fn(), onNext: vi.fn(), onRetry: vi.fn() };
-const render = (props: Partial<Parameters<typeof RecordListView>[0]> = {}) => renderToStaticMarkup(<MemoryRouter><RecordListView menu={menu} limit={20} pageIndex={0} loading={false} result={result('success')} error={null} {...handlers} {...props} /></MemoryRouter>);
+const handlers = { onLimitChange: vi.fn(), onPageChange: vi.fn(), onRetry: vi.fn() };
+const render = (props: Partial<Parameters<typeof RecordListView>[0]> = {}) => renderToStaticMarkup(<MemoryRouter><RecordListView menu={menu} limit={20} page={1} loading={false} result={result('success')} error={null} {...handlers} {...props} /></MemoryRouter>);
 
 describe('record list scalar formatter', () => {
   test('선언 타입만 형식화한다', () => {
@@ -72,58 +72,69 @@ test('로딩과 조회 실패를 안전하게 표시한다', () => {
   expect(html).toContain('저장 레코드 조회에 실패했습니다.'); expect(html).toContain('다시 시도');
 });
 
-test('첫 묶음에서 현재 위치와 접근 가능한 페이징 컨트롤을 표시한다', () => {
+test('첫 페이지에서 번호·전체 건수와 접근 가능한 탐색을 표시한다', () => {
   const html = render();
   expect(html).toContain('aria-label="목록 페이지 탐색"');
-  expect(html).toContain('1번째 묶음');
-  expect(html).toMatch(/<button[^>]*disabled=""[^>]*>이전 묶음<\/button>/);
-  expect(html).toMatch(/<button[^>]*>다음 묶음<\/button>/);
+  expect(html).toContain('1 / 3 페이지 · 전체 45건');
+  expect(html).toMatch(/aria-label="첫 페이지" disabled=""/);
+  expect(html).toMatch(/aria-label="이전 페이지" disabled=""/);
+  expect(html).toContain('aria-label="1페이지" aria-current="page"');
+  expect(html).not.toMatch(/aria-label="다음 페이지" disabled/);
   for (const limit of [20, 50, 100, 200]) expect(html).toContain(`value="${limit}"`);
 });
 
-test('중간과 마지막 묶음에서 이전·다음 상태를 일관되게 표시한다', () => {
-  expect(render({ pageIndex: 1 })).not.toMatch(/<button[^>]*disabled=""[^>]*>이전 묶음<\/button>/);
-  const last = result('success'); last.pageInfo = { nextCursor: null, hasNextPage: false };
-  const html = render({ pageIndex: 2, result: last });
-  expect(html).toContain('3번째 묶음');
-  expect(html).toMatch(/<button[^>]*disabled=""[^>]*>다음 묶음<\/button>/);
-  expect(html).toContain('마지막 묶음입니다.');
+test('마지막 페이지에서는 다음과 마지막 이동을 막는다', () => {
+  const last = result('success');
+  last.pageInfo = { page: 3, pageSize: 20, totalItems: 45, totalPages: 3, hasNextPage: false };
+  const html = render({ page: 3, result: last });
+  expect(html).toContain('3 / 3 페이지');
+  expect(html).toMatch(/aria-label="다음 페이지" disabled=""/);
+  expect(html).toMatch(/aria-label="마지막 페이지" disabled=""/);
+  expect(html).not.toMatch(/aria-label="이전 페이지" disabled/);
 });
 
-test('로딩·빈 결과·조회 실패에서도 탐색 위치를 유지하고 실행 불가능한 이동을 막는다', () => {
-  const loading = render({ pageIndex: 1, loading: true });
-  expect(loading).toContain('2번째 묶음');
-  expect(loading.match(/disabled=""/g)?.length).toBe(3);
-  expect(render({ pageIndex: 0, result: result('success', false) })).toContain('1번째 묶음');
-  const failed = render({ pageIndex: 1, error: { kind: 'API_ERROR', message: '저장 레코드 조회에 실패했습니다.' } });
-  expect(failed).toContain('2번째 묶음');
+test('로딩·빈 결과·조회 실패는 위치와 행을 보존하며 이동을 막는다', () => {
+  const loading = render({ page: 2, loading: true });
+  expect(loading).toContain('2 / 3 페이지');
+  expect(loading).toContain('server-1');
+  expect(loading.match(/disabled=""/g)?.length).toBe(8);
+  const empty = render({ result: result('success', false) });
+  expect(empty).toContain('전체 0건');
+  expect(empty.match(/disabled=""/g)?.length).toBe(4);
+  const failed = render({ page: 2, error: { kind: 'API_ERROR', message: '조회 실패' } });
+  expect(failed).toContain('2 / 3 페이지');
+  expect(failed).toContain('server-1');
   expect(failed).toContain('다시 시도');
 });
 
-describe('record list cursor navigation', () => {
-  test('다음 성공 후 방문 cursor로 이전 묶음을 요청한다', () => {
-    let state = createNavigationState('scope');
-    state = navigationReducer(state, { type: 'next', cursor: 'cursor-20' });
-    expect(state.target).toEqual({ cursor: 'cursor-20', index: 1 });
-    state = navigationReducer(state, { type: 'success' });
-    expect(state).toMatchObject({ history: [undefined, 'cursor-20'], index: 1, target: null });
-    state = navigationReducer(state, { type: 'previous' });
-    expect(state.target).toEqual({ cursor: undefined, index: 0 });
-    expect(requestedCursor(state)).toBeUndefined();
-  });
+test.each([
+  [1, 0, []], [1, 1, [1]], [1, 12, [1,2,3,4,5,6,7,8,9,10]],
+  [10, 21, [1,2,3,4,5,6,7,8,9,10]], [11, 21, [11,12,13,14,15,16,17,18,19,20]], [21,21,[21]],
+])('페이지 %i / %i의 번호 구간', (page, total, expected) => {
+  expect(pageNumbers(page as number, total as number)).toEqual(expected);
+});
 
-  test('실패는 성공한 위치와 이력을 유지하고 같은 대상을 재시도할 수 있다', () => {
+describe('numbered navigation state', () => {
+  test('임의 이동은 성공 전 위치를 유지하고 서버 보정 page를 반영한다', () => {
     let state = createNavigationState('scope');
-    state = navigationReducer(state, { type: 'next', cursor: 'cursor-20' });
+    state = navigationReducer(state, { type: 'navigate', page: 15 });
+    expect(state).toMatchObject({ page: 1, target: 15 });
+    state = navigationReducer(state, { type: 'success', page: 12 });
+    expect(state).toMatchObject({ page: 12, target: null });
+  });
+  test('실패는 마지막 성공 위치와 재시도 대상을 유지한다', () => {
+    let state = createNavigationState('scope');
+    state = navigationReducer(state, { type: 'navigate', page: 3 });
     state = navigationReducer(state, { type: 'failure' });
-    expect(state).toMatchObject({ history: [undefined], index: 0, target: { cursor: 'cursor-20', index: 1 } });
+    expect(state).toMatchObject({ page: 1, target: 3 });
   });
-
-  test('route 또는 묶음 크기 scope 변경은 cursor 이력과 위치를 초기화한다', () => {
-    let state = createNavigationState('old');
-    state = navigationReducer(state, { type: 'next', cursor: 'cursor-20' });
-    state = navigationReducer(state, { type: 'success' });
+  test('route 또는 크기가 바뀌면 위치를 초기화한다', () => {
+    let state = navigationReducer(createNavigationState('old'), { type: 'success', page: 12 });
     state = navigationReducer(state, { type: 'reset', sessionKey: 'new' });
     expect(state).toEqual(createNavigationState('new'));
+  });
+  test.each([0, -1, 1.5, Number.MAX_SAFE_INTEGER + 1])('잘못된 페이지 %s를 무시한다', page => {
+    const state = createNavigationState('scope');
+    expect(navigationReducer(state, { type: 'navigate', page })).toBe(state);
   });
 });

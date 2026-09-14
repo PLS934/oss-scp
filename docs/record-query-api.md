@@ -1,4 +1,4 @@
-# 저장 레코드 cursor 조회 API
+# 저장 레코드 조회 API
 
 이 API는 원천 시스템을 호출하지 않고 플랫폼 DB에 마지막으로 저장된 공통 레코드를 읽는다. 현재 계정관리는 비활성화된 상태를 대상으로 하며 인증 없이 접근한다. 역할·담당 자산 권한은 후속 서비스 계층에서 적용한다.
 
@@ -54,7 +54,31 @@ GET /api/v1/records?pluginId=sample1&sourceId=sample-api&dataType=asset&limit=20
 
 `collection.status`는 같은 plugin/source의 최신 전체 수집 실행 상태이며 `never_collected`, `running`, `success`, `partial`, `failed` 중 하나다. 이는 data type별 상태가 아니다. `lastStoredAt`은 현재 묶음이 아니라 조회 범위 전체의 마지막 저장 시각이다.
 
-이 계약은 두 지원 DB에서 동일하다. 정확한 전체 건수, 임의 페이지 번호 이동, 이전 cursor, 검색·필터·사용자 지정 정렬과 DB 제품 간 데이터 이전은 제공하지 않는다. 순회 중 레코드가 갱신되어 cursor 앞쪽으로 이동하면 현재 순회에 다시 나타나지 않을 수 있으므로 전체 스냅샷을 보장하지 않는다.
+이 계약은 두 지원 DB에서 동일하다. cursor 모드는 전체 건수를 계산하지 않는다. 이전 cursor 생성, 검색·필터·사용자 지정 정렬과 DB 제품 간 데이터 이전은 제공하지 않는다. 순회 중 레코드가 갱신되어 cursor 앞쪽으로 이동하면 현재 순회에 다시 나타나지 않을 수 있으므로 전체 스냅샷을 보장하지 않는다.
+
+## 번호형 목록 조회
+
+`page`를 지정하면 동일 endpoint가 번호형으로 조회한다. `page`는 1부터 시작하는 정수이고 `limit`의 허용값과 기본값은 cursor 모드와 같다.
+
+```http
+GET /api/v1/records?pluginId=sample1&sourceId=sample-api&dataType=asset&page=2&limit=20
+```
+
+45건 범위에서는 21~40번째 items와 다음 pageInfo를 반환한다. items, collection과 lastStoredAt의 구조는 기존 계약과 같다.
+
+```json
+{ "page": 2, "pageSize": 20, "totalItems": 45, "totalPages": 3, "hasNextPage": true }
+```
+
+번호형 pageInfo에는 nextCursor가 없다. 전체 건수는 동일 plugin/source/dataType 범위에서 계산하며, 두 DB 모두 읽기 전용 REPEATABLE READ transaction에서 count와 정렬된 LIMIT/OFFSET 조회를 실행한다. 한 요청 안의 전체 건수와 items는 같은 snapshot을 사용한다. 빈 범위는 page=1, totalItems=0, totalPages=0, items=[], hasNextPage=false다. 유효한 정수지만 마지막 페이지를 초과하면 마지막 유효 페이지로 보정한다.
+
+page와 cursor의 동시 지정, 중복 page, 빈 문자열·0·음수·소수·숫자 외 문자는 INVALID_QUERY다. page와 `(page-1)*limit`은 JavaScript 안전 정수 범위 안이어야 한다.
+
+번호형 조회는 4 MiB items 예산 때문에 레코드를 버리지 않는다. 선택한 모든 레코드의 식별 정보와 omittedFields를 유지하면서 원천 요약 필드를 추가로 생략한다. 최소 메타데이터로도 예산을 초과하면 QUERY_FAILED이며 불완전한 성공 페이지를 반환하지 않는다. 상세는 저장 원문을 유지한다.
+
+서로 다른 페이지 요청 사이 수집·추가·삭제가 발생하면 정렬 위치가 변해 중복·누락이 생길 수 있다. 페이지 간 고정 snapshot은 보장하지 않는다. 깊은 페이지 OFFSET과 정확한 count 비용은 데이터 규모에 따라 증가한다.
+
+새 웹과 서버는 같은 버전으로 배포한다. 기존 웹·cursor 호출은 새 서버와 호환되며, 이전 버전으로 되돌릴 때는 웹과 서버를 함께 복귀시킨다. DB migration과 데이터 역변환은 필요 없다.
 
 ## 상세 조회
 
@@ -68,7 +92,7 @@ GET /api/v1/records/00000000-0000-4000-8000-000000000001
 
 | HTTP | 코드 | 의미 |
 |---|---|---|
-| 400 | `INVALID_QUERY` | 필수 범위 누락, 허용되지 않은 limit 또는 잘못된 UUID |
+| 400 | `INVALID_QUERY` | 필수 범위 누락, 허용되지 않은 limit/page, cursor·page 혼합 또는 잘못된 UUID |
 | 400 | `INVALID_CURSOR` | 잘못된 형식·버전 또는 현재 조건과 일치하지 않는 cursor |
 | 404 | `RECORD_NOT_FOUND` | 유효한 UUID에 해당하는 저장 레코드 없음 |
 | 503 | `QUERY_FAILED` | PostgreSQL 또는 MySQL 플랫폼 DB 조회 실패 |
