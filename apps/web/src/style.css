@@ -112,9 +112,8 @@ a.plugin-icon-link:focus-visible { outline: 3px solid var(--focus); outline-offs
 
 .plugin-menu-paths { display: grid; gap: 4px; margin-top: 0; margin-bottom: 20px; color: var(--muted); font-size: 13px; }
 
-.plugin-home-heading { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px; }
-.plugin-home-heading h2 { margin: 0; }
-.plugin-sort-toggle { display: inline-flex; align-items: center; gap: 6px; padding: 8px 12px; border-color: var(--border); border-radius: 8px; font: inherit; font-size: 13px; cursor: pointer; }
+.plugin-sort-toolbar { display: flex; align-items: center; }
+.plugin-sort-toggle { display: inline-flex; align-items: center; gap: 5px; padding: 4px 10px; border-color: var(--border); border-radius: 999px; font: inherit; font-size: 12px; line-height: 20px; cursor: pointer; }
 .plugin-sort-toggle:disabled { opacity: .55; cursor: not-allowed; }
 
 .plugin-sort-toggle:hover:not(:disabled) { background: var(--info); }

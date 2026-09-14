@@ -29,13 +29,14 @@ export function PluginHomeContent({ plugins, state, menus, menuState }: {
   const [sort, setSort] = useState('default');
   const displayedPlugins = sort === 'name' ? [...plugins].sort((a, b) => nameCollator.compare(a.name, b.name)) : plugins;
   return <section className="plugin-home" aria-labelledby="plugin-home-title">
-    <div className="plugin-home-heading"><h2 id="plugin-home-title">플러그인 목록</h2>
+    <h2 id="plugin-home-title">플러그인 목록</h2>
+    <p className="plugin-intro">등록된 플러그인과 제공 데이터를 확인하세요. 활성화 여부는 설정 기준이며, 연결·수집 성공을 의미하지 않습니다.</p>
+    <div className="plugin-sort-toolbar">
       <button type="button" className="plugin-sort-toggle" aria-pressed={sort === 'name'} onClick={() => setSort(sort === 'name' ? 'default' : 'name')} disabled={state !== 'success' || plugins.length === 0} title={sort === 'name' ? '등록된 순서로 되돌리기' : '이름 순으로 정렬'}>
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M4 6h16M4 12h10M4 18h4m10-6v8m-3-3 3 3 3-3" /></svg>
         이름 순
       </button>
     </div>
-    <p className="plugin-intro">등록된 플러그인과 제공 데이터를 확인하세요. 활성화 여부는 설정 기준이며, 연결·수집 성공을 의미하지 않습니다.</p>
     {state === 'loading' ? <p role="status">플러그인 목록을 불러오는 중입니다.</p>
       : state === 'failure' ? <p role="alert">플러그인 목록을 불러오지 못했습니다. 잠시 후 다시 시도해 주세요.</p>
       : plugins.length === 0 ? <p className="empty-state">등록된 플러그인이 없습니다.</p>
