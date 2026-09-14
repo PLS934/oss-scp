@@ -4,7 +4,7 @@ import { customPluginViews, resolveCustomPluginViews, type CustomPluginViewRegis
 import { CustomViewBoundary } from './custom-view-boundary';
 import { RecordDetail } from './detail';
 import { observeHealth, type ConnectionState } from './health';
-import { groupMenus, type MenuItem } from './menu';
+import { activeMenuPath, groupMenus, type MenuItem } from './menu';
 import { loadPluginMenus } from './plugin-menus';
 import { PluginHome } from './plugin-home';
 import { RecordList } from './record-list';
@@ -18,10 +18,6 @@ function ListRoute({ menu, registry }: { menu: MenuItem; registry: CustomPluginV
   return CustomList
     ? <CustomViewBoundary><CustomList menu={menu} /></CustomViewBoundary>
     : <RecordList key={`${menu.pluginId}:${menu.sourceId}:${menu.dataType}`} menu={menu} />;
-}
-
-export function activeMenuPath(pathname: string, menus: readonly MenuItem[]): string | undefined {
-  return menus.filter(menu => pathname === menu.path || pathname.startsWith(`${menu.path}/`)).sort((a, b) => b.path.length - a.path.length)[0]?.path;
 }
 
 function DetailRoute({ menu, registry }: { menu: MenuItem; registry: CustomPluginViewRegistry }) {

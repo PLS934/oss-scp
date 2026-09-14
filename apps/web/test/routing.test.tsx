@@ -1,9 +1,9 @@
 import { renderToStaticMarkup } from 'react-dom/server';
 import { MemoryRouter } from 'react-router-dom';
 import { expect, test } from 'vitest';
-import App, { activeMenuPath } from '../src/App';
+import App from '../src/App';
 import type { CustomPluginDetailProps, CustomPluginListProps, CustomPluginViewRegistry } from '../src/custom-plugin-views';
-import { groupMenus } from '../src/menu';
+import { activeMenuPath, groupMenus } from '../src/menu';
 
 const pluginMenus = [
   { title: '취약점', icon: 'shield' as const, group: '보안 관리', order: 10, path: '/vulnerabilities', dataType: 'vulnerability', pluginId: 'vulnerabilities-local-csv', sourceId: 'fixtures/csv/vulnerabilities.csv', list: { columns: [{ key: 'cve', label: 'CVE', type: 'string' as const }] }, detail: { sections: [{ title: '기본', fields: [{ key: 'cve', label: 'CVE', type: 'string' as const }] }] } },

@@ -45,6 +45,10 @@ export function groupMenus(menus: readonly MenuItem[]) {
   }, new Map());
 }
 
+export function activeMenuPath(pathname: string, menus: readonly MenuItem[]): string | undefined {
+  return menus.filter(menu => pathname === menu.path || pathname.startsWith(`${menu.path}/`)).sort((a, b) => b.path.length - a.path.length)[0]?.path;
+}
+
 export function recordDetailPath(menuPath: string, recordId: string): string {
   return `${menuPath}/${encodeURIComponent(recordId)}`;
 }
