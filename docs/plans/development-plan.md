@@ -6,7 +6,7 @@ oss-scp는 외부 자산·취약점 데이터를 수집·가공해 플랫폼 DB�
 
 현재 합의한 제품 요구사항과 구현 순서를 관리한다. 파일명·JSON·SDK는 명세 작성용 초안이며 구현 완료를 뜻하지 않는다. 세부 계약은 단계별 OpenSpec change에서 확정한다.
 
-현재 구현된 범위는 React·NestJS와 로컬·Docker 실행 환경, HTTP JSON offset·single 및 로컬·HTTP CSV 수집, 공통 가공·저장·수동 수집 CLI, PostgreSQL·MySQL 연결과 저장·조회, 외부 플러그인 설정 검증, registry 기반 메뉴·기본 목록·상세와 cursor 기반 첫·이전·다음 묶음 이동이다. 기동·재시작 시 전체 수집, 대상별 실행 조정·상태 조회 API, HTTP CSV의 공통 CLI 연결과 GitHub Release 개별 Docker 자산 자동화도 구현되어 있다. 인증·권한, 담당자 관리, 매일 22시 정기 수집, 검색·필터·정렬·개인별 목록 설정과 운영 상태 화면 등은 남아 있다. 구현된 계약은 [OpenSpec 본 명세](../../openspec/specs/)를 기준으로 하고, 아래 단계별 계획과 구분한다. 실행 방법은 [클라이언트 가이드](../client-development.md), [서버 가이드](../server-development.md), 브랜치·배포 절차는 [개발 워크플로](../development-workflow.md)를 따른다.
+현재 구현된 범위는 React·NestJS와 로컬·Docker 실행 환경, HTTP JSON offset·single 및 로컬·HTTP CSV 수집, 공통 가공·저장·수동 수집 CLI, PostgreSQL·MySQL 연결과 저장·조회, 외부 플러그인 설정 검증, registry 기반 메뉴·기본 목록·상세와 cursor 기반 첫·이전·다음 묶음 이동이다. 기동·재시작 시 전체 수집, 대상별 실행 조정·상태 조회 API, HTTP CSV의 공통 CLI 연결과 GitHub Release 번들 자산 자동화도 구현되어 있다. 인증·권한, 담당자 관리, 매일 22시 정기 수집, 검색·필터·정렬·개인별 목록 설정과 운영 상태 화면 등은 남아 있다. 구현된 계약은 [OpenSpec 본 명세](../../openspec/specs/)를 기준으로 하고, 아래 단계별 계획과 구분한다. 실행 방법은 [클라이언트 가이드](../client-development.md), [서버 가이드](../server-development.md), 브랜치·배포 절차는 [개발 워크플로](../development-workflow.md)를 따른다.
 
 ### 계정관리 옵션
 
@@ -549,7 +549,7 @@ Vitest·Playwright와 실제 PostgreSQL/MySQL 통합 검증을 사용한다. 규
 | PostgreSQL·MySQL 연결·migration·공통 저장·조회 | [저장](../../openspec/specs/platform-record-storage/spec.md), [조회](../../openspec/specs/platform-record-query/spec.md) |
 | 외부 플러그인 검증·독립 배포, 메뉴·기본 목록·상세, cursor 첫·이전·다음 이동 | [배포](../../openspec/specs/server-plugin-deployment/spec.md), [목록](../../openspec/specs/plugin-record-list/spec.md), [상세](../../openspec/specs/plugin-detail-view/spec.md) |
 | 기동·재시작 전체 수집, 실행 충돌 조정과 상태 조회 API | [기동 수집](../../openspec/specs/startup-full-collection/spec.md), [실행 조정](../../openspec/specs/collection-run-coordination/spec.md) |
-| 기술 프리뷰 범위 정의와 개별 Release 자산 자동화 | [0.1.0 계약](../../openspec/specs/technical-preview-release/spec.md), [Release 자산](../../openspec/specs/github-release-artifacts/spec.md) |
+| 기술 프리뷰 범위 정의와 번들 Release 자산 자동화 | [0.1.0 계약](../../openspec/specs/technical-preview-release/spec.md), [Release 자산](../../openspec/specs/github-release-artifacts/spec.md) |
 
 각 후속 작업에 필요한 최소 OpenSpec 계약을 먼저 작성한다. 아래 Phase의 작업 목록은 남은 범위이며, 완료 기준에는 기존 동작을 유지하기 위한 회귀 검증도 포함한다.
 
@@ -693,7 +693,7 @@ AI·IAM·규제 대응·분산 처리 및 자동 확장은 실제 필요성과 �
 
 현재 활성 OpenSpec change는 없다. 완료된 기반은 12절에 모아 두고, 다음 작업은 아래 공개 준비와 기능 확장 후보에서 구체화한다.
 
-0.1.0 공개 준비는 [기술 프리뷰의 출시 차단 게이트](../../openspec/specs/technical-preview-release/spec.md)를 기준으로 추적한다. [개별 Release 자산 자동화](../../openspec/specs/github-release-artifacts/spec.md)는 구현되었으나, API·웹·선택 DB를 묶는 단일 오프라인 번들과 설치·업데이트·복구 검증까지 완료된 것을 의미하지 않는다. 공개 전 최종 번들 검증과 태그 후보 CI 등 각 게이트의 증거를 확인한다.
+0.1.0 공개 준비는 [기술 프리뷰의 출시 차단 게이트](../../openspec/specs/technical-preview-release/spec.md)를 기준으로 추적한다. [Release 자산 자동화](../../openspec/specs/github-release-artifacts/spec.md)는 API·웹 내부 산출물로 기본 번들과 PostgreSQL 포함 번들을 만들고, GitHub Release에는 두 번들과 외부 `SHA256SUMS`만 게시한다. 공개 전 최종 번들 검증과 태그 후보 CI 등 각 게이트의 증거를 확인한다.
 
 기능 확장 후보는 서버 검색·필터·정렬과 개인별 목록 설정, 기존 상태 조회 API를 사용하는 운영 화면, 매일 22시 정기 수집 및 Phase 0의 나머지 완료 기준이다. 각 후보는 기존 계약을 기반으로 별도 change에서 구체화하며 후보 간 착수 순서는 아직 확정하지 않았다.
 
@@ -708,6 +708,6 @@ AI·IAM·규제 대응·분산 처리 및 자동 확장은 실제 필요성과 �
 - **동기화·알림**: 기동 수집과 [대상별 실행 충돌 조정](../../openspec/specs/collection-run-coordination/spec.md)은 확정되어 있다. 남은 결정은 Asia/Seoul 기준 매일 22시 스케줄러, 정기 실행과 기존 실행의 결합, 운영 화면·알림 및 실패 이력 보존 기간이다.
 - **목록**: 플러그인 지정 필터의 지원 종류·연산자·옵션 공급 방식, 다중 정렬, 검색의 대소문자·여러 단어·배열/비문자 타입 처리, 필드 변경·계정관리 설정 전환 시 목록 설정 처리
 - **운영 규모**: 첫 실제 수집처와 대표 샘플, 건수·바이트·응답 한도, 큰 본문 저장 위치와 원본·이력 보존 기간
-- **릴리스**: [0.1.0 기술 프리뷰](../../openspec/specs/technical-preview-release/spec.md)의 Ubuntu 24.04 linux/amd64·Docker Compose·PostgreSQL 17.6/MySQL 8.4.6 검증 대상과 [태그·개별 자산 게시 규칙](../../openspec/specs/github-release-artifacts/spec.md)은 확정되어 있다. 남은 항목은 라이선스, 단일 오프라인 번들·설치·업데이트 스크립트의 세부 계약과 최종 설치·업데이트·복구 검증, 후속 지원 환경 확대다.
+- **릴리스**: [0.1.0 기술 프리뷰](../../openspec/specs/technical-preview-release/spec.md)의 Ubuntu 24.04 linux/amd64·Docker Compose·PostgreSQL 17.6/MySQL 8.4.6 검증 대상과 [태그·번들 자산 게시 규칙](../../openspec/specs/github-release-artifacts/spec.md)은 확정되어 있다. GitHub Release는 기본 번들, PostgreSQL 포함 번들과 외부 `SHA256SUMS`만 공개한다. 남은 항목은 라이선스와 후속 지원 환경 확대다.
 
 Node.js 24 LTS·pnpm·React/Vite·NestJS와 PostgreSQL/MySQL 지원은 유지한다. Redis/BullMQ는 후속 큐 기반 고도화에 사용하며 일일 동기화의 필수 설치 조건으로 고정하지 않는다.

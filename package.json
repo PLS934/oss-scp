@@ -31,7 +31,7 @@
     "test:docker:mysql": "bash scripts/test-mysql-docker.sh",
     "test:http-collector": "pnpm --filter @oss-scp/http-collector test",
     "test:http-csv-source": "pnpm --filter @oss-scp/http-csv-source test",
-    "test:release": "node --test scripts/release-metadata.test.mjs scripts/test-release-assets.mjs scripts/test-release-workflow.mjs",
+    "test:release": "node --test scripts/release-metadata.test.mjs scripts/test-release-assets.mjs scripts/test-release-bundle-checksums.mjs scripts/test-release-workflow.mjs",
     "test:bundle": "node --test scripts/bundle-manifest.test.mjs && node scripts/test-bundle-contract.mjs",
     "verify:bundles": "node scripts/verify-offline-bundles.mjs",
     "test:bundle:generator": "bash scripts/test-offline-bundle-generator.sh",
