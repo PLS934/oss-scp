@@ -154,6 +154,27 @@ packages/plugin-config/
 }
 ```
 
+## 사용자 정의 React 목록·상세
+
+공통 목록이나 상세 표현으로 부족한 플러그인은 플랫폼 웹 소스의 `apps/web/src/custom-plugin-views.tsx` registry에 React 컴포넌트를 정적으로 등록할 수 있습니다. registry key는 `plugin.json`의 `id`와 같아야 하며 `List`와 `Detail`은 서로 독립적으로 생략할 수 있습니다.
+
+```tsx
+export const customPluginViews: CustomPluginViewRegistry = {
+  'sample2-single-api': {
+    List: Sample2RepositoryList,
+    Detail: Sample2RepositoryDetail,
+  },
+};
+```
+
+`List`는 `{ menu }`, `Detail`은 `{ menu, recordId }`를 받습니다. `menu`는 서버가 기동 시 검증하여 `/api/v1/plugin-menus`로 공개한 `pluginId`, `sourceId`, `dataType`, 목록 columns와 상세 sections를 포함합니다. 상세의 `recordId`는 현재 메뉴 아래의 URL에서 플랫폼 router가 해석한 값입니다. 사용자 정의 화면은 `apps/web/src/records.ts`의 공개 조회 클라이언트와 기존 API를 사용하며, 원천 Connection이나 서버 전용 설정을 입력으로 받지 않습니다. 서버의 조회 범위와 권한 검사는 사용자 정의 화면에도 동일하게 적용됩니다.
+
+등록하지 않은 화면 종류는 기존 공통 `RecordList` 또는 `RecordDetail`로 표시됩니다. 사용자 정의 화면의 렌더링 예외는 해당 route 영역에 안전한 안내로 표시되며 shell과 다른 플러그인 메뉴는 계속 동작합니다. 비동기 조회 실패, 로딩·빈 결과와 키보드 접근성은 사용자 정의 컴포넌트가 처리해야 합니다.
+
+현재 사용자 정의 화면은 플랫폼과 같은 React·라우터 버전을 사용하며 배포용 웹 자산에 함께 빌드됩니다. 화면을 추가하거나 변경하면 웹 이미지를 다시 빌드해야 합니다. 외부 플러그인 설정의 React 소스나 프론트엔드 번들을 런타임에 로드하지 않으며, 독립 UI 빌드·배포는 후속 #94 범위입니다.
+
+## 설정과 가공 모듈 검증
+
 ```bash
 pnpm build:plugin-transforms
 pnpm --filter @oss-scp/plugin-config build
