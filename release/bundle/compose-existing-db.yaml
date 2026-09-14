@@ -1,0 +1,27 @@
+services:
+  api:
+    image: oss-scp-api:${OSS_SCP_VERSION:?OSS_SCP_VERSION must be set}
+    pull_policy: never
+    environment:
+      NODE_ENV: production
+      HOST: 0.0.0.0
+      PORT: "3000"
+      OSS_SCP_CONFIG_ROOT: /config
+      PLATFORM_DB_TYPE: ${PLATFORM_DB_TYPE:?PLATFORM_DB_TYPE must be set}
+      PLATFORM_DB_HOST: ${PLATFORM_DB_HOST:?PLATFORM_DB_HOST must be set}
+      PLATFORM_DB_PORT: ${PLATFORM_DB_PORT:?PLATFORM_DB_PORT must be set}
+      PLATFORM_DB_NAME: ${PLATFORM_DB_NAME:?PLATFORM_DB_NAME must be set}
+      PLATFORM_DB_USER: ${PLATFORM_DB_USER:?PLATFORM_DB_USER must be set}
+      PLATFORM_DB_PASSWORD: ${PLATFORM_DB_PASSWORD:?PLATFORM_DB_PASSWORD must be set}
+      PLATFORM_DB_TLS_MODE: ${PLATFORM_DB_TLS_MODE:-disable}
+    ports:
+      - "127.0.0.1:${API_PORT:-3000}:3000"
+    volumes:
+      - ${OSS_SCP_CONFIG_PATH:?OSS_SCP_CONFIG_PATH must be set}:/config:ro
+  web:
+    image: oss-scp-web:${OSS_SCP_VERSION:?OSS_SCP_VERSION must be set}
+    pull_policy: never
+    environment:
+      API_UPSTREAM: api:3000
+    ports:
+      - "0.0.0.0:${WEB_PORT:-8080}:8080"

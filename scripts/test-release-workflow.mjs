@@ -17,6 +17,11 @@ test('릴리스 workflow는 검증 뒤 최소 권한으로 불변 draft를 공�
   assert.match(workflow, /gh release view/);
   assert.match(workflow, /--draft/);
   assert.match(workflow, /--draft=false/);
+  assert.match(workflow, /build-offline-bundles\.sh/);
+  assert.match(workflow, /verify-offline-bundles\.mjs/);
+  assert.match(workflow, /test-offline-bundle-generator\.sh/);
+  assert.match(workflow, /oss-scp-bundle-.*\.tar\.gz/);
+  assert.match(workflow, /oss-scp-bundle-.*-postgresql\.tar\.gz/);
   assert.doesNotMatch(workflow, /packages: write|pull-requests: write/);
 });
 

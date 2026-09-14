@@ -91,6 +91,8 @@ jobs:
       - run: bash scripts/test-docker.sh
       # 실제 archive load, migration, 두 제품 버전 전환과 DB·설정 보존 검증
       - run: pnpm test:docker:release
+      # 폐쇄망 PostgreSQL 포함 번들의 최초 설치·두 버전 업데이트·복구 경계 검증
+      - run: pnpm test:docker:bundle
       - run: pnpm test:docker:external-db
       - run: pnpm test:docker:mysql
       - run: pnpm test:docker:mock

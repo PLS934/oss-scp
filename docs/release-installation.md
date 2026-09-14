@@ -1,6 +1,6 @@
-# GitHub Release 설치·업데이트
+# GitHub Release 개별 자산 설치·업데이트
 
-이 문서는 GitHub Release의 개별 Docker 자산으로 oss-scp를 설치·업데이트하는 절차를 설명한다. 0.x는 기술 프리뷰이며 검증 대상은 Ubuntu 24.04 linux/amd64와 Docker Compose다. 외부 Registry에 연결하지 않는 단일 파일 번들과 자동 설치·복구 스크립트는 #88에서 제공한다.
+이 문서는 GitHub Release의 개별 Docker 자산으로 oss-scp를 설치·업데이트하는 절차를 설명한다. 0.x는 기술 프리뷰이며 검증 대상은 Ubuntu 24.04 linux/amd64와 Docker Compose다. Registry 연결 없이 단일 압축 파일로 반입하고 설치·복구 스크립트를 사용하려면 [폐쇄망 번들 가이드](offline-bundle.md)를 따른다.
 
 ## 준비
 
