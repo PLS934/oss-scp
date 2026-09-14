@@ -5,6 +5,7 @@ import { observeHealth, type ConnectionState } from './health';
 import { groupMenus, type MenuItem } from './menu';
 import { loadPluginMenus } from './plugin-menus';
 import { RecordList } from './record-list';
+import { ThemePicker } from './theme-picker';
 
 const labels: Record<ConnectionState, string> = { loading: '서버 연결 확인 중', success: '서버 연결 성공', failure: '서버 연결 실패' };
 const productVersion = import.meta.env.VITE_OSS_SCP_VERSION || 'dev';
@@ -30,11 +31,11 @@ export default function App({ menus: providedMenus }: { menus?: readonly MenuIte
     {menuState === 'loading' ? <p>플러그인 메뉴 로딩 중</p> : menuState === 'failure' ? <p role="alert">플러그인 메뉴를 불러오지 못했습니다.</p> : null}
     <nav aria-label="플러그인 메뉴">{[...groups].map(([group, entries]) => <section className="menu-group" key={group} aria-labelledby={`group-${group}`}><h2 id={`group-${group}`}>{group}</h2><ul>
       {entries.map(menu => <li key={menu.path}><NavLink to={menu.path}>{menu.title}</NavLink></li>)}</ul></section>)}</nav>
-    <div className="sidebar-meta"><p role="status" className={`status ${state}`}>{labels[state]}</p><p className="version">v{productVersion}</p></div></aside><main><Routes>
+    </aside><div className="workspace"><header className="app-header"><div className="header-actions"><p role="status" className={`status ${state}`}>{labels[state]}</p><span className="version">v{productVersion}</span><ThemePicker /></div></header><main><Routes>
       <Route path="/" element={<section><h2>플러그인 메뉴</h2><p>조회할 데이터 메뉴를 선택해 주세요.</p></section>} />
       {menuState === 'success' ? menus.flatMap(menu => [
         <Route key={menu.path} path={menu.path} element={<RecordList key={`${menu.pluginId}:${menu.sourceId}:${menu.dataType}`} menu={menu} />} />,
         <Route key={`${menu.path}/:recordId`} path={`${menu.path}/:recordId`} element={<DetailRoute menu={menu} />} />,
       ]) : null}<Route path="*" element={<NotFound />} />
-    </Routes></main></div>;
+    </Routes></main></div></div>;
 }
