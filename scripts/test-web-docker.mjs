@@ -43,7 +43,7 @@ try {
   page.setDefaultTimeout(15000);
   page.on('pageerror', error => console.error('browser error:', error));
   await page.goto(url);
-  await expect(page.getByRole('status')).toHaveText('서버 연결 성공');
+  await expect(page.getByRole('banner').getByRole('status')).toHaveText('서버 연결 성공');
   assert.equal((await fetch(`${url}/api/unknown`)).status, 404);
   await page.goto(`${url}/assets/servers`);
   await expect(page.getByRole('heading', { name: '서버 자산', exact: true })).toBeVisible();
@@ -61,18 +61,18 @@ try {
 
   await compose(['stop', 'api']);
   await page.reload();
-  await expect(page.getByRole('status')).toHaveText('서버 연결 실패', { timeout: 10000 });
+  await expect(page.getByRole('banner').getByRole('status')).toHaveText('서버 연결 실패', { timeout: 10000 });
   await expect(page.getByRole('heading', { name: 'OSS-SCP', exact: true })).toBeVisible();
   await compose(['up', '-d', '--force-recreate', 'api']);
   await waitFor(() => healthy(url), 'API 재생성 후 DNS 복구');
   await page.reload();
-  await expect(page.getByRole('status')).toHaveText('서버 연결 성공');
+  await expect(page.getByRole('banner').getByRole('status')).toHaveText('서버 연결 성공');
 
   await docker(['run', '-d', '--name', standalone, '-p', '127.0.0.1::8080', 'oss-scp-web:local']);
   const standaloneAddress = (await docker(['port', standalone, '8080/tcp'])).trim();
   await waitFor(async () => (await fetch(`http://${standaloneAddress}`)).ok, 'API 없는 이미지');
   await page.goto(`http://${standaloneAddress}`);
-  await expect(page.getByRole('status')).toHaveText('서버 연결 실패', { timeout: 10000 });
+  await expect(page.getByRole('banner').getByRole('status')).toHaveText('서버 연결 실패', { timeout: 10000 });
   const inspection = JSON.parse(await docker(['inspect', standalone]))[0];
   assert.equal(inspection.Mounts.length, 0);
   await docker(['exec', standalone, 'sh', '-c', 'test "$(id -u)" != 0 && test ! -e /usr/share/nginx/html/src && test ! -e /usr/share/nginx/html/.env && ! command -v node']);
@@ -90,7 +90,7 @@ try {
   await waitFor(() => healthy(url), 'Docker 개발 API');
   const ids = await compose(['ps', '-q'], true);
   await page.goto(url);
-  await expect(page.getByRole('status')).toHaveText('서버 연결 성공');
+  await expect(page.getByRole('banner').getByRole('status')).toHaveText('서버 연결 성공');
   await page.waitForFunction(() => performance.getEntriesByType('resource').some(entry => entry.name.includes('/@vite/client')));
   await page.evaluate(() => { document.documentElement.dataset.hmrCheck = 'docker'; });
   const appFile = path.join(dir, 'apps/web/src/App.tsx');
