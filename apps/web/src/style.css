@@ -111,3 +111,8 @@ a.plugin-icon-link:hover { color: var(--focus); background: var(--info); }
 a.plugin-icon-link:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
 
 .plugin-menu-paths { display: grid; gap: 4px; margin-top: 0; margin-bottom: 20px; color: var(--muted); font-size: 13px; }
+
+.plugin-home-heading { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px; }
+.plugin-home-heading h2 { margin: 0; }
+.plugin-home-heading select { padding: 8px 12px; border-color: var(--border); border-radius: 8px; font: inherit; font-size: 13px; cursor: pointer; }
+.plugin-home-heading select:disabled { opacity: .55; cursor: not-allowed; }
