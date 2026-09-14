@@ -98,7 +98,7 @@ main .plugin-home { background: transparent; border: 0; border-radius: 0; paddin
 .plugin-badge.enabled { color: #22533c; background: #e6f4ec; }
 .plugin-badge.disabled { color: #516372; background: #eef1f4; }
 .plugin-source { display: grid; gap: 8px; font-size: 14px; }
-.plugin-source > div { display: flex; flex-wrap: wrap; gap: 8px 16px; }
+.plugin-source > div { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 16px; }
 .plugin-source dt { min-width: 80px; }
 .plugin-source dd { min-width: 0; }
 .plugin-method { font-size: 12px; font-weight: 700; color: #245c83; }
