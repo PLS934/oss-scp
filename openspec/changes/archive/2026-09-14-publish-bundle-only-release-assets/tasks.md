@@ -21,3 +21,11 @@
 ## 후속 릴리스 검증
 
 PR 병합 후 다음 RC의 draft Release에서 공개 자산이 두 번들과 외부 `SHA256SUMS`만 포함하고 외부·내부 checksum 검증이 모두 성공하는지 확인한다. 이 실행 기록은 병합 전 구현 완료 조건이 아니며, 해당 RC의 후속 배포 검증 기록으로 남긴다.
+
+실행 기록(2026-09-14):
+
+- `v0.1.0-rc.2` 태그는 PR #98 병합 commit `e7b172dd8b59a30458386445233e707d30994eae`에 생성했다.
+- GitHub Actions run `34807921215`에서 태그 검증, PostgreSQL·MySQL, 로컬 개발·배포 빌드, Docker 전체 검증과 자산 게시가 모두 성공했다.
+- GitHub prerelease에는 `oss-scp-bundle-0.1.0-rc.2.tar.gz`, `oss-scp-bundle-0.1.0-rc.2-postgresql.tar.gz`, `SHA256SUMS`만 게시됐다.
+- 세 자산의 로컬 SHA-256은 GitHub asset digest와 일치했고, 외부 `SHA256SUMS`는 두 번들 archive를 모두 검증했다.
+- 다운로드한 두 번들의 내부 checksum, manifest, 제품 버전·Git revision 및 이미지 목록 검증이 성공했다.
