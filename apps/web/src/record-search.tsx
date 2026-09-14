@@ -66,8 +66,9 @@ function DateRangeFilter({ field, start, end, onChange }: { field: QueryFilter; 
     if (value && (part === 'start' ? end : start)) setOpen(false);
   };
   return <fieldset className="date-range-filter" ref={container} onKeyDown={event => { if (event.key === 'Escape') setOpen(false); }}>
-    <legend>{field.label} (UTC)</legend>
+    <legend className="visually-hidden">{field.label} (UTC)</legend>
     <div className="date-range-summary">
+      <span className="date-range-title" aria-hidden="true">{field.label} (UTC)</span>
       <button className="date-range-trigger" type="button" aria-label={`${field.label} 기간 선택`} aria-expanded={open} aria-haspopup="dialog" onClick={() => setOpen(value => !value)}><svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M7 3v3m10-3v3M4 9h16M5 5h14a1 1 0 0 1 1 1v14H4V6a1 1 0 0 1 1-1Z" /></svg></button>
       {summary ? <span className="date-range-badge"><button type="button" onClick={() => setOpen(true)}>{summary}</button><button type="button" aria-label={`${field.label} 기간 지우기`} onClick={() => { onChange('start', ''); onChange('end', ''); }}>×</button></span> : null}
     </div>
