@@ -55,8 +55,7 @@ a:focus-visible, button:focus-visible, select:focus-visible { outline: 3px solid
 aside a:focus-visible { outline-color: var(--sidebar-focus); }
 
 .workspace { min-width: 0; }
-.app-header { height: 64px; box-sizing: border-box; padding: 0 32px; display: flex; align-items: center; justify-content: space-between; background: var(--surface); border-bottom: 1px solid var(--border); }
-.header-title { font-size: 14px; font-weight: 600; color: var(--muted); letter-spacing: .03em; }
+.app-header { height: 64px; box-sizing: border-box; padding: 0 32px; display: flex; align-items: center; justify-content: flex-end; background: var(--surface); border-bottom: 1px solid var(--border); }
 .theme-trigger { width: 36px; height: 36px; display: grid; place-items: center; border: 0; background: transparent; cursor: pointer; border-radius: 8px; }
 .theme-trigger:hover { background: var(--info); }
 @media (max-width: 700px) { .app-header { padding: 0 24px; height: 56px; } }
@@ -65,4 +64,4 @@ aside a:focus-visible { outline-color: var(--sidebar-focus); }
 .header-actions .status { margin: 0; font-size: 12px; white-space: nowrap; }
 .header-actions .status::before { content: ''; display: inline-block; width: 6px; height: 6px; margin-right: 7px; border-radius: 50%; background: currentColor; vertical-align: middle; }
 .header-actions .version { color: var(--muted); font-size: 12px; white-space: nowrap; }
-@media (max-width: 700px) { .header-actions { gap: 12px; } .header-title { display: none; } .app-header { justify-content: flex-end; } }
+@media (max-width: 700px) { .header-actions { gap: 12px; } .app-header { justify-content: flex-end; } }
