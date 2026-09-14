@@ -38,6 +38,7 @@ export function PluginHomeContent({ plugins, state, menus, menuState }: {
           </div><span className={`plugin-badge ${plugin.enabled ? 'enabled' : 'disabled'}`}>{plugin.enabled ? '활성화' : '비활성화'}</span></div>
           {plugin.description?.trim() ? <p className="plugin-description">{plugin.description}</p> : null}
           <dl className="plugin-source">
+            {targets.length > 0 ? <div><dt>메뉴 그룹</dt><dd>{[...new Set(targets.map(menu => menu.group))].join(', ')}</dd></div> : null}
             {targets.length > 0 ? <div><dt>메뉴 이름</dt><dd>{targets.map(menu => menu.title).join(', ')}</dd></div> : null}
             <div><dt>데이터 출처</dt><dd>{sourceLabels[plugin.sourceType]}</dd></div>
             {plugin.endpoint ? <div><dt>API 주소</dt><dd><span className="plugin-method">{plugin.endpoint.method}</span> <code>{plugin.endpoint.url}</code></dd></div> : null}

@@ -22,6 +22,8 @@ test('등록 정보와 메뉴별 데이터 조회 링크를 표시한다', () =>
   expect(html).toMatch(/class="plugin-title"[\s\S]*href="\/servers"/);
   expect(html.indexOf('<dt>메뉴 이름</dt>')).toBeLessThan(html.indexOf('<dt>데이터 출처</dt>'));
   expect(html).toContain('<dd>서버, 저장소</dd>');
+  expect(html).toContain('<dt>메뉴 그룹</dt><dd>자산</dd>');
+  expect(html.indexOf('<dt>메뉴 그룹</dt>')).toBeLessThan(html.indexOf('<dt>메뉴 이름</dt>'));
   expect(html).toContain('aria-label="샘플 · 저장소 데이터 보기"');
   expect(html).toContain('연결·수집 성공을 의미하지 않습니다');
 });
