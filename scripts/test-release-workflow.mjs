@@ -20,12 +20,24 @@ test('릴리스 workflow는 검증 뒤 최소 권한으로 불변 draft를 공�
   assert.match(workflow, /build-offline-bundles\.sh/);
   assert.match(workflow, /verify-offline-bundles\.mjs/);
   assert.match(workflow, /test-offline-bundle-generator\.sh/);
+  assert.match(workflow, /build-release-bundle-checksums\.mjs/);
   assert.match(workflow, /oss-scp-bundle-.*\.tar\.gz/);
   assert.match(workflow, /oss-scp-bundle-.*-postgresql\.tar\.gz/);
+  const upload = workflow.match(/gh release create "\$RELEASE_TAG" \\\n(?<assets>[\s\S]*?)\s+--verify-tag/)?.groups?.assets;
+  assert.ok(upload, 'GitHub Release 업로드 자산 목록을 찾을 수 있어야 한다');
+  const paths = [...upload.matchAll(/^\s+([^\s\\]+) \\$/gm)].map(([, path]) => path);
+  assert.deepEqual(paths, [
+    'bundle-output/oss-scp-bundle-"$RELEASE_VERSION".tar.gz',
+    'bundle-output/oss-scp-bundle-"$RELEASE_VERSION"-postgresql.tar.gz',
+    'bundle-output/SHA256SUMS',
+  ]);
+  for (const forbidden of ['release-output/oss-scp-api-', 'release-output/oss-scp-web-', '-compose.yaml', '.env.example', 'release-output/SHA256SUMS']) {
+    assert.doesNotMatch(upload, new RegExp(forbidden.replaceAll('.', '\\.')));
+  }
   assert.doesNotMatch(workflow, /packages: write|pull-requests: write/);
 });
 
-test('릴리스 본문은 배포 provenance와 제한 사항을 포함한다', () => {
+test('릴리스 본문은 번들 선택, checksum 경계, provenance와 제한 사항을 포함한다', () => {
   const notes = releaseNotes({ version: '0.1.0', revision: 'a'.repeat(40), apiDigest: 'sha256:api', webDigest: 'sha256:web' });
-  for (const value of ['0.1.0', 'a'.repeat(40), 'sha256:api', 'sha256:web', 'Ubuntu 24.04', 'migration', '기술 프리뷰']) assert.match(notes, new RegExp(value));
+  for (const value of ['0.1.0', 'a'.repeat(40), 'sha256:api', 'sha256:web', 'Ubuntu 24.04', 'migration', '기술 프리뷰', '기존 DB', 'PostgreSQL 포함', '외부 `SHA256SUMS`', '내부 `SHA256SUMS`']) assert.match(notes, new RegExp(value));
 });

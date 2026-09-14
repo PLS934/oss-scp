@@ -11,9 +11,10 @@ GitHub Release는 같은 제품 버전에 두 가지 단일 서버용 번들을 
 
 ## 반입과 최초 설치
 
-GitHub가 자산 옆에 표시하는 digest는 다운로드한 `.tar.gz` 자체를 검증한다. 압축을 푼 뒤의 `SHA256SUMS`는 `images.tar`, Compose, 매니페스트와 실행 파일이 반입 과정에서 바뀌지 않았는지 검증한다. 매니페스트의 이미지별 `digest`는 OCI manifest를, `configDigest`는 Docker image config를 식별하며 설치 스크립트는 Engine이 반환하는 실제 image ID를 둘 모두와 대조한다. 검증 대상이 서로 다르므로 생략하지 않는다.
+Release에서 선택한 번들과 외부 `SHA256SUMS`를 내려받아 archive checksum을 먼저 확인한다. 외부 파일에는 두 번들이 모두 기록되므로 선택한 번들의 행만 검증할 수 있다. 압축을 푼 뒤의 내부 `SHA256SUMS`는 `images.tar`, Compose, 매니페스트와 실행 파일이 반입 과정에서 바뀌지 않았는지 검증한다. 매니페스트의 이미지별 `digest`는 OCI manifest를, `configDigest`는 Docker image config를 식별하며 설치 스크립트는 Engine이 반환하는 실제 image ID를 둘 모두와 대조한다. 검증 대상이 서로 다르므로 생략하지 않는다.
 
 ```bash
+grep 'oss-scp-bundle-0.1.0.tar.gz$' SHA256SUMS | sha256sum --check
 tar -xzf oss-scp-bundle-0.1.0.tar.gz
 cd oss-scp-bundle-0.1.0
 sha256sum --check --strict SHA256SUMS
