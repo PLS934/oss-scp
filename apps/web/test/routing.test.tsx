@@ -1,7 +1,7 @@
 import { renderToStaticMarkup } from 'react-dom/server';
 import { MemoryRouter } from 'react-router-dom';
 import { expect, test } from 'vitest';
-import App from '../src/App';
+import App, { activeMenuPath } from '../src/App';
 import type { CustomPluginDetailProps, CustomPluginListProps, CustomPluginViewRegistry } from '../src/custom-plugin-views';
 import { groupMenus } from '../src/menu';
 
@@ -15,6 +15,15 @@ const render = (path: string, customViews: CustomPluginViewRegistry = {}) => ren
 test('검증된 메뉴를 그룹과 선언 순서대로 표시한다', () => {
   expect([...groupMenus(pluginMenus)].map(([group, entries]) => [group, entries.map(item => item.title)])).toEqual([['보안 관리', ['취약점', 'HTTP 취약점']], ['자산 관리', ['서버 자산', '저장소']]]);
   const html = render('/'); expect(html.indexOf('취약점')).toBeLessThan(html.indexOf('서버 자산')); expect(html.indexOf('서버 자산')).toBeLessThan(html.indexOf('저장소'));
+});
+test('겹치는 메뉴 경로에서는 가장 구체적인 메뉴만 활성화한다', () => {
+  expect(activeMenuPath('/vulnerabilities', pluginMenus)).toBe('/vulnerabilities');
+  expect(activeMenuPath('/vulnerabilities/record-id', pluginMenus)).toBe('/vulnerabilities');
+  expect(activeMenuPath('/vulnerabilities/http', pluginMenus)).toBe('/vulnerabilities/http');
+  expect(activeMenuPath('/vulnerabilities/http/record-id', pluginMenus)).toBe('/vulnerabilities/http');
+  const html = render('/vulnerabilities/http');
+  expect(html).toMatch(/class="" href="\/vulnerabilities"/);
+  expect(html).toMatch(/aria-current="page" class="active" href="\/vulnerabilities\/http"/);
 });
 test('아이콘 렌더러가 없으면 아이콘 영역 없이 메뉴 제목만 표시한다', () => {
   const html = render('/');

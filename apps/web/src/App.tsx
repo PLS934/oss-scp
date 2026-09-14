@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { NavLink, Route, Routes, useLocation, useParams } from 'react-router-dom';
+import { Link, NavLink, Route, Routes, useLocation, useParams } from 'react-router-dom';
 import { customPluginViews, resolveCustomPluginViews, type CustomPluginViewRegistry } from './custom-plugin-views';
 import { CustomViewBoundary } from './custom-view-boundary';
 import { RecordDetail } from './detail';
@@ -18,6 +18,10 @@ function ListRoute({ menu, registry }: { menu: MenuItem; registry: CustomPluginV
   return CustomList
     ? <CustomViewBoundary><CustomList menu={menu} /></CustomViewBoundary>
     : <RecordList key={`${menu.pluginId}:${menu.sourceId}:${menu.dataType}`} menu={menu} />;
+}
+
+export function activeMenuPath(pathname: string, menus: readonly MenuItem[]): string | undefined {
+  return menus.filter(menu => pathname === menu.path || pathname.startsWith(`${menu.path}/`)).sort((a, b) => b.path.length - a.path.length)[0]?.path;
 }
 
 function DetailRoute({ menu, registry }: { menu: MenuItem; registry: CustomPluginViewRegistry }) {
@@ -43,13 +47,11 @@ export default function App({ menus: providedMenus, customViews = customPluginVi
   }, [providedMenus]);
   const menus = providedMenus ?? loadedMenus;
   const groups = groupMenus(menus);
-  const { pathname } = useLocation();
-  const activeMenu = menus.filter(menu => pathname === menu.path || pathname.startsWith(`${menu.path}/`))
-    .reduce<MenuItem | undefined>((active, menu) => !active || menu.path.length > active.path.length ? menu : active, undefined);
+  const activePath = activeMenuPath(useLocation().pathname, menus);
   return <div className="app-shell"><aside><p className="eyebrow">오픈소스 취약점 관리 플랫폼</p><h1><NavLink to="/">OSS-SCP</NavLink></h1>
     {menuState === 'loading' ? <p>플러그인 메뉴 로딩 중</p> : menuState === 'failure' ? <p role="alert">플러그인 메뉴를 불러오지 못했습니다.</p> : null}
     <nav aria-label="플러그인 메뉴">{[...groups].map(([group, entries]) => <section className="menu-group" key={group} aria-labelledby={`group-${group}`}><h2 id={`group-${group}`}>{group}</h2><ul>
-      {entries.map(menu => <li key={menu.path}><NavLink to={menu.path} end={menu !== activeMenu}>{menu.title}</NavLink></li>)}</ul></section>)}</nav>
+      {entries.map(menu => <li key={menu.path}><Link aria-current={activePath === menu.path ? 'page' : undefined} className={activePath === menu.path ? 'active' : ''} to={menu.path}>{menu.title}</Link></li>)}</ul></section>)}</nav>
     </aside><div className="workspace"><header className="app-header"><div className="header-actions"><p role="status" className={`status ${state}`}>{labels[state]}</p><span className="version">v{productVersion}</span><ThemePicker /></div></header><main><Routes>
       <Route path="/" element={<PluginHome menus={menus} menuState={menuState} />} />
       {menuState === 'success' ? menus.flatMap(menu => [
