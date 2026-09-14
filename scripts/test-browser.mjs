@@ -188,7 +188,7 @@ try {
     await page.goto(`${url}/assets/repositories`);
     await expect(page.getByRole('cell', { name: 'example/another-repository' })).toBeVisible();
     await expect(page.getByLabel('화면 테마')).toHaveValue(theme);
-    await page.getByRole('link', { name: '보기' }).first().click();
+    await page.getByRole('row').filter({ hasText: 'example/another-repository' }).getByRole('link').first().click();
     await expect(page.getByRole('heading', { name: '저장소 상세' })).toBeVisible();
     await expect(page.locator('html')).toHaveAttribute('data-theme', theme);
     await page.screenshot({ path: `/tmp/oss-scp-theme-detail-${theme}.png`, fullPage: true });
