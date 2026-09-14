@@ -15,6 +15,11 @@ const { NestFactory } = apiRequire('@nestjs/core');
 const { AppModule } = apiRequire('./dist/app.module.js');
 const { createPluginRuntimeRegistry } = apiRequire('./dist/plugin-runtime-registry.js');
 const { validateRepository } = apiRequire('@oss-scp/plugin-config');
+async function assertPopoverInViewport(locator, page) {
+  await expect(locator).toBeVisible();
+  const [box, viewport] = await Promise.all([locator.boundingBox(), page.evaluate(() => ({ width: globalThis.innerWidth, height: globalThis.innerHeight }))]);
+  assert.ok(box && box.x >= 0 && box.y >= 0 && box.x + box.width <= viewport.width && box.y + box.height <= viewport.height, '필터 팝오버가 viewport 안에 있어야 합니다.');
+}
 const reports = [];
 for (const dialect of (process.env.SEARCH_DB_TYPE ? [process.env.SEARCH_DB_TYPE] : ['postgres', 'mysql'])) {
   assert.ok(['postgres', 'mysql'].includes(dialect));
@@ -56,6 +61,15 @@ for (const dialect of (process.env.SEARCH_DB_TYPE ? [process.env.SEARCH_DB_TYPE]
     await waitFor(() => healthy(url), '검색 테스트 웹');
     browser = await chromium.launch();
     await testAssetSearch(browser, url);
+    const mobile = await browser.newPage({ viewport: { width: 390, height: 844 } });
+    await mobile.goto(`${url}${menu.path}`);
+    await expect(mobile.getByText('전체 1,000건', { exact: true })).toBeVisible();
+    await mobile.locator('.record-table-wrap').evaluate(element => { element.scrollLeft = element.scrollWidth; });
+    await mobile.getByRole('button', { name: '관측 시각 필터' }).click();
+    await assertPopoverInViewport(mobile.getByRole('dialog', { name: '관측 시각 필터' }), mobile);
+    await mobile.keyboard.press('Escape');
+    await expect(mobile.getByRole('dialog', { name: '관측 시각 필터' })).toHaveCount(0);
+    await mobile.close();
     const page = await browser.newPage();
     const requests = [];
     page.on('request', request => { if (new URL(request.url()).pathname === '/api/v1/records') requests.push(new URL(request.url())); });
@@ -81,20 +95,23 @@ for (const dialect of (process.env.SEARCH_DB_TYPE ? [process.env.SEARCH_DB_TYPE]
     assert.equal(requests.at(-1).searchParams.get('page'), '1');
     await page.getByRole('button', { name: '마지막 페이지', exact: true }).click();
     await expect(page.locator('tbody tr')).toHaveCount(5);
+    await page.getByRole('button', { name: '영향 여부 필터' }).click();
     await page.getByLabel('영향 여부', { exact: true }).selectOption('0');
-    await page.getByRole('button', { name: '점수 범위 선택' }).click();
+    await page.getByRole('button', { name: '점수 필터' }).click();
+    await assertPopoverInViewport(page.getByRole('dialog', { name: '점수 필터' }), page);
     await page.getByLabel('점수 최솟값').fill('9');
     await page.getByLabel('점수 최댓값').fill('10');
-    await page.getByRole('button', { name: '관측 시각 범위 선택' }).click();
+    await page.getByRole('button', { name: '관측 시각 필터' }).click();
     await page.getByLabel('관측 시각 시작일 (UTC)').fill('2024-02-29');
     await page.getByLabel('관측 시각 종료일 (UTC)').fill('2024-02-29');
-    await page.getByLabel('취약점명', { exact: false }).selectOption(['0', '1']);
+    await page.getByRole('button', { name: '취약점명 필터' }).click();
+    await page.getByLabel('취약점명', { exact: true }).selectOption(['0', '1']);
     await page.getByRole('button', { name: '적용', exact: true }).click();
     await expect(page.locator('tbody tr')).toHaveCount(20);
     const applied = JSON.parse(requests.at(-1).searchParams.get('filters'));
     assert.equal(applied.find(filter => filter.field === 'affected').value, true);
     assert.deepEqual(applied.find(filter => filter.field === 'name').values, ['Alpha', 'Beta']);
-    await page.getByRole('button', { name: '9 ~ 10' }).click();
+    await page.getByRole('button', { name: '점수 필터' }).click();
     await page.getByLabel('점수 최솟값').fill('11');
     const beforeInvalid = requests.length;
     await page.getByRole('button', { name: '적용', exact: true }).click();
@@ -132,7 +149,7 @@ for (const dialect of (process.env.SEARCH_DB_TYPE ? [process.env.SEARCH_DB_TYPE]
     // 메뉴가 바뀌면 draft와 적용 조건을 모두 초기화한다.
     await page.getByRole('link', { name: '저장소', exact: true }).click();
     await expect(page.getByRole('searchbox')).toHaveValue('');
-    await expect(page.getByRole('combobox', { name: '활성 상태', exact: true })).toBeVisible();
+    await expect(page.getByRole('button', { name: '활성 상태 필터', exact: true })).toBeVisible();
     await page.getByRole('link', { name: '취약점', exact: true }).click();
     await expect(search).toHaveValue(''); await expect(page.getByText('전체 1,000건', { exact: true })).toBeVisible();
     await mkdir(new URL('../test-results/', import.meta.url), { recursive: true });

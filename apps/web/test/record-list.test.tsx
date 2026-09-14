@@ -3,6 +3,7 @@ import { MemoryRouter } from 'react-router-dom';
 import { describe, expect, test, vi } from 'vitest';
 import type { MenuItem } from '../src/menu';
 import { createNavigationState, formatColumnValue, navigationReducer, RecordListView, pageNumbers } from '../src/record-list';
+import type { RecordSearchState } from '../src/record-search';
 import type { CollectionStatus, NumberedListRecordsResult } from '../src/records';
 
 const menu: MenuItem = {
@@ -48,6 +49,14 @@ test('기본 컬럼 순서와 표시명만 렌더링한다', () => {
   expect(html.indexOf('호스트명')).toBeLessThan(html.indexOf('점수'));
   expect(html).toContain('server-1'); expect(html).toContain('12,345'); expect(html).toContain('예');
   expect(html).not.toContain('secret'); expect(html).not.toContain('not-visible'); expect(html).not.toContain('details');
+});
+
+test('필터가 선언된 컬럼명만 필터 버튼으로 렌더링한다', () => {
+  const filteredMenu: MenuItem = { ...menu, list: { ...menu.list, query: { searchEnabled: true, filters: [{ key: 'score', label: '점수', type: 'number', kind: 'numberRange' }] } } };
+  const searchState: RecordSearchState = { query: filteredMenu.list.query!, q: '', draft: {}, dirty: false, error: null, setQ: vi.fn(), update: vi.fn(), clearFilter: vi.fn(), apply: vi.fn(), reset: vi.fn() };
+  const html = render({ menu: filteredMenu, searchState });
+  expect(html).toContain('aria-label="점수 필터"');
+  expect(html).not.toContain('aria-label="호스트명 필터"');
 });
 
 test('목록 레코드의 내부 UUID로 현재 메뉴 상세 링크를 만든다', () => {
