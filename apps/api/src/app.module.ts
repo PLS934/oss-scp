@@ -4,6 +4,7 @@ import { HealthController } from './health.controller';
 import { HealthService, PLATFORM_DB_CONNECTION } from './health.service';
 import { RecordQueryController } from './record-query.controller';
 import { RECORD_QUERY, RecordQueryService } from './record-query.service';
+import { PluginController } from './plugin.controller';
 import { PluginMenuController } from './plugin-menu.controller';
 import { createPluginRuntimeRegistry, PLUGIN_RUNTIME_REGISTRY, type PluginRuntimeRegistry } from './plugin-runtime-registry';
 import { CollectionStatusController } from './collection-status.controller';
@@ -29,7 +30,7 @@ export class AppModule {
     };
     return {
       module: AppModule,
-      controllers: [HealthController, RecordQueryController, PluginMenuController, CollectionStatusController],
+      controllers: [HealthController, RecordQueryController, PluginMenuController, PluginController, CollectionStatusController],
       providers: [
         { provide: PLATFORM_DB_CONNECTION, useValue: connection },
         { provide: RECORD_QUERY, useValue: query ?? unavailable },

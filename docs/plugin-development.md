@@ -49,9 +49,19 @@ packages/plugin-config/
 
 `plugin.json`은 플러그인 ID·이름·릴리스 버전, 같은 폴더의 source와 빌드된 transform 파일, 데이터 종류·필드·유일키·관계, 메뉴와 기본 목록을 정의합니다. sample1의 `source.json`은 `/sample1` 경로, GET, `rows`·`total` 응답 경로와 offset·limit 설정을 정의합니다. sample2의 `source.json`은 `/sample2` 경로, GET, `items` 응답 경로와 `single` 방식을 정의합니다.
 
+## 홈의 등록 정보
+
+`GET /api/v1/plugins`는 기동 시 검증한 registry에서 등록 순서대로 `id`, `name`, 선택적 `description`, `enabled`, `sourceType`만 제공합니다. `sourceType`은 source 설정에서 도출한 `http-json`(외부 API), `http-csv`(외부 HTTP CSV), `local-csv`(로컬 CSV)입니다. Connection, 요청 경로, 파일 경로, transform 경로와 인증정보는 포함하지 않습니다. 이름과 설명은 공개 표시 정보이므로 비밀정보를 넣지 않습니다.
+
+`plugin.json`에 선택적으로 `description`(최대 2,000자)과 `enabled`(boolean)를 지정할 수 있습니다. 기존 설정에서 `enabled`를 생략하면 `true`로 동작합니다. `false`인 플러그인은 등록 목록에는 남지만 수집 정의와 메뉴에서 제외되어 시작 수집·수동 수집 대상이 되지 않으며 transform 모듈을 로딩하지 않습니다. 비활성 설정도 기본 schema, 데이터·메뉴 참조, source schema 및 transform 파일 존재 검증은 통과해야 합니다.
+
+홈은 이름·설명·출처 유형·설정상 활성화 여부를 표시하고, 활성 플러그인의 조회 가능한 메뉴를 기존 `/api/v1/plugin-menus` 응답과 ID로 연결합니다. 복수 메뉴 응답은 메뉴 제목별 링크로 구분합니다. 현재 `plugin.json`의 메뉴 선언은 최대 하나이며 이 변경에서 배열 선언을 추가하지 않습니다. 설명 누락, 비활성, 메뉴 없음, 로딩, 조회 실패, 빈 registry는 각각 안내합니다. 등록 여부와 활성화는 원천 연결이나 수집 성공을 뜻하지 않습니다.
+
+설정 편집·활성화 전환 UI와 수집 이력 표시는 제공하지 않습니다. 기존 설정은 변경 없이 호환되며, 새 선택 필드를 사용한 설정은 이 필드를 지원하는 서버와 함께 배포해야 합니다. 새 홈은 `/api/v1/plugins`를 제공하는 서버가 필요합니다.
+
 ## 메뉴와 라우팅
 
-플러그인은 하나의 메뉴를 필수로 선언합니다. `dataType`은 같은 파일의 `data.types` 키를 참조하며, `path`는 소문자 영숫자와 하이픈으로 이루어진 절대 경로입니다.
+플러그인은 하나의 메뉴를 선택적으로 선언합니다. 메뉴를 생략하면 수집은 가능하지만 사이드바와 홈의 데이터 조회 링크에는 표시되지 않습니다. `dataType`은 같은 파일의 `data.types` 키를 참조하며, `path`는 소문자 영숫자와 하이픈으로 이루어진 절대 경로입니다.
 
 ```json
 {

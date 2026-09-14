@@ -87,3 +87,18 @@ aside a:focus-visible { outline-color: var(--sidebar-focus); }
 .record-row:focus-within { outline: 3px solid var(--focus, #2f6f9f); outline-offset: -3px; }
 .record-row-link { text-decoration: none; }
 .record-row-link:focus-visible { outline: 2px solid var(--focus, #2f6f9f); outline-offset: 2px; }
+
+.plugin-intro, .plugin-description, .plugin-unavailable { color: #516372; }
+.plugin-cards { display: grid; gap: 16px; margin-top: 24px; }
+.plugin-card { border: 1px solid #dce2e7; border-radius: 10px; padding: 20px; overflow-wrap: anywhere; min-width: 0; }
+.plugin-heading { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; }
+.plugin-heading h3 { margin: 0; font-size: 18px; }
+.plugin-badge { border-radius: 20px; padding: 3px 10px; font-size: 13px; white-space: nowrap; }
+.plugin-badge.enabled { color: #22533c; background: #e6f4ec; }
+.plugin-badge.disabled { color: #516372; background: #eef1f4; }
+.plugin-source { display: flex; flex-wrap: wrap; gap: 8px 16px; font-size: 14px; }
+.plugin-source dt { font-weight: 600; } .plugin-source dd { margin: 0; }
+.plugin-links { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 16px; }
+.plugin-links a { color: #245c83; background: #eef4f8; }
+.plugin-links a:hover { color: #183f5b; background: #dceaf4; }
+.plugin-links a:focus-visible { outline: 3px solid #2f6f9f; outline-offset: 2px; }

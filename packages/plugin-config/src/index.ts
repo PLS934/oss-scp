@@ -10,6 +10,7 @@ import type {
   ClientDetailDefinition,
   ClientListDefinition,
   ClientMenuItem,
+  ClientPluginSummary,
   CollectionDefinitionBase,
   ConfigurationIssue,
   ConfigurationResult,
@@ -201,6 +202,7 @@ function loadPlugins(
   connections: Map<string, Candidate<HttpConnectionConfig>>,
   errors: ConfigurationIssue[],
   menus: ClientMenuItem[],
+  plugins: ClientPluginSummary[],
 ): CollectionDefinition[] {
   const pluginRoot = join(root, 'plugins');
   const registryFile = join(pluginRoot, 'registry.json');
@@ -311,16 +313,18 @@ function loadPlugins(
         }
       }
     }
-    if (!(pluginValue.menu.dataType in pluginValue.data.types)) {
-      issue(errors, root, pluginFile, '/menu/dataType', `unknown data type: ${pluginValue.menu.dataType}`);
-      invalidReference = true;
-    }
-    const existingMenu = menuPaths.get(pluginValue.menu.path);
-    if (existingMenu) {
-      issue(errors, root, pluginFile, '/menu/path', `duplicate menu path: ${pluginValue.menu.path} (already declared by ${existingMenu})`);
-      invalidReference = true;
-    } else {
-      menuPaths.set(pluginValue.menu.path, displayPath(root, pluginFile));
+    if (pluginValue.menu) {
+      if (!(pluginValue.menu.dataType in pluginValue.data.types)) {
+        issue(errors, root, pluginFile, '/menu/dataType', `unknown data type: ${pluginValue.menu.dataType}`);
+        invalidReference = true;
+      }
+      const existingMenu = menuPaths.get(pluginValue.menu.path);
+      if (existingMenu) {
+        issue(errors, root, pluginFile, '/menu/path', `duplicate menu path: ${pluginValue.menu.path} (already declared by ${existingMenu})`);
+        invalidReference = true;
+      } else {
+        menuPaths.set(pluginValue.menu.path, displayPath(root, pluginFile));
+      }
     }
     if (invalidReference) continue;
     const runtimePlugin: PluginRuntimeDefinition = {
@@ -348,6 +352,14 @@ function loadPlugins(
     ) {
       continue;
     }
+    plugins.push({
+      id: pluginValue.id,
+      name: pluginValue.name,
+      ...(pluginValue.description === undefined ? {} : { description: pluginValue.description }),
+      enabled: pluginValue.enabled ?? true,
+      sourceType: sourceValue.format === 'csv' ? (sourceValue.transport === 'file' ? 'local-csv' : 'http-csv') : 'http-json',
+    });
+    if (pluginValue.enabled === false) continue;
     if (sourceValue.format === 'csv' && sourceValue.transport === 'file') {
       const csvPath = safeResolve(
         root,
@@ -359,7 +371,7 @@ function loadPlugins(
       );
       if (!csvPath) continue;
       definitions.push(loadLocalCsvSource(runtimePlugin, sourceValue, csvPath));
-      menus.push({ ...pluginValue.menu, pluginId: pluginValue.id, sourceId: `file:${sourceValue.path}`, list: clientLists.get(pluginValue.menu.dataType)!, detail: clientDetails.get(pluginValue.menu.dataType)! });
+      if (pluginValue.menu) menus.push({ ...pluginValue.menu, pluginId: pluginValue.id, sourceId: `file:${sourceValue.path}`, list: clientLists.get(pluginValue.menu.dataType)!, detail: clientDetails.get(pluginValue.menu.dataType)! });
       continue;
     }
 
@@ -374,7 +386,7 @@ function loadPlugins(
         continue;
       }
       definitions.push(loadHttpCsvSource(runtimePlugin, sourceValue, connection.value));
-      menus.push({ ...pluginValue.menu, pluginId: pluginValue.id, sourceId: connection.value.id, list: clientLists.get(pluginValue.menu.dataType)!, detail: clientDetails.get(pluginValue.menu.dataType)! });
+      if (pluginValue.menu) menus.push({ ...pluginValue.menu, pluginId: pluginValue.id, sourceId: connection.value.id, list: clientLists.get(pluginValue.menu.dataType)!, detail: clientDetails.get(pluginValue.menu.dataType)! });
       continue;
     }
 
@@ -413,7 +425,7 @@ function loadPlugins(
       },
     };
     definitions.push(loadSourceDefinition(commonDefinition, sourceValue));
-    menus.push({ ...pluginValue.menu, pluginId: pluginValue.id, sourceId: connection.value.id, list: clientLists.get(pluginValue.menu.dataType)!, detail: clientDetails.get(pluginValue.menu.dataType)! });
+    if (pluginValue.menu) menus.push({ ...pluginValue.menu, pluginId: pluginValue.id, sourceId: connection.value.id, list: clientLists.get(pluginValue.menu.dataType)!, detail: clientDetails.get(pluginValue.menu.dataType)! });
   }
   return definitions;
 }
@@ -423,9 +435,10 @@ export function validateRepository(rootDirectory: string): ConfigurationResult {
   const errors: ConfigurationIssue[] = [];
   const connections = loadConnections(root, errors);
   const menus: ClientMenuItem[] = [];
-  const definitions = loadPlugins(root, connections, errors, menus);
+  const plugins: ClientPluginSummary[] = [];
+  const definitions = loadPlugins(root, connections, errors, menus, plugins);
   menus.sort((a, b) => a.group < b.group ? -1 : a.group > b.group ? 1 : a.order - b.order || (a.title < b.title ? -1 : a.title > b.title ? 1 : a.path < b.path ? -1 : a.path > b.path ? 1 : 0));
-  return errors.length > 0 ? { ok: false, errors } : { ok: true, definitions, menus };
+  return errors.length > 0 ? { ok: false, errors } : { ok: true, definitions, menus, plugins };
 }
 
 const loadModule = createRequire(__filename);

@@ -172,7 +172,8 @@ describe('validateRepository', () => {
   });
 
   test.each([
-    ['메뉴 누락', (plugin) => delete plugin.menu, '/menu'],
+    ['잘못된 활성화 값', (plugin) => (plugin.enabled = 'false'), '/enabled'],
+    ['잘못된 설명', (plugin) => (plugin.description = {}), '/description'],
     ['지원하지 않는 아이콘', (plugin) => (plugin.menu.icon = 'unknown'), '/menu/icon'],
     ['상대 메뉴 경로', (plugin) => (plugin.menu.path = 'assets'), '/menu/path'],
   ])('플러그인의 %s을 거부한다', (_name, mutate, expectedPath) => {
@@ -712,4 +713,45 @@ describe('validateRepository', () => {
       }),
     );
   });
+});
+
+
+test('등록 요약은 실제 출처와 기본 활성화를 제공하며 원천 설정을 노출하지 않는다', () => {
+  const result = validateRepository(temporaryRepository());
+  expect(result.ok).toBe(true);
+  expect(result.plugins.map(plugin => [plugin.id, plugin.sourceType, plugin.enabled])).toEqual([
+    ['sample1-offset-api', 'http-json', true],
+    ['vulnerabilities-local-csv', 'local-csv', true],
+    ['vulnerabilities-http-csv', 'http-csv', true],
+    ['sample2-single-api', 'http-json', true],
+  ]);
+  for (const plugin of result.plugins) expect(Object.keys(plugin).sort()).toEqual(['enabled', 'id', 'name', 'sourceType']);
+});
+
+test('비활성 플러그인은 등록 목록에 남고 수집 정의·메뉴·transform 로딩에서 제외한다', async () => {
+  const root = temporaryRepository();
+  const file = 'plugins/sample1-offset-api/plugin.json';
+  const plugin = readJson(root, file);
+  plugin.enabled = false;
+  plugin.description = '서버 자산 제공';
+  writeJson(root, file, plugin);
+  writeFileSync(join(root, 'plugins/sample1-offset-api/dist/transform.js'), "throw new Error('disabled module must not run');");
+  const result = await preflightConfiguration(root);
+  expect(result.ok).toBe(true);
+  expect(result.plugins.find(item => item.id === plugin.id)).toEqual({ id: plugin.id, name: plugin.name, description: plugin.description, enabled: false, sourceType: 'http-json' });
+  expect(result.definitions.some(item => item.plugin.id === plugin.id)).toBe(false);
+  expect(result.menus.some(item => item.pluginId === plugin.id)).toBe(false);
+});
+
+test('메뉴 없는 플러그인은 수집 정의와 등록 목록만 제공한다', () => {
+  const root = temporaryRepository();
+  const file = 'plugins/sample1-offset-api/plugin.json';
+  const plugin = readJson(root, file);
+  delete plugin.menu;
+  writeJson(root, file, plugin);
+  const result = validateRepository(root);
+  expect(result.ok).toBe(true);
+  expect(result.plugins.some(item => item.id === plugin.id)).toBe(true);
+  expect(result.definitions.some(item => item.plugin.id === plugin.id)).toBe(true);
+  expect(result.menus.some(item => item.pluginId === plugin.id)).toBe(false);
 });

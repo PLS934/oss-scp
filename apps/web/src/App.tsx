@@ -4,6 +4,7 @@ import { RecordDetail } from './detail';
 import { observeHealth, type ConnectionState } from './health';
 import { groupMenus, type MenuItem } from './menu';
 import { loadPluginMenus } from './plugin-menus';
+import { PluginHome } from './plugin-home';
 import { RecordList } from './record-list';
 import { ThemePicker } from './theme-picker';
 
@@ -32,7 +33,7 @@ export default function App({ menus: providedMenus }: { menus?: readonly MenuIte
     <nav aria-label="플러그인 메뉴">{[...groups].map(([group, entries]) => <section className="menu-group" key={group} aria-labelledby={`group-${group}`}><h2 id={`group-${group}`}>{group}</h2><ul>
       {entries.map(menu => <li key={menu.path}><NavLink to={menu.path}>{menu.title}</NavLink></li>)}</ul></section>)}</nav>
     </aside><div className="workspace"><header className="app-header"><div className="header-actions"><p role="status" className={`status ${state}`}>{labels[state]}</p><span className="version">v{productVersion}</span><ThemePicker /></div></header><main><Routes>
-      <Route path="/" element={<section><h2>플러그인 메뉴</h2><p>조회할 데이터 메뉴를 선택해 주세요.</p></section>} />
+      <Route path="/" element={<PluginHome menus={menus} menuState={menuState} />} />
       {menuState === 'success' ? menus.flatMap(menu => [
         <Route key={menu.path} path={menu.path} element={<RecordList key={`${menu.pluginId}:${menu.sourceId}:${menu.dataType}`} menu={menu} />} />,
         <Route key={`${menu.path}/:recordId`} path={`${menu.path}/:recordId`} element={<DetailRoute menu={menu} />} />,
