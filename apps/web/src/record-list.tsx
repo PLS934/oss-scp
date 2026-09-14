@@ -69,12 +69,14 @@ export function RecordListView({ menu, limit, page, loading, result, error, onLi
       <tbody>{result.items.map(item => <tr key={item.id}>{menu.list.columns.map(column => <td key={column.key}>{formatColumnValue(column.type, item.sourceValues[column.key])}</td>)}<td><Link to={recordDetailPath(menu.path, item.id)}>보기</Link></td></tr>)}</tbody>
     </table></div> : null}
     <nav className="pagination" aria-label="목록 페이지 탐색">
-      <span aria-live="polite">{page} / {totalPages} 페이지 · 전체 {numberFormat.format(result?.pageInfo.totalItems ?? 0)}건{result ? ` · ${result.items.length}개 항목` : ''}</span>
-      <button type="button" aria-label="첫 페이지" disabled={navigationDisabled || page <= 1} onClick={() => onPageChange(1)}>{'<<'}</button>
-      <button type="button" aria-label="이전 페이지" disabled={navigationDisabled || page <= 1} onClick={() => onPageChange(page - 1)}>{'<'}</button>
+      <span className="pagination-summary" aria-live="polite">{page} / {totalPages} 페이지 · 전체 {numberFormat.format(result?.pageInfo.totalItems ?? 0)}건{result ? ` · ${result.items.length}개 항목` : ''}</span>
+      <div className="pagination-controls">
+      <button type="button" aria-label="첫 페이지" disabled={navigationDisabled || page <= 1} onClick={() => onPageChange(1)}><svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"><path d="m11 5-7 7 7 7m9-14-7 7 7 7" /></svg></button>
+      <button type="button" aria-label="이전 페이지" disabled={navigationDisabled || page <= 1} onClick={() => onPageChange(page - 1)}><svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"><path d="m15 5-7 7 7 7" /></svg></button>
       {pageNumbers(page, totalPages).map(number => <button key={number} type="button" aria-label={`${number}페이지`} aria-current={page === number ? 'page' : undefined} disabled={navigationDisabled} onClick={() => onPageChange(number)}>{number}</button>)}
-      <button type="button" aria-label="다음 페이지" disabled={navigationDisabled || page >= totalPages} onClick={() => onPageChange(page + 1)}>{'>'}</button>
-      <button type="button" aria-label="마지막 페이지" disabled={navigationDisabled || page >= totalPages} onClick={() => onPageChange(totalPages)}>{'>>'}</button>
+      <button type="button" aria-label="다음 페이지" disabled={navigationDisabled || page >= totalPages} onClick={() => onPageChange(page + 1)}><svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"><path d="m9 5 7 7-7 7" /></svg></button>
+      <button type="button" aria-label="마지막 페이지" disabled={navigationDisabled || page >= totalPages} onClick={() => onPageChange(totalPages)}><svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"><path d="m4 5 7 7-7 7m9-14 7 7-7 7" /></svg></button>
+      </div>
     </nav>
   </section>;
 }

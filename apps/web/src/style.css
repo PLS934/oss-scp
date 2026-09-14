@@ -30,7 +30,6 @@ main section { background: white; border: 1px solid #dce2e7; border-radius: 12px
 table { border-collapse: collapse; min-width: 100%; }
 th, td { border-bottom: 1px solid #dce2e7; padding: 11px 12px; text-align: left; white-space: nowrap; }
 th { background: #f4f6f8; }
-.pagination { display: flex; flex-wrap: wrap; justify-content: flex-end; align-items: center; gap: 12px; margin-top: 18px; color: #516372; }
 .detail-section { margin: 20px 0; padding: 20px; }
 .detail-section h3 { margin-top: 0; }
 .detail-section dl, .nested-fields { margin: 0; }
@@ -41,4 +40,13 @@ th { background: #f4f6f8; }
 .back-link { display: inline-block; margin-top: 8px; }
 @media (max-width: 700px) { .app-shell { grid-template-columns: 1fr; } main { margin: 24px auto; } }
 
-.pagination button[aria-current="page"] { font-weight: 700; outline: 2px solid currentColor; outline-offset: -3px; }
+
+.pagination { display: flex; flex-direction: column; align-items: center; gap: 12px; margin-top: 24px; color: var(--muted, #516372); }
+.pagination-summary { font-size: 12px; font-variant-numeric: tabular-nums; }
+.pagination-controls { display: flex; justify-content: center; gap: 4px; max-width: 100%; flex-wrap: wrap; }
+.pagination button { display: inline-flex; align-items: center; justify-content: center; width: 32px; height: 32px; padding: 0; border: 1px solid transparent; border-radius: 8px; background: transparent; color: var(--muted, #516372); font: inherit; font-size: 13px; font-variant-numeric: tabular-nums; cursor: pointer; transition: background-color .15s, color .15s; }
+.pagination button svg { width: 16px; height: 16px; }
+.pagination button:hover:not(:disabled) { background: var(--info, #eef4f8); color: var(--text, #182c3c); }
+.pagination button[aria-current="page"], .pagination button[aria-current="page"]:hover:not(:disabled) { background: var(--text, #182c3c); color: var(--surface, #fff); font-weight: 600; }
+.pagination button:focus-visible { outline: 2px solid var(--focus, #226596); outline-offset: 2px; }
+.pagination button:disabled { opacity: .35; }
