@@ -17,3 +17,5 @@
 
 
 검증 기록: 웹 Vitest 61개, 전체 `pnpm build`·`pnpm typecheck`·`pnpm lint`, Docker PostgreSQL 기반 `pnpm test:browser`, OpenSpec strict validation을 통과했다. GitHub Actions 결과는 PR에서 확인한다. #86·#74와 조합한 검증은 독립 PR의 코드를 유지한 채 통합 검증 작업에서 수행한다.
+
+아카이브 검증: PR #100의 head 5d981ae에서 GitHub Actions MySQL·PostgreSQL·로컬 빌드·Docker 4개 검사가 모두 성공했다. #86·#74와 조합한 임시 통합 환경에서 웹 102개 테스트와 브라우저 회귀도 통과했다. 본 명세 plugin-record-list의 행 상세 이동 요구사항과 모든 변경 시나리오를 동기화했다.
