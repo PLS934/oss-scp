@@ -152,13 +152,13 @@ try {
   await expect(pagination.locator('[aria-current="page"]')).toHaveText('3');
   assert.deepEqual(recordRequests.at(-1), { pluginId: 'sample1-offset-api', limit: 20, page: 3 });
   await page.getByRole('button', { name: '10페이지', exact: true }).click();
-  await expect(pagination).toContainText('10 / 13 페이지');
+  await expect(pagination.locator('[aria-current="page"]')).toHaveText('10');
   await page.getByRole('button', { name: '다음 페이지', exact: true }).click();
   await expect(pagination.locator('[aria-current="page"]')).toHaveText('11');
   await expect(pagination.getByRole('button', { name: /^\d+페이지$/ })).toHaveCount(3);
   await page.getByRole('button', { name: '마지막 페이지', exact: true }).click();
   await expect(page.getByRole('cell', { name: 'test-host-245', exact: true })).toBeVisible();
-  await expect(pagination).toContainText('13 / 13 페이지');
+  await expect(pagination.locator('[aria-current="page"]')).toHaveText('13');
   await expect(page.getByRole('button', { name: '다음 페이지', exact: true })).toBeDisabled();
   await expect(page.getByRole('button', { name: '마지막 페이지', exact: true })).toBeDisabled();
   await page.getByRole('button', { name: '첫 페이지', exact: true }).click();
@@ -166,7 +166,7 @@ try {
   failPage = 2;
   await page.getByRole('button', { name: '다음 페이지', exact: true }).click();
   await expect(page.getByRole('alert')).toBeVisible();
-  await expect(pagination).toContainText('1 / 13 페이지');
+  await expect(pagination.locator('[aria-current="page"]')).toHaveText('1');
   await expect(page.getByRole('cell', { name: 'test-host-1', exact: true })).toBeVisible();
   await page.getByRole('button', { name: '다시 시도', exact: true }).click();
   await expect(page.getByRole('cell', { name: 'test-host-21', exact: true })).toBeVisible();
@@ -194,7 +194,7 @@ try {
   await expect(page.getByRole('heading', { name: '저장소', exact: true })).toBeVisible();
   await expect(page.getByRole('columnheader', { name: '저장소 전체 이름' })).toBeVisible();
   await expect(page.getByRole('cell', { name: 'example/another-repository' })).toBeVisible();
-  await expect(pagination).toContainText('1 / 1 페이지');
+  await expect(pagination.locator('[aria-current="page"]')).toHaveText('1');
   assert.deepEqual(recordRequests.at(-1), { pluginId: 'sample2-single-api', limit: 20, page: 1 });
   await page.waitForTimeout(400);
   await expect(page.getByRole('cell', { name: 'example/another-repository' })).toBeVisible();

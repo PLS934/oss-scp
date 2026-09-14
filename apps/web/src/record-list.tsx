@@ -54,9 +54,7 @@ export function RecordListView({ menu, limit, page, loading, result, error, onLi
     <p className="eyebrow">{menu.group}</p>
     <div className="list-heading">
       <h2 id="record-list-title">{menu.title}</h2>
-      <label>페이지 크기 <select value={limit} disabled={loading} onChange={event => onLimitChange(Number(event.target.value) as RecordListLimit)}>
-        {limits.map(value => <option key={value} value={value}>{value}</option>)}
-      </select></label>
+
     </div>
     {loading ? <p role="status">저장된 목록을 불러오는 중입니다.</p> : null}
     {!loading && error ? <div className="list-message error" role="alert"><p>{error.message}</p><button type="button" onClick={onRetry}>다시 시도</button></div> : null}
@@ -64,7 +62,12 @@ export function RecordListView({ menu, limit, page, loading, result, error, onLi
     {!loading && !error && result?.collection.status === 'never_collected' && !hasItems ? <p className="empty-state">아직 수집된 데이터가 없습니다.</p> : null}
     {!loading && !error && result?.collection.status === 'success' && !hasItems ? <p className="empty-state">수집이 완료됐지만 표시할 결과가 없습니다.</p> : null}
     {!loading && !error && result && result.collection.status !== 'never_collected' && result.collection.status !== 'success' && !hasItems ? <p className="empty-state">현재 표시할 저장 데이터가 없습니다.</p> : null}
-    <p className="record-total" aria-live="polite">전체 {numberFormat.format(result?.pageInfo.totalItems ?? 0)}건</p>
+    <div className="record-table-toolbar">
+      <p className="record-total" aria-live="polite">전체 {numberFormat.format(result?.pageInfo.totalItems ?? 0)}건</p>
+      <label className="page-size-select"><select aria-label="페이지 크기" value={limit} disabled={loading} onChange={event => onLimitChange(Number(event.target.value) as RecordListLimit)}>
+        {limits.map(value => <option key={value} value={value}>{value}개씩 보기</option>)}
+      </select><svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"><path d="m7 10 5 5 5-5" /></svg></label>
+    </div>
     {result && hasItems ? <div className="record-table-wrap"><table>
       <thead><tr>{menu.list.columns.map(column => <th key={column.key} scope="col">{column.label}</th>)}<th scope="col">상세</th></tr></thead>
       <tbody>{result.items.map(item => <tr key={item.id}>{menu.list.columns.map(column => <td key={column.key}>{formatColumnValue(column.type, item.sourceValues[column.key])}</td>)}<td><Link to={recordDetailPath(menu.path, item.id)}>보기</Link></td></tr>)}</tbody>
