@@ -69,6 +69,8 @@ try {
   const recordRequests = [];
   const detailRequests = [];
   let sourceRequests = 0;
+  let failPage = null;
+  let recordTotal = 245;
   page.on('request', request => {
     const requestUrl = new URL(request.url());
     if (['/sample1', '/sample2', '/vulnerabilities.csv'].includes(requestUrl.pathname)) sourceRequests += 1;
@@ -97,11 +99,18 @@ try {
     const requestUrl = new URL(route.request().url());
     const pluginId = requestUrl.searchParams.get('pluginId');
     const limit = Number(requestUrl.searchParams.get('limit') ?? 20);
-    const cursor = requestUrl.searchParams.get('cursor');
-    recordRequests.push({ pluginId, limit, cursor });
-    if (cursor === 'cursor-50') await delay(300);
-    const start = cursor ? Number(cursor.slice('cursor-'.length)) : 0;
-    const total = pluginId === 'sample1-offset-api' ? 72 : 1;
+    const requestedPage = Number(requestUrl.searchParams.get('page'));
+    assert.equal(requestUrl.searchParams.has('cursor'), false);
+    recordRequests.push({ pluginId, limit, page: requestedPage });
+    if (limit === 50 && requestedPage === 2) await delay(300);
+    if (failPage === requestedPage) {
+      failPage = null;
+      await route.fulfill({ status: 503, json: { code: 'QUERY_FAILED' } });
+      return;
+    }
+    const total = pluginId === 'sample1-offset-api' ? recordTotal : 1;
+    const currentPage = Math.min(requestedPage, Math.max(1, Math.ceil(total / limit)));
+    const start = (currentPage - 1) * limit;
     const rows = Array.from({ length: Math.min(limit, total - start) }, (_, index) => {
       const number = start + index + 1;
       return {
@@ -116,7 +125,7 @@ try {
     });
     const hasNextPage = start + rows.length < total;
     await route.fulfill({ json: {
-      items: rows, pageInfo: { nextCursor: hasNextPage ? `cursor-${start + rows.length}` : null, hasNextPage },
+      items: rows, pageInfo: { page: currentPage, pageSize: limit, totalItems: total, totalPages: Math.ceil(total / limit), hasNextPage },
       collection: { scope: 'source', status: 'success', runId: '00000000-0000-4000-8000-000000009999', startedAt: '2026-09-11T01:00:00.000Z', finishedAt: '2026-09-11T01:02:00.000Z' },
       lastStoredAt: '2026-09-11T01:01:00.000Z',
     } });
@@ -129,45 +138,69 @@ try {
   await expect(page.getByRole('heading', { name: '서버 자산', exact: true })).toBeVisible();
   await expect(page.getByRole('columnheader', { name: '호스트명' })).toBeVisible();
   await expect(page.getByRole('cell', { name: 'test-host-1', exact: true })).toBeVisible();
-  await expect(page.getByText('20개 항목')).toBeVisible();
-  await expect(page.getByRole('navigation', { name: '목록 페이지 탐색' })).toBeVisible();
-  await expect(page.getByText(/1번째 묶음/)).toBeVisible();
-  await expect(page.getByRole('button', { name: '이전 묶음' })).toBeDisabled();
-  await expect(page.getByRole('button', { name: '다음 묶음' })).toBeEnabled();
   const firstServerRow = page.locator('tbody tr').first();
   await firstServerRow.getByRole('cell').nth(1).click();
   await expect(page).toHaveURL(`${url}/assets/servers/00000000-0000-4000-8000-000000000001`);
   await page.goto(`${url}/assets/servers`);
   await expect(page.getByRole('cell', { name: 'test-host-1', exact: true })).toBeVisible();
-  await page.getByRole('button', { name: '다음 묶음' }).click();
+  await expect(page.getByText(/20개 항목/)).toHaveCount(0);
+  const pagination = page.getByRole('navigation', { name: '목록 페이지 탐색' });
+  await expect(pagination).toBeVisible();
+  await expect(page.getByText('전체 245건', { exact: true })).toBeVisible();
+  await expect(page.getByRole('button', { name: '첫 페이지', exact: true })).toBeDisabled();
+  await expect(page.getByRole('button', { name: '이전 페이지', exact: true })).toBeDisabled();
+  await expect(pagination.locator('[aria-current="page"]')).toHaveText('1');
+  await expect(pagination.getByRole('button', { name: /^\d+페이지$/ })).toHaveCount(10);
+  await page.getByRole('button', { name: '3페이지', exact: true }).focus();
+  await page.keyboard.press('Enter');
+  await expect(page.getByRole('cell', { name: 'test-host-41', exact: true })).toBeVisible();
+  await expect(pagination.locator('[aria-current="page"]')).toHaveText('3');
+  assert.deepEqual(recordRequests.at(-1), { pluginId: 'sample1-offset-api', limit: 20, page: 3 });
+  await page.getByRole('button', { name: '10페이지', exact: true }).click();
+  await expect(pagination.locator('[aria-current="page"]')).toHaveText('10');
+  await page.getByRole('button', { name: '다음 페이지', exact: true }).click();
+  await expect(pagination.locator('[aria-current="page"]')).toHaveText('11');
+  await expect(pagination.getByRole('button', { name: /^\d+페이지$/ })).toHaveCount(3);
+  await page.getByRole('button', { name: '마지막 페이지', exact: true }).click();
+  await expect(page.getByRole('cell', { name: 'test-host-245', exact: true })).toBeVisible();
+  await expect(pagination.locator('[aria-current="page"]')).toHaveText('13');
+  await expect(page.getByRole('button', { name: '다음 페이지', exact: true })).toBeDisabled();
+  await expect(page.getByRole('button', { name: '마지막 페이지', exact: true })).toBeDisabled();
+  await page.getByRole('button', { name: '첫 페이지', exact: true }).click();
+  await expect(page.getByRole('cell', { name: 'test-host-1', exact: true })).toBeVisible();
+  failPage = 2;
+  await page.getByRole('button', { name: '다음 페이지', exact: true }).click();
+  await expect(page.getByRole('alert')).toBeVisible();
+  await expect(pagination.locator('[aria-current="page"]')).toHaveText('1');
+  await expect(page.getByRole('cell', { name: 'test-host-1', exact: true })).toBeVisible();
+  await page.getByRole('button', { name: '다시 시도', exact: true }).click();
   await expect(page.getByRole('cell', { name: 'test-host-21', exact: true })).toBeVisible();
-  await expect(page.getByRole('cell', { name: 'test-host-1', exact: true })).toHaveCount(0);
-  await expect(page.getByText(/2번째 묶음/)).toBeVisible();
-  assert.deepEqual(recordRequests.at(-1), { pluginId: 'sample1-offset-api', limit: 20, cursor: 'cursor-20' });
-  await page.getByRole('button', { name: '이전 묶음' }).click();
-  await expect(page.getByRole('cell', { name: 'test-host-1', exact: true })).toBeVisible();
-  await expect(page.getByRole('cell', { name: 'test-host-21', exact: true })).toHaveCount(0);
-  await expect(page.getByText(/1번째 묶음/)).toBeVisible();
-  assert.deepEqual(recordRequests.at(-1), { pluginId: 'sample1-offset-api', limit: 20, cursor: null });
-  await page.getByRole('button', { name: '다음 묶음' }).click();
-  await page.getByRole('button', { name: '다음 묶음' }).click();
-  await page.getByRole('button', { name: '다음 묶음' }).click();
-  await expect(page.getByRole('cell', { name: 'test-host-72', exact: true })).toBeVisible();
-  await expect(page.getByText(/4번째 묶음/)).toBeVisible();
-  await expect(page.getByText('마지막 묶음입니다.')).toBeVisible();
-  await expect(page.getByRole('button', { name: '다음 묶음' })).toBeDisabled();
-  await page.getByLabel('묶음 크기').selectOption('50');
-  await expect(page.getByRole('cell', { name: 'test-host-1', exact: true })).toBeVisible();
-  await expect(page.getByText(/1번째 묶음/)).toBeVisible();
-  await expect(page.getByRole('button', { name: '이전 묶음' })).toBeDisabled();
-  assert.deepEqual(recordRequests.at(-1), { pluginId: 'sample1-offset-api', limit: 50, cursor: null });
-  await page.getByRole('button', { name: '다음 묶음' }).click();
+  for (const size of [50, 100, 200, 20]) {
+    await page.getByLabel('페이지 크기').selectOption(String(size));
+    await expect(page.locator('tbody tr')).toHaveCount(size);
+    await expect(pagination.locator('[aria-current="page"]')).toHaveText('1');
+    assert.deepEqual(recordRequests.at(-1), { pluginId: 'sample1-offset-api', limit: size, page: 1 });
+  }
+  // 마지막 페이지 요청 사이 삭제가 발생하면 서버가 반환한 페이지로 보정한다.
+  recordTotal = 25;
+  await page.getByRole('button', { name: '마지막 페이지', exact: true }).click();
+  await expect(page.getByText('전체 25건', { exact: true })).toBeVisible();
+  await expect(pagination.getByRole('button', { name: '2페이지', exact: true })).toHaveAttribute('aria-current', 'page');
+  await expect(page.getByRole('cell', { name: 'test-host-25', exact: true })).toBeVisible();
+  recordTotal = 0;
+  await page.getByRole('button', { name: '첫 페이지', exact: true }).click();
+  await expect(page.getByText('전체 0건', { exact: true })).toBeVisible();
+  await expect(pagination.getByRole('button', { disabled: false })).toHaveCount(0);
+  recordTotal = 245;
+  await page.getByLabel('페이지 크기').selectOption('50');
+  await expect(page.locator('tbody tr')).toHaveCount(50);
+  await page.getByRole('button', { name: '다음 페이지', exact: true }).click();
   await page.getByRole('link', { name: /저장소/ }).click();
   await expect(page.getByRole('heading', { name: '저장소', exact: true })).toBeVisible();
   await expect(page.getByRole('columnheader', { name: '저장소 전체 이름' })).toBeVisible();
   await expect(page.getByRole('cell', { name: 'example/another-repository' })).toBeVisible();
-  await expect(page.getByText(/1번째 묶음/)).toBeVisible();
-  assert.deepEqual(recordRequests.at(-1), { pluginId: 'sample2-single-api', limit: 20, cursor: null });
+  await expect(pagination.locator('[aria-current="page"]')).toHaveText('1');
+  assert.deepEqual(recordRequests.at(-1), { pluginId: 'sample2-single-api', limit: 20, page: 1 });
   await page.waitForTimeout(400);
   await expect(page.getByRole('cell', { name: 'example/another-repository' })).toBeVisible();
   await expect(page.getByText('test-host-51')).toHaveCount(0);
@@ -184,7 +217,7 @@ try {
   await expect(repositoryRow).toHaveCSS('cursor', 'pointer');
   const hoverBackground = await repositoryRow.evaluate(row => globalThis.getComputedStyle(row).backgroundColor);
   assert.notEqual(hoverBackground, 'rgba(0, 0, 0, 0)');
-  await page.getByLabel('묶음 크기').focus();
+  await page.getByLabel('페이지 크기').focus();
   await page.keyboard.press('Tab');
   await expect(detailLink).toBeFocused();
   await expect(repositoryRow).toHaveCSS('outline-style', 'solid');
@@ -259,7 +292,7 @@ try {
   await page.reload();
   await expect(page.getByRole('status')).toHaveText('서버 연결 실패');
   await expect(page.getByRole('heading', { name: 'OSS-SCP HMR 확인', exact: true })).toBeVisible();
-  console.log('브라우저: 선언형 목록·상세 이동·직접 URL·새로고침·복귀·상세 오류·cursor 앞뒤 이동·마지막 묶음·묶음 크기·요청 경합·플러그인 재사용·원천 미호출·not-found·health·API 404·포트 충돌·HMR 통과');
+  console.log('브라우저: 선언형 목록·상세 이동·직접 URL·새로고침·복귀·상세 오류·번호 직접 이동·첫/마지막 페이지·페이지 크기·조회 실패 재시도·빈 결과·서버 페이지 보정·요청 경합·플러그인 재사용·원천 미호출·not-found·health·API 404·포트 충돌·HMR 통과');
 } catch (error) {
   console.error(api.output(), web?.output());
   throw error;

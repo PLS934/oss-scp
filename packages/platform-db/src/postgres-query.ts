@@ -1,5 +1,5 @@
 import type { PostgresPlatformDbConnection } from './postgres';
-import { encodeRecordCursor, QUERY_LIMITS, QueryError, summarizeSourceValues, validateListRecordsInput, validateRecordId, type CollectionStatus, type ListRecordsResult, type QueryRecord, type QueryRecordSummary, type RecordQuery } from './query';
+import { numberedPageInfo, summarizeNumberedRecords, encodeRecordCursor, QUERY_LIMITS, QueryError, summarizeSourceValues, validateListRecordsInput, validateRecordId, type CollectionStatus, type ListRecordsInput, type ListRecordsResult, type NumberedListRecordsResult, type AnyListRecordsResult, type QueryRecord, type QueryRecordSummary, type RecordQuery } from './query';
 import { serializedBytes, type ExternalKey, type JsonValue } from './storage';
 interface RecordRow { id: string; plugin_id: string; source_id: string; data_type: string; external_key_type: 'string' | 'number'; external_key: string; source_values: Record<string, JsonValue>; first_seen_at: Date | string; last_seen_at: Date | string }
 interface RunRow { id: string; status: CollectionStatus['status']; started_at: Date | string; finished_at: Date | string | null }
@@ -17,24 +17,45 @@ function summary(row: RecordRow): QueryRecordSummary {
 }
 function failure(error: unknown): QueryError { return error instanceof QueryError ? error : new QueryError('QUERY_FAILED'); }
 export function createPostgresRecordQuery(connection: PostgresPlatformDbConnection): RecordQuery {
+  function listRecords(raw: ListRecordsInput & { page: number }): Promise<NumberedListRecordsResult>;
+  function listRecords(raw: ListRecordsInput & { page?: undefined }): Promise<ListRecordsResult>;
+  function listRecords(raw: ListRecordsInput): Promise<AnyListRecordsResult>;
+  async function listRecords(raw: ListRecordsInput): Promise<AnyListRecordsResult> {
+    const input = validateListRecordsInput(raw);
+    try {
+      return await connection.withClient(async client => {
+        let transaction = false;
+        try {
+          let numbered: ReturnType<typeof numberedPageInfo> | undefined;
+          if (input.page !== undefined) {
+            await client.query('BEGIN TRANSACTION ISOLATION LEVEL REPEATABLE READ READ ONLY');
+            transaction = true;
+            const count = await client.query<{ total: string }>('SELECT count(*) AS total FROM platform_records WHERE plugin_id=$1 AND source_id=$2 AND data_type=$3', [input.pluginId, input.sourceId, input.dataType]);
+            numbered = numberedPageInfo(count.rows[0]?.total, input.page, input.limit);
+          }
+          const parameters: unknown[] = [input.pluginId, input.sourceId, input.dataType];
+          const boundary = input.boundary ? ` AND (last_seen_at < $4 OR (last_seen_at = $4 AND id > $5))` : '';
+          if (input.boundary) parameters.push(input.boundary.lastSeenAt, input.boundary.id);
+          parameters.push(numbered ? input.limit : input.limit + 1);
+          if (numbered) parameters.push((numbered.page - 1) * input.limit);
+          const recordsResult = await client.query<RecordRow>(`SELECT id, plugin_id, source_id, data_type, external_key_type, external_key, source_values, first_seen_at, last_seen_at FROM platform_records WHERE plugin_id=$1 AND source_id=$2 AND data_type=$3${boundary} ORDER BY last_seen_at DESC, id ASC LIMIT $${parameters.length - (numbered ? 1 : 0)}${numbered ? ` OFFSET $${parameters.length}` : ''}`, parameters);
+          const runResult = await client.query<RunRow>(`SELECT id, status, started_at, finished_at FROM collection_runs WHERE plugin_id=$1 AND source_id=$2 AND scope_type='full' ORDER BY started_at DESC, id DESC LIMIT 1`, [input.pluginId, input.sourceId]);
+          const storedResult = await client.query<StoredRow>(`SELECT max(last_seen_at) AS last_stored_at FROM platform_records WHERE plugin_id=$1 AND source_id=$2 AND data_type=$3`, [input.pluginId, input.sourceId, input.dataType]);
+          const items: QueryRecordSummary[] = numbered ? summarizeNumberedRecords(recordsResult.rows.map(record), input.limit) : []; let pageBytes = 2;
+          for (const row of (numbered ? [] : recordsResult.rows.slice(0, input.limit))) { const item = summary(row); const itemBytes = serializedBytes(item as unknown as JsonValue) + (items.length === 0 ? 0 : 1); if (items.length > 0 && pageBytes + itemBytes > QUERY_LIMITS.summaryPageBytes) break; items.push(item); pageBytes += itemBytes; }
+          const hasNextPage = items.length < recordsResult.rows.length; const last = items.at(-1);
+          const run = runResult.rows[0]; const lastStored = storedResult.rows[0]?.last_stored_at ?? null;
+          if (transaction) { await client.query('COMMIT'); transaction = false; }
+          return { items, pageInfo: numbered ?? { nextCursor: hasNextPage && last ? encodeRecordCursor(input, { lastSeenAt: last.lastSeenAt, id: last.id }) : null, hasNextPage }, lastStoredAt: lastStored === null ? null : timestamp(lastStored), collection: run ? { scope: 'source', status: run.status, runId: run.id, startedAt: timestamp(run.started_at), finishedAt: run.finished_at === null ? null : timestamp(run.finished_at) } : { scope: 'source', status: 'never_collected', runId: null, startedAt: null, finishedAt: null } };
+        } catch (error) {
+          if (transaction) { try { await client.query('ROLLBACK'); } catch { /* Preserve the original query error. */ } }
+          throw error;
+        }
+      });
+    } catch (error) { throw failure(error); }
+  }
   return {
-    async listRecords(raw): Promise<ListRecordsResult> {
-      const input = validateListRecordsInput(raw);
-      try { return await connection.withClient(async client => {
-        const parameters: unknown[] = [input.pluginId, input.sourceId, input.dataType];
-        const boundary = input.boundary ? ` AND (last_seen_at < $4 OR (last_seen_at = $4 AND id > $5))` : '';
-        if (input.boundary) parameters.push(input.boundary.lastSeenAt, input.boundary.id);
-        parameters.push(input.limit + 1);
-        const recordsResult = await client.query<RecordRow>(`SELECT id, plugin_id, source_id, data_type, external_key_type, external_key, source_values, first_seen_at, last_seen_at FROM platform_records WHERE plugin_id=$1 AND source_id=$2 AND data_type=$3${boundary} ORDER BY last_seen_at DESC, id ASC LIMIT $${parameters.length}`, parameters);
-        const runResult = await client.query<RunRow>(`SELECT id, status, started_at, finished_at FROM collection_runs WHERE plugin_id=$1 AND source_id=$2 AND scope_type='full' ORDER BY started_at DESC, id DESC LIMIT 1`, [input.pluginId, input.sourceId]);
-        const storedResult = await client.query<StoredRow>(`SELECT max(last_seen_at) AS last_stored_at FROM platform_records WHERE plugin_id=$1 AND source_id=$2 AND data_type=$3`, [input.pluginId, input.sourceId, input.dataType]);
-        const items: QueryRecordSummary[] = []; let pageBytes = 2;
-        for (const row of recordsResult.rows.slice(0, input.limit)) { const item = summary(row); const itemBytes = serializedBytes(item as unknown as JsonValue) + (items.length === 0 ? 0 : 1); if (items.length > 0 && pageBytes + itemBytes > QUERY_LIMITS.summaryPageBytes) break; items.push(item); pageBytes += itemBytes; }
-        const hasNextPage = items.length < recordsResult.rows.length; const last = items.at(-1);
-        const run = runResult.rows[0]; const lastStored = storedResult.rows[0]?.last_stored_at ?? null;
-        return { items, pageInfo: { nextCursor: hasNextPage && last ? encodeRecordCursor(input, { lastSeenAt: last.lastSeenAt, id: last.id }) : null, hasNextPage }, lastStoredAt: lastStored === null ? null : timestamp(lastStored), collection: run ? { scope: 'source', status: run.status, runId: run.id, startedAt: timestamp(run.started_at), finishedAt: run.finished_at === null ? null : timestamp(run.finished_at) } : { scope: 'source', status: 'never_collected', runId: null, startedAt: null, finishedAt: null } };
-      }); } catch (error) { throw failure(error); }
-    },
+    listRecords,
     async getRecord(id): Promise<QueryRecord | null> { validateRecordId(id); try { const result = await connection.withClient(client => client.query<RecordRow>(`SELECT id, plugin_id, source_id, data_type, external_key_type, external_key, source_values, first_seen_at, last_seen_at FROM platform_records WHERE id=$1`, [id])); return result.rows[0] ? record(result.rows[0]) : null; } catch (error) { throw failure(error); } },
   };
 }

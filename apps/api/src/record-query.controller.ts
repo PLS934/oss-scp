@@ -19,8 +19,8 @@ function mapError(error: unknown): never {
 export class RecordQueryController {
   constructor(private readonly records: RecordQueryService) {}
   @Get()
-  async list(@Query('pluginId') pluginId?: string, @Query('sourceId') sourceId?: string, @Query('dataType') dataType?: string, @Query('limit') limit?: string, @Query('cursor') cursor?: string) {
-    try { return await this.records.list(pluginId, sourceId, dataType, limit, cursor); } catch (error) { mapError(error); }
+  async list(@Query('pluginId') pluginId?: string, @Query('sourceId') sourceId?: string, @Query('dataType') dataType?: string, @Query('limit') limit?: string, @Query('cursor') cursor?: string, @Query('page') page?: string) {
+    try { return await this.records.list(pluginId, sourceId, dataType, limit, cursor, page); } catch (error) { mapError(error); }
   }
   @Get(':id')
   async detail(@Param('id') id: string) {

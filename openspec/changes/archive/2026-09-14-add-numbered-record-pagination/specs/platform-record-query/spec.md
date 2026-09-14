@@ -1,10 +1,4 @@
-# Platform Record Query Specification
-
-## Purpose
-
-원천 시스템의 가용성과 무관하게 플랫폼 DB에 저장된 공통 레코드의 제한된 목록·상세와 관련 수집 상태를 DB 제품에 종속되지 않은 계약으로 조회하게 한다.
-
-## Requirements
+## MODIFIED Requirements
 
 ### Requirement: Stored record lists are bounded and stably ordered
 플랫폼은 plugin ID, source ID와 data type이 모두 지정된 범위에서 저장 레코드 목록을 SHALL 반환해야 한다. 묶음 크기는 20·50·100·200 중 하나이고 기본값은 20이어야 한다. 첫 묶음과 후속 묶음은 `lastSeenAt` 내림차순과 내부 `id` 오름차순의 동일한 안정적 순서를 사용해야 하며 cursor 모드에서는 정확한 전체 건수를 계산해서는 안 된다. `page`가 지정된 번호형 모드에서는 동일 범위의 정확한 전체 건수를 제공해야 한다.
@@ -36,36 +30,6 @@
 - **WHEN** 조회자가 목록에서 필드가 제외된 레코드의 내부 ID로 상세를 조회한다
 - **THEN** 플랫폼은 저장 한도 안에서 영속화된 전체 원천 값을 반환한다
 
-### Requirement: Record details use platform identity
-플랫폼은 유효한 내부 UUID로 저장된 레코드 상세를 SHALL 조회해야 하며, DB 제품별 타입이나 드라이버 값을 공개 계약에 노출해서는 안 된다.
-
-#### Scenario: Existing detail is returned
-- **WHEN** 조회자가 존재하는 레코드의 내부 UUID로 상세를 조회한다
-- **THEN** 플랫폼은 그 레코드의 범위, 외부 키, 전체 원천 값과 관측 시각을 반환한다
-
-#### Scenario: Missing detail is distinguished
-- **WHEN** 유효한 내부 UUID에 해당하는 저장 레코드가 없다
-- **THEN** 플랫폼은 명시적인 찾을 수 없음 결과를 반환한다
-
-#### Scenario: Malformed identity is rejected
-- **WHEN** 상세 식별자가 UUID 형식이 아니다
-- **THEN** 플랫폼은 DB 쿼리를 실행하지 않고 안정된 잘못된 입력 오류를 반환한다
-
-### Requirement: Query responses distinguish collection state
-범위 목록 조회는 같은 plugin ID와 source ID의 가장 최근 전체 수집 실행을 기준으로 `never_collected`, `running`, `success`, `partial`, `failed` 상태를 SHALL 구분해야 한다. 상태에는 실행 식별자와 시작·종료 시각을 가능한 경우 포함하고, 목록의 마지막 저장 시각은 반환된 묶음이 아니라 해당 조회 범위 전체의 가장 최근 `lastSeenAt`으로 제공해야 한다.
-
-#### Scenario: No collection has run
-- **WHEN** 범위에 해당하는 전체 수집 실행 이력이 없다
-- **THEN** 플랫폼은 `never_collected` 상태와 null 실행·시각 정보를 반환한다
-
-#### Scenario: Running collection preserves stored results
-- **WHEN** 가장 최근 전체 수집이 실행 중이고 이전에 저장된 레코드가 있다
-- **THEN** 플랫폼은 `running` 상태와 기존 저장 목록 및 범위의 마지막 저장 시각을 함께 반환한다
-
-#### Scenario: Failed or partial collection is explicit
-- **WHEN** 가장 최근 전체 수집이 `failed` 또는 `partial`로 끝났다
-- **THEN** 플랫폼은 해당 상태를 성공이나 빈 결과로 바꾸지 않고 그대로 반환한다
-
 ### Requirement: PostgreSQL reads only platform storage
 PostgreSQL 구현은 공통 조회 계약을 SHALL 구현하고 조회 중 외부 원천 API·DB·파일을 호출해서는 안 된다. cursor 목록은 offset 없이 마지막 `lastSeenAt/id`를 기준으로 다음 묶음을 읽어야 한다.
 
@@ -96,20 +60,7 @@ MySQL 조회 구현은 PostgreSQL과 동일한 공통 목록·상세·수집 상
 - **WHEN** MySQL 조회가 실패한다
 - **THEN** 플랫폼은 드라이버 메시지나 접속 정보를 노출하지 않는 안정된 조회 실패 오류를 반환한다
 
-### Requirement: PostgreSQL and MySQL pagination have equivalent boundaries
-플랫폼은 동일 fixture와 동일 cursor 요청에 대해 PostgreSQL과 MySQL에서 같은 정렬·경계·`hasNextPage` 의미를 SHALL 제공해야 한다. datetime은 공통 정밀도로 비교하고 내부 ID와 문자열은 locale 또는 기본 collation에 영향받지 않는 이진 순서를 사용해야 한다.
-
-#### Scenario: Equal timestamps use deterministic identity order
-- **WHEN** 여러 레코드가 동일한 `lastSeenAt` 값을 가지고 한 묶음 경계를 가로지른다
-- **THEN** 두 DB 구현은 내부 `id` 오름차순으로 같은 순서를 만들고 후속 묶음에 중복이나 누락을 만들지 않는다
-
-#### Scenario: Final partial page is equivalent
-- **WHEN** 남은 레코드 수가 요청 크기보다 작은 마지막 묶음을 두 DB에서 조회한다
-- **THEN** 두 구현은 같은 의미의 남은 레코드를 반환하고 `hasNextPage=false`와 `nextCursor=null`을 제공한다
-
-#### Scenario: String and null source values do not alter cursor order
-- **WHEN** 원천 값에 대소문자가 다른 문자열, null, datetime, 숫자와 중첩 JSON이 혼합되어 있다
-- **THEN** 두 구현은 원천 값의 DB별 비교나 표현에 cursor 순서를 의존하지 않고 같은 저장 값을 반환한다
+## ADDED Requirements
 
 ### Requirement: Numbered pages provide exact scoped totals
 플랫폼은 `page`를 지정하면 1부터 시작하는 번호형 조회를 SHALL 제공하고, `limit`은 기존 20·50·100·200 및 기본값 20을 사용해야 한다. 번호형 `pageInfo`는 `page`, `pageSize`, `totalItems`, `totalPages`, `hasNextPage`를 포함해야 하며 cursor 모드와 구분되도록 `nextCursor`를 포함하지 않아야 한다. 전체 건수와 items는 하나의 읽기 snapshot에서 동일 범위를 기준으로 조회해야 한다. 두 DB의 정렬은 기존 `lastSeenAt DESC, id ASC`를 유지해야 한다. page와 offset은 안전한 정수 범위여야 하며 cursor와 page의 동시 지정은 입력 오류여야 한다.
