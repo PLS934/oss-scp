@@ -68,7 +68,16 @@ aside a:focus-visible { outline-color: var(--sidebar-focus); }
 .pagination { display: flex; flex-direction: column; align-items: center; gap: 12px; margin-top: 24px; color: var(--muted, #516372); }
 .record-table-toolbar { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px; margin: 18px 0 8px; }
 .record-total { margin: 0; text-align: left; color: var(--muted, #516372); font-size: 12px; font-variant-numeric: tabular-nums; }
+.record-list-summary, .sort-chips { display: flex; align-items: center; flex-wrap: wrap; gap: .45rem; }
+.sort-chips { padding-left: .2rem; }
+.sort-chip { display: inline-flex; align-items: center; gap: .2rem; min-height: 26px; padding: 3px 9px; border: 1px solid var(--border); border-radius: 999px; background: var(--surface); color: var(--muted); font: inherit; font-size: .75rem; cursor: pointer; }
+.sort-chip:hover { border-color: var(--focus); background: var(--info); color: var(--text); }
+.sort-chip.active { border-color: var(--focus); background: var(--info); color: var(--text); font-weight: 600; }
+.sort-chip svg { width: .8rem; height: .8rem; fill: none; stroke: currentColor; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
+.sort-chip:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
 .record-table-toolbar + .record-table-wrap { margin-top: 0; }
+.record-card-filters { display: flex; flex-wrap: wrap; gap: 8px; margin: -10px 0 18px; }
+.record-card-filters .column-filter-trigger { margin: 0; border: 1px solid var(--border); border-radius: 999px; background: var(--surface); font-size: 13px; font-weight: 500; }
 .pagination-controls { display: flex; justify-content: center; gap: 4px; max-width: 100%; flex-wrap: wrap; }
 .pagination button { display: inline-flex; align-items: center; justify-content: center; width: 32px; height: 32px; padding: 0; border: 1px solid transparent; border-radius: 8px; background: transparent; color: var(--muted, #516372); font: inherit; font-size: 13px; font-variant-numeric: tabular-nums; cursor: pointer; transition: background-color .15s, color .15s; }
 .pagination button svg { width: 16px; height: 16px; }
@@ -144,3 +153,46 @@ main .repository-members { padding: 20px; }
 
 .plugin-sort-toggle:hover:not(:disabled) { background: var(--info); }
 .plugin-sort-toggle[aria-pressed="true"] { background: var(--info); color: var(--focus); border-color: var(--focus); }
+.record-search { display: flex; flex-wrap: wrap; gap: 1rem 1.25rem; align-items: end; margin: 1.5rem 0; padding: 0; }
+.record-search label { display: flex; flex-direction: column; gap: .35rem; font-size: .875rem; }
+.record-search-query { display: flex; flex: 0 0 100%; flex-direction: column; align-items: flex-start; }
+.record-search-input { position: relative; width: min(28rem, 100%); }
+.record-search-icon { position: absolute; top: 50%; left: .7rem; width: 1rem; height: 1rem; color: var(--muted); pointer-events: none; transform: translateY(-50%); }
+.record-search .record-search-input input { width: 100%; padding-right: 4.5rem; padding-left: 2rem; }
+.record-search-input input::-webkit-search-cancel-button { appearance: none; }
+.record-search .record-search-clear { position: absolute; top: 50%; right: 2.35rem; width: 1.5rem; min-height: 1.5rem; padding: 0; border: 0; border-radius: 50%; background: transparent; color: var(--muted); font-size: 1.2rem; line-height: 1; transform: translateY(-50%); }
+.record-search .record-search-clear:hover { border: 0; background: var(--info); color: var(--text); }
+.record-search .record-search-submit { position: absolute; top: 50%; right: .35rem; display: grid; place-items: center; width: 1.75rem; min-height: 1.75rem; padding: 0; border: 0; border-radius: 50%; background: transparent; color: var(--text); transform: translateY(-50%); }
+.record-search .record-search-submit:hover:not(:disabled) { border: 0; background: var(--info); }
+.record-search .record-search-submit:disabled { color: var(--muted); cursor: default; opacity: .4; }
+.record-search-submit svg { width: 1rem; height: 1rem; }
+.filter-chips { display: flex; flex: 0 0 100%; flex-wrap: wrap; gap: .5rem; }
+.filter-chip { display: inline-flex; align-items: center; overflow: hidden; border: 1px solid var(--border); border-radius: 999px; background: var(--info); font-size: .8rem; }
+.filter-chip > span { padding: .25rem .15rem .25rem .7rem; }
+.record-search .filter-chip button { width: 1.75rem; min-height: 1.75rem; padding: 0; border: 0; border-radius: 0; background: transparent; color: var(--muted); font-size: 1rem; }
+.record-search .filter-chip button:hover { border: 0; color: var(--text); }
+.record-search input, .record-search select { min-height: 2.25rem; max-width: 100%; padding: .4rem .6rem; border: 1px solid var(--control-border); border-radius: 4px; background: var(--surface); color: var(--text); font: inherit; }
+.record-search input:focus-visible, .record-search select:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+.record-search p { width: 100%; margin: 0; }
+.record-search small { color: var(--muted); }
+.record-search input, .record-search select { box-sizing: border-box; }
+.record-search button, .empty-state button { min-height: 36px; padding: 7px 14px; border: 1px solid var(--control-border); border-radius: 6px; background: var(--surface); color: var(--text); font: inherit; font-size: .875rem; cursor: pointer; }
+.record-search button:hover, .empty-state button:hover { border-color: var(--focus); }
+.record-search button:focus-visible, .empty-state button:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+
+.column-filter-trigger { display: inline-flex; align-items: center; gap: .35rem; margin: -7px -8px; padding: 7px 8px; border: 0; background: transparent; color: inherit; font: inherit; font-weight: inherit; cursor: pointer; }
+.column-filter-trigger:hover { background: var(--info); }
+.column-filter-trigger svg { width: .9rem; height: .9rem; color: var(--muted); }
+.column-filter-trigger.active svg { color: var(--focus); fill: currentColor; }
+.column-filter-trigger:focus-visible { outline: 2px solid var(--focus); outline-offset: 1px; }
+.column-filter-popover { position: fixed; z-index: 100; box-sizing: border-box; width: max-content; max-width: calc(100vw - 24px); padding: .8rem; border: 1px solid var(--border); border-radius: 8px; background: var(--surface); color: var(--text); box-shadow: 0 8px 24px rgb(0 0 0 / 18%); }
+.column-filter-popover > label { display: flex; min-width: 12rem; flex-direction: column; gap: .35rem; font-size: .8rem; }
+.column-filter-popover fieldset { display: flex; align-items: end; gap: .5rem; margin: 0; padding: 0; border: 0; }
+.column-filter-popover legend { margin-bottom: .4rem; padding: 0; font-size: .8rem; }
+.column-filter-popover fieldset label { display: flex; flex-direction: column; gap: .3rem; color: var(--muted); font-size: .75rem; }
+.column-filter-popover fieldset > span { padding-bottom: .5rem; color: var(--muted); }
+.column-filter-popover input, .column-filter-popover select { box-sizing: border-box; min-height: 2.25rem; max-width: 100%; padding: .4rem .6rem; border: 1px solid var(--control-border); border-radius: 4px; background: var(--surface); color: var(--text); font: inherit; font-size: .875rem; }
+.column-filter-popover input[type="number"] { width: 8rem; }
+.column-filter-popover small { color: var(--muted); }
+.column-filter-popover input:focus-visible, .column-filter-popover select:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+@media (max-width: 640px) { .column-filter-popover fieldset { flex-wrap: wrap; width: min(19rem, calc(100vw - 3rem)); } .column-filter-popover fieldset label { flex: 1 1 7rem; } .column-filter-popover fieldset input { width: 100%; } }

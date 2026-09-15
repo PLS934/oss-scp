@@ -19,11 +19,11 @@
         },
         "fields": {
           "assetKey": { "type": "string", "label": "자산 키", "required": true },
-          "fullName": { "type": "string", "label": "저장소 전체 이름", "required": true },
-          "active": { "type": "boolean", "label": "활성 상태", "required": true },
+          "fullName": {"type": "string", "label": "저장소 전체 이름", "required": true, "searchable": true, "sortable": true},
+          "active": {"type": "boolean", "label": "활성 상태", "required": true, "sortable": true, "filter": {"kind": "select", "options": [{"value": true, "label": "활성"}, {"value": false, "label": "비활성"}]}},
           "details": { "type": "object", "label": "상세 정보", "required": true, "fields": { "label": { "type": "string", "label": "표시명", "required": true }, "observedAt": { "type": "datetime", "label": "관측 시각", "required": true } } },
           "members": { "type": "array", "label": "구성원", "required": true, "items": { "type": "object", "label": "구성원", "fields": { "login": { "type": "string", "label": "로그인", "required": true } } } },
-          "feed": { "type": "string", "label": "피드", "required": true }
+          "feed": {"type": "string", "label": "피드", "required": true, "searchable": true, "sortable": true, "filter": {"kind": "select", "options": [{"value": "true", "label": "true"}, {"value": "false", "label": "false"}]}}
         }
       }
     }

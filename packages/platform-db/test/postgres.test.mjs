@@ -1,3 +1,4 @@
+import { verifySearchContract } from './search-contract.mjs';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
@@ -131,6 +132,7 @@ describe('PostgreSQL 공통 레코드 저장 계약', () => {
 
   it('제품 중립 공통 fixture를 통과한다', async () => {
     await verifyRecordContract(storage, query, testScope('shared-contract'));
+    await verifySearchContract(storage, query, testScope('search-contract'));
   });
 
   it('migration을 재실행하고 실행 상태를 기록한다', async () => {

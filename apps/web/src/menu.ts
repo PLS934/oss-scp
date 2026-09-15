@@ -1,3 +1,11 @@
+export interface QueryFilter {
+  key: string; label: string; type: ListColumn['type'];
+  kind: 'select' | 'multiSelect' | 'numberRange' | 'dateRange';
+  options?: Array<{ value: string | number | boolean; label: string }>;
+}
+export interface ListQuery { searchEnabled: boolean; filters: QueryFilter[] }
+export type ListSort = ListColumn;
+
 export interface ListColumn {
   key: string;
   label: string;
@@ -24,7 +32,7 @@ export interface MenuItem {
   dataType: string;
   pluginId: string;
   sourceId: string;
-  list: { columns: ListColumn[] };
+  list: { columns: ListColumn[]; query?: ListQuery; sorts?: ListSort[] };
   detail: { sections: DetailSection[] };
 }
 
@@ -35,6 +43,10 @@ export function groupMenus(menus: readonly MenuItem[]) {
     groups.set(menu.group, entries);
     return groups;
   }, new Map());
+}
+
+export function activeMenuPath(pathname: string, menus: readonly MenuItem[]): string | undefined {
+  return menus.filter(menu => pathname === menu.path || pathname.startsWith(`${menu.path}/`)).sort((a, b) => b.path.length - a.path.length)[0]?.path;
 }
 
 export function recordDetailPath(menuPath: string, recordId: string): string {

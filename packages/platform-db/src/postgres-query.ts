@@ -1,3 +1,5 @@
+import { conditionSql } from './condition-sql';
+import { recordOrderSql } from './sort-sql';
 import type { PostgresPlatformDbConnection } from './postgres';
 import { numberedPageInfo, summarizeNumberedRecords, encodeRecordCursor, QUERY_LIMITS, QueryError, summarizeSourceValues, validateListRecordsInput, validateRecordId, type CollectionStatus, type ListRecordsInput, type ListRecordsResult, type NumberedListRecordsResult, type AnyListRecordsResult, type QueryRecord, type QueryRecordSummary, type RecordQuery } from './query';
 import { serializedBytes, type ExternalKey, type JsonValue } from './storage';
@@ -30,15 +32,20 @@ export function createPostgresRecordQuery(connection: PostgresPlatformDbConnecti
           if (input.page !== undefined) {
             await client.query('BEGIN TRANSACTION ISOLATION LEVEL REPEATABLE READ READ ONLY');
             transaction = true;
-            const count = await client.query<{ total: string }>('SELECT count(*) AS total FROM platform_records WHERE plugin_id=$1 AND source_id=$2 AND data_type=$3', [input.pluginId, input.sourceId, input.dataType]);
+            const countFilter = conditionSql(input.conditions, 'postgres', 3);
+            const count = await client.query<{ total: string }>(`SELECT count(*) AS total FROM platform_records WHERE plugin_id=$1 AND source_id=$2 AND data_type=$3${countFilter.sql}`, [input.pluginId, input.sourceId, input.dataType, ...countFilter.parameters]);
             numbered = numberedPageInfo(count.rows[0]?.total, input.page, input.limit);
           }
           const parameters: unknown[] = [input.pluginId, input.sourceId, input.dataType];
-          const boundary = input.boundary ? ` AND (last_seen_at < $4 OR (last_seen_at = $4 AND id > $5))` : '';
+          const filtered = conditionSql(input.conditions, 'postgres', parameters.length);
+          parameters.push(...filtered.parameters);
+          const boundary = input.boundary ? ` AND (last_seen_at < $${parameters.length + 1} OR (last_seen_at = $${parameters.length + 1} AND id > $${parameters.length + 2}))` : '';
           if (input.boundary) parameters.push(input.boundary.lastSeenAt, input.boundary.id);
+          const order = recordOrderSql(input.sort, 'postgres', parameters.length);
+          parameters.push(...order.parameters);
           parameters.push(numbered ? input.limit : input.limit + 1);
           if (numbered) parameters.push((numbered.page - 1) * input.limit);
-          const recordsResult = await client.query<RecordRow>(`SELECT id, plugin_id, source_id, data_type, external_key_type, external_key, source_values, first_seen_at, last_seen_at FROM platform_records WHERE plugin_id=$1 AND source_id=$2 AND data_type=$3${boundary} ORDER BY last_seen_at DESC, id ASC LIMIT $${parameters.length - (numbered ? 1 : 0)}${numbered ? ` OFFSET $${parameters.length}` : ''}`, parameters);
+          const recordsResult = await client.query<RecordRow>(`SELECT id, plugin_id, source_id, data_type, external_key_type, external_key, source_values, first_seen_at, last_seen_at FROM platform_records WHERE plugin_id=$1 AND source_id=$2 AND data_type=$3${filtered.sql}${boundary} ORDER BY ${order.sql} LIMIT $${parameters.length - (numbered ? 1 : 0)}${numbered ? ` OFFSET $${parameters.length}` : ''}`, parameters);
           const runResult = await client.query<RunRow>(`SELECT id, status, started_at, finished_at FROM collection_runs WHERE plugin_id=$1 AND source_id=$2 AND scope_type='full' ORDER BY started_at DESC, id DESC LIMIT 1`, [input.pluginId, input.sourceId]);
           const storedResult = await client.query<StoredRow>(`SELECT max(last_seen_at) AS last_stored_at FROM platform_records WHERE plugin_id=$1 AND source_id=$2 AND data_type=$3`, [input.pluginId, input.sourceId, input.dataType]);
           const items: QueryRecordSummary[] = numbered ? summarizeNumberedRecords(recordsResult.rows.map(record), input.limit) : []; let pageBytes = 2;

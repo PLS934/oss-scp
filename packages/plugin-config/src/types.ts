@@ -14,7 +14,10 @@ export interface PluginConfig {
 export type PluginMenuIcon = 'server' | 'shield' | 'repository';
 export interface PluginMenuDefinition { title: string; icon: PluginMenuIcon; group: string; order: number; path: string; dataType: string; }
 export interface ClientListColumn { key: string; label: string; type: ScalarFieldType; }
-export interface ClientListDefinition { columns: ClientListColumn[]; }
+export type FilterValue = string | number | boolean;
+export type FieldFilter = { kind: 'select' | 'multiSelect'; options: Array<{ value: FilterValue; label: string }> } | { kind: 'numberRange' } | { kind: 'dateRange' };
+export type ClientQueryFilter = ClientListColumn & FieldFilter;
+export interface ClientListDefinition { columns: ClientListColumn[]; query?: { searchEnabled: boolean; filters: ClientQueryFilter[] }; sorts?: ClientListColumn[]; }
 export interface ClientDetailField { key: string; label: string; type: FieldType; }
 export interface ClientDetailSection { title: string; fields: ClientDetailField[]; }
 export interface ClientDetailDefinition { sections: ClientDetailSection[]; }
@@ -23,7 +26,7 @@ export interface ClientMenuItem extends PluginMenuDefinition { pluginId: string;
 export type ScalarFieldType = 'string' | 'number' | 'boolean' | 'datetime';
 export type FieldType = ScalarFieldType | 'object' | 'array';
 export type FieldDefinition =
-  | { type: ScalarFieldType; label: string; required?: boolean }
+  | { type: ScalarFieldType; label: string; required?: boolean; searchable?: true; sortable?: true; filter?: FieldFilter }
   | { type: 'object'; label: string; required?: boolean; fields: Record<string, FieldDefinition> }
   | { type: 'array'; label: string; required?: boolean; items: FieldDefinition };
 export interface DataTypeDefinition {

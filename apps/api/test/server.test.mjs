@@ -1,5 +1,6 @@
 import 'reflect-metadata';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { encodeRecordCursor } from '@oss-scp/platform-db';
 import { Test } from '@nestjs/testing';
 import { AppModule } from '../dist/app.module.js';
 import { readConfig } from '../dist/config.js';
@@ -149,13 +150,14 @@ describe('저장 레코드 조회 API', () => {
   };
 
   it('인증 없이 목록·상세와 빈 목록을 반환하고 입력을 전달한다', async () => {
+    const cursor = encodeRecordCursor({ pluginId: 'sample', sourceId: 'source', dataType: 'asset', limit: 20 }, { id, lastSeenAt: record.lastSeenAt });
     const calls = [];
     const query = { listRecords: async input => { calls.push(input); return input.dataType === 'empty' ? { ...list, items: [], pageInfo: { nextCursor: null, hasNextPage: false }, lastStoredAt: null } : list; }, getRecord: async value => value === id ? record : null };
     const { app, url } = await start(query);
     try {
-      const response = await fetch(`${url}/api/v1/records?pluginId=sample&sourceId=source&dataType=asset&limit=20&cursor=next-page`);
+      const response = await fetch(`${url}/api/v1/records?pluginId=sample&sourceId=source&dataType=asset&limit=20&cursor=${cursor}`);
       expect(response.status).toBe(200); expect(await response.json()).toEqual(list);
-      expect(calls).toEqual([{ pluginId: 'sample', sourceId: 'source', dataType: 'asset', limit: 20, cursor: 'next-page' }]);
+      expect(calls).toEqual([{ pluginId: 'sample', sourceId: 'source', dataType: 'asset', limit: 20, cursor }]);
       expect((await fetch(`${url}/api/v1/records?pluginId=sample&sourceId=source&dataType=empty`)).status).toBe(200);
       const detail = await fetch(`${url}/api/v1/records/${id}`); expect(detail.status).toBe(200); expect(await detail.json()).toEqual(record);
     } finally { await app.close(); }

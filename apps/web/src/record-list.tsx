@@ -1,4 +1,6 @@
-import { useEffect, useReducer, useRef, useState, type MouseEvent } from 'react';
+import { RecordFilterHeader, RecordSearchToolbar, useRecordSearchState, type RecordSearchState } from './record-search';
+import type { SearchConditions } from './records';
+import { useEffect, useReducer, useRef, useState, type MouseEvent, type ReactNode } from 'react';
 import { Link } from 'react-router-dom';
 import { recordDetailPath, type ListColumn, type MenuItem } from './menu';
 import {
@@ -8,6 +10,7 @@ import {
   type NumberedListRecordsResult,
   type RecordApiError,
   type RecordListLimit,
+  type RecordSort,
 } from './records';
 
 const limits: readonly RecordListLimit[] = [20, 50, 100, 200];
@@ -35,6 +38,9 @@ const collectionMessages: Partial<Record<NumberedListRecordsResult['collection']
 
 interface RecordListViewProps {
   menu: MenuItem;
+  title?: string;
+  loadingMessage?: string;
+  renderItems?: (result: NumberedListRecordsResult) => ReactNode;
   limit: RecordListLimit;
   page: number;
   loading: boolean;
@@ -43,6 +49,17 @@ interface RecordListViewProps {
   onLimitChange: (limit: RecordListLimit) => void;
   onPageChange: (page: number) => void;
   onRetry: () => void;
+  searchControls?: ReactNode;
+  searchState?: RecordSearchState;
+  activeConditions?: boolean;
+  sort?: RecordSort;
+  onSortChange?: (sort: RecordSort | undefined) => void;
+}
+
+export function nextRecordSort(current: RecordSort | undefined, field: string): RecordSort | undefined {
+  if (!current || current.field !== field) return { field, direction: 'asc' };
+  if (current.direction === 'asc') return { field, direction: 'desc' };
+  return undefined;
 }
 
 function activateRowLink(event: MouseEvent<HTMLTableRowElement>) {
@@ -53,7 +70,7 @@ function activateRowLink(event: MouseEvent<HTMLTableRowElement>) {
   event.currentTarget.querySelector<HTMLAnchorElement>('a')?.click();
 }
 
-export function RecordListView({ menu, limit, page, loading, result, error, onLimitChange, onPageChange, onRetry }: RecordListViewProps) {
+export function RecordListView({ menu, title, loadingMessage, renderItems, limit, page, loading, result, error, onLimitChange, onPageChange, onRetry, searchControls, searchState, activeConditions = false, sort, onSortChange }: RecordListViewProps) {
   const collectionMessage = result ? collectionMessages[result.collection.status] : undefined;
   const hasItems = Boolean(result?.items.length);
   const navigationDisabled = loading || error !== null || !result || result.pageInfo.totalPages === 0;
@@ -61,24 +78,34 @@ export function RecordListView({ menu, limit, page, loading, result, error, onLi
   return <section aria-labelledby="record-list-title">
     <p className="eyebrow">{menu.group}</p>
     <div className="list-heading">
-      <h2 id="record-list-title">{menu.title}</h2>
+      <h2 id="record-list-title">{title ?? menu.title}</h2>
 
     </div>
-    {loading ? <p role="status">저장된 목록을 불러오는 중입니다.</p> : null}
+    {searchState ? <RecordSearchToolbar state={searchState} /> : searchControls}
+    {renderItems && searchState && menu.list.query?.filters.length ? <div className="record-card-filters" aria-label="필터">{menu.list.query.filters.map(field => <RecordFilterHeader key={field.key} field={field} state={searchState} />)}</div> : null}
+    {loading ? <p role="status">{loadingMessage ?? '저장된 목록을 불러오는 중입니다.'}</p> : null}
     {!loading && error ? <div className="list-message error" role="alert"><p>{error.message}</p><button type="button" onClick={onRetry}>다시 시도</button></div> : null}
     {!loading && !error && collectionMessage ? <p className={`list-message ${result?.collection.status}`} role="status">{collectionMessage}</p> : null}
+    {!loading && !error && result && activeConditions && !hasItems ? <p className="empty-state">검색·필터 결과가 없습니다.</p> : null}
     {!loading && !error && result?.collection.status === 'never_collected' && !hasItems ? <p className="empty-state">아직 수집된 데이터가 없습니다.</p> : null}
-    {!loading && !error && result?.collection.status === 'success' && !hasItems ? <p className="empty-state">수집이 완료됐지만 표시할 결과가 없습니다.</p> : null}
-    {!loading && !error && result && result.collection.status !== 'never_collected' && result.collection.status !== 'success' && !hasItems ? <p className="empty-state">현재 표시할 저장 데이터가 없습니다.</p> : null}
+    {!loading && !error && !activeConditions && result?.collection.status === 'success' && !hasItems ? <p className="empty-state">수집이 완료됐지만 표시할 결과가 없습니다.</p> : null}
+    {!loading && !error && !activeConditions && result && result.collection.status !== 'never_collected' && result.collection.status !== 'success' && !hasItems ? <p className="empty-state">현재 표시할 저장 데이터가 없습니다.</p> : null}
     <div className="record-table-toolbar">
-      <p className="record-total" aria-live="polite">전체 {numberFormat.format(result?.pageInfo.totalItems ?? 0)}건</p>
+      <div className="record-list-summary"><p className="record-total" aria-live="polite">전체 {numberFormat.format(result?.pageInfo.totalItems ?? 0)}건</p>{menu.list.sorts?.length ? <div className="sort-chips" aria-label="정렬 기준">{menu.list.sorts.map(field => {
+        const direction = sort?.field === field.key ? sort.direction : undefined;
+        const state = direction === 'asc' ? '오름차순' : direction === 'desc' ? '내림차순' : '해제';
+        return <button key={field.key} type="button" className={`sort-chip${direction ? ' active' : ''}`} aria-label={`${field.label} 정렬: ${state}`} aria-pressed={Boolean(direction)} onClick={() => onSortChange?.(nextRecordSort(sort, field.key))}><span>{field.label}</span>{direction ? <svg aria-hidden="true" viewBox="0 0 16 16"><path d={direction === 'asc' ? 'm4 10 4-4 4 4' : 'm4 6 4 4 4-4'} /></svg> : null}</button>;
+      })}</div> : null}</div>
       <label className="page-size-select"><select aria-label="페이지 크기" value={limit} disabled={loading} onChange={event => onLimitChange(Number(event.target.value) as RecordListLimit)}>
         {limits.map(value => <option key={value} value={value}>{value}개씩 보기</option>)}
       </select><svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"><path d="m7 10 5 5 5-5" /></svg></label>
     </div>
-    {result && hasItems ? <div className="record-table-wrap"><table>
-      <thead><tr>{menu.list.columns.map(column => <th key={column.key} scope="col">{column.label}</th>)}</tr></thead>
-      <tbody>{result.items.map(item => <tr key={item.id} className="record-row" onClick={activateRowLink}>{menu.list.columns.map((column, index) => {
+    {renderItems ? result && hasItems ? renderItems(result) : null : result || searchState ? <div className="record-table-wrap"><table>
+      <thead><tr>{menu.list.columns.map(column => {
+        const filter = menu.list.query?.filters.find(candidate => candidate.key === column.key);
+        return <th key={column.key} scope="col">{filter && searchState ? <RecordFilterHeader field={filter} state={searchState} /> : column.label}</th>;
+      })}</tr></thead>
+      <tbody>{(result?.items ?? []).map(item => <tr key={item.id} className="record-row" onClick={activateRowLink}>{menu.list.columns.map((column, index) => {
         const value = formatColumnValue(column.type, item.sourceValues[column.key]);
         return <td key={column.key} aria-label={index === 0 ? value : undefined}>{index === 0
           ? <Link className="record-row-link" to={recordDetailPath(menu.path, item.id)} aria-label={`${menu.title} ${value} (${item.id}) 상세`}>{value}</Link>
@@ -131,11 +158,23 @@ export function navigationReducer(state: NavigationState, action: NavigationActi
 export interface RecordListProps {
   menu: MenuItem;
   request?: typeof listNumberedRecords;
+  title?: string;
+  loadingMessage?: string;
+  renderItems?: (result: NumberedListRecordsResult) => ReactNode;
 }
 
-export function RecordList({ menu, request = listNumberedRecords }: RecordListProps) {
+export function RecordList(props: RecordListProps) {
+  const { menu } = props;
+  return <RecordListSession key={JSON.stringify([menu.path, menu.pluginId, menu.sourceId, menu.dataType, menu.list.query, menu.list.sorts])} {...props} />;
+}
+function RecordListSession({ menu, request = listNumberedRecords, title, loadingMessage, renderItems }: RecordListProps) {
+  const [conditions, setConditions] = useState<SearchConditions>({});
+  const [conditionVersion, setConditionVersion] = useState(0);
   const [limit, setLimit] = useState<RecordListLimit>(20);
-  const sessionKey = JSON.stringify([menu.path, menu.pluginId, menu.sourceId, menu.dataType, limit]);
+  const [sort, setSort] = useState<RecordSort | undefined>();
+  const applyConditions = (value: SearchConditions) => { setConditions(value); setConditionVersion(version => version + 1); };
+  const searchState = useRecordSearchState(menu.list.query ?? { searchEnabled: false, filters: [] }, applyConditions);
+  const sessionKey = JSON.stringify([menu.path, menu.pluginId, menu.sourceId, menu.dataType, limit, conditions, conditionVersion, sort]);
   const [navigation, dispatchNavigation] = useReducer(navigationReducer, sessionKey, createNavigationState);
   const [retry, setRetry] = useState(0);
   const [loading, setLoading] = useState(true);
@@ -155,7 +194,7 @@ export function RecordList({ menu, request = listNumberedRecords }: RecordListPr
     const page = navigation.target ?? navigation.page;
     setLoading(true);
     setError(null);
-    void request({ pluginId: menu.pluginId, sourceId: menu.sourceId, dataType: menu.dataType, limit, page }, { signal: controller.signal })
+    void request({ pluginId: menu.pluginId, sourceId: menu.sourceId, dataType: menu.dataType, limit, page, ...conditions, ...(sort ? { sort } : {}) }, { signal: controller.signal })
       .then((response: ApiResult<NumberedListRecordsResult>) => {
         if (controller.signal.aborted || currentRequest !== requestId.current) return;
         if (response.ok) {
@@ -175,7 +214,7 @@ export function RecordList({ menu, request = listNumberedRecords }: RecordListPr
   const visibleError = currentSession ? error : null;
   const busy = !currentSession || loading || (navigation.target !== null && visibleError === null);
 
-  return <RecordListView menu={menu} limit={limit} page={currentSession ? navigation.page : 1} loading={busy} result={visibleResult} error={visibleError}
+  return <RecordListView searchState={menu.list.query && (menu.list.query.searchEnabled || menu.list.query.filters.length > 0) ? searchState : undefined} menu={menu} title={title} loadingMessage={loadingMessage} renderItems={renderItems} activeConditions={Boolean(conditions.q || conditions.filters?.length)} sort={sort} onSortChange={setSort} limit={limit} page={currentSession ? navigation.page : 1} loading={busy} result={visibleResult} error={visibleError}
     onLimitChange={value => setLimit(value)}
     onPageChange={page => {
       if (!busy && visibleResult && page >= 1 && page <= visibleResult.pageInfo.totalPages && page !== navigation.page) {

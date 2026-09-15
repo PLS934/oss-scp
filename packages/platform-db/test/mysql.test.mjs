@@ -1,3 +1,4 @@
+import { verifySearchContract } from './search-contract.mjs';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { execFileSync, spawnSync } from 'node:child_process';
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
@@ -144,6 +145,7 @@ describe('MySQL 공통 레코드 저장·조회 계약', () => {
 
   it('제품 중립 공통 fixture를 통과한다', async () => {
     await verifyRecordContract(storage, query, scopeFor('shared-contract'));
+    await verifySearchContract(storage, query, scopeFor('search-contract'));
   });
 
   it('migration 재실행과 실행·checkpoint 상태 전이를 보존한다', async () => {

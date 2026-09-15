@@ -9,11 +9,11 @@ describe('공통 조회 입력 계약', () => {
   it('cursor의 범위·크기·고정 정렬과 마지막 키를 복원한다', () => {
     const cursor = encodeRecordCursor({ ...scope, limit: 20 }, boundary);
     expect(validateListRecordsInput({ ...scope, limit: 20, cursor })).toEqual({ ...scope, limit: 20, boundary });
-    expect(JSON.parse(Buffer.from(cursor, 'base64url').toString('utf8'))).toMatchObject({ v: 1, ...scope, limit: 20, sort: RECORD_LIST_SORT, ...boundary });
+    expect(JSON.parse(Buffer.from(cursor, 'base64url').toString('utf8'))).toMatchObject({ v: 2, ...scope, limit: 20, sort: RECORD_LIST_SORT, ...boundary });
   });
   it('malformed·버전·범위·크기 불일치 cursor를 구분해 거부한다', () => {
     const cursor = encodeRecordCursor({ ...scope, limit: 20 }, boundary);
-    const changedVersion = Buffer.from(JSON.stringify({ ...JSON.parse(Buffer.from(cursor, 'base64url').toString('utf8')), v: 2 })).toString('base64url');
+    const changedVersion = Buffer.from(JSON.stringify({ ...JSON.parse(Buffer.from(cursor, 'base64url').toString('utf8')), v: 3 })).toString('base64url');
     for (const input of [{ ...scope, cursor: '%' }, { ...scope, cursor: '' }, { ...scope, cursor: changedVersion }, { ...scope, pluginId: 'other', cursor }, { ...scope, limit: 50, cursor }]) expect(() => validateListRecordsInput(input)).toThrowError(expect.objectContaining({ code: 'INVALID_CURSOR' }));
   });
   it('잘못된 cursor를 DB 접근 전에 거부한다', async () => {

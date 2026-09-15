@@ -2,7 +2,8 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { MemoryRouter } from 'react-router-dom';
 import { describe, expect, test, vi } from 'vitest';
 import type { MenuItem } from '../src/menu';
-import { createNavigationState, formatColumnValue, navigationReducer, RecordListView, pageNumbers } from '../src/record-list';
+import { createNavigationState, formatColumnValue, navigationReducer, nextRecordSort, RecordListView, pageNumbers } from '../src/record-list';
+import type { RecordSearchState } from '../src/record-search';
 import type { CollectionStatus, NumberedListRecordsResult } from '../src/records';
 
 const menu: MenuItem = {
@@ -50,6 +51,14 @@ test('기본 컬럼 순서와 표시명만 렌더링한다', () => {
   expect(html).not.toContain('secret'); expect(html).not.toContain('not-visible'); expect(html).not.toContain('details');
 });
 
+test('필터가 선언된 컬럼명만 필터 버튼으로 렌더링한다', () => {
+  const filteredMenu: MenuItem = { ...menu, list: { ...menu.list, query: { searchEnabled: true, filters: [{ key: 'score', label: '점수', type: 'number', kind: 'numberRange' }] } } };
+  const searchState: RecordSearchState = { query: filteredMenu.list.query!, q: '', appliedQ: '', draft: {}, error: null, setQ: vi.fn(), update: vi.fn(), clearFilter: vi.fn(), submitSearch: vi.fn(), clearSearch: vi.fn(), reset: vi.fn() };
+  const html = render({ menu: filteredMenu, searchState });
+  expect(html).toContain('aria-label="점수 필터"');
+  expect(html).not.toContain('aria-label="호스트명 필터"');
+});
+
 test('목록 레코드의 내부 UUID로 현재 메뉴 상세 링크를 만든다', () => {
   expect(render()).toContain(`href="/assets/servers/${id}"`);
 });
@@ -81,6 +90,17 @@ test('첫 페이지에서 번호·전체 건수와 접근 가능한 탐색을 �
   expect(html).toContain('aria-label="1페이지" aria-current="page"');
   expect(html).not.toMatch(/aria-label="다음 페이지" disabled/);
   for (const limit of [20, 50, 100, 200]) expect(html).toContain(`value="${limit}"`);
+});
+
+test('정렬 뱃지는 오름차순·내림차순·해제하고 다른 필드는 오름차순으로 교체한다', () => {
+  expect(nextRecordSort(undefined, 'score')).toEqual({ field: 'score', direction: 'asc' });
+  expect(nextRecordSort({ field: 'score', direction: 'asc' }, 'score')).toEqual({ field: 'score', direction: 'desc' });
+  expect(nextRecordSort({ field: 'score', direction: 'desc' }, 'score')).toBeUndefined();
+  expect(nextRecordSort({ field: 'score', direction: 'desc' }, 'hostname')).toEqual({ field: 'hostname', direction: 'asc' });
+  const sortable = { ...menu, list: { ...menu.list, sorts: [menu.list.columns[0], menu.list.columns[1]] } };
+  const html = render({ menu: sortable, sort: { field: 'score', direction: 'desc' } });
+  expect(html).toContain('aria-label="호스트명 정렬: 해제"');
+  expect(html).toContain('aria-label="점수 정렬: 내림차순" aria-pressed="true"');
 });
 
 test('마지막 페이지에서는 다음과 마지막 이동을 막는다', () => {
@@ -169,4 +189,14 @@ test('저장 행이 없는 로딩·빈 결과·실패에는 상세 링크를 만
     { result: result('success', false) },
     { result: null, error: { kind: 'API_ERROR' as const, message: '조회 실패' } },
   ]) expect(render(props)).not.toContain('<a ');
+});
+
+test.each(['never_collected', 'running', 'partial', 'failed', 'success'] as const)('활성 조건의 빈 결과와 %s 수집 상태를 구분한다', collection => {
+  const html = render({ result: result(collection, false), activeConditions: true });
+  expect(html).toContain('검색·필터 결과가 없습니다.');
+  expect(html).not.toContain('조건 초기화');
+  if (collection === 'partial') expect(html).toContain('부분 완료');
+  if (collection === 'failed') expect(html).toContain('마지막 수집이 실패');
+  if (collection === 'running') expect(html).toContain('수집이 진행 중');
+  if (collection === 'never_collected') expect(html).toContain('아직 수집된 데이터');
 });
