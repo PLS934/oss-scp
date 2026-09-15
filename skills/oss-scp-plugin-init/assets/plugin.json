@@ -1,0 +1,24 @@
+{
+  "apiVersion": "oss-scp/plugin-v1",
+  "id": "starter",
+  "name": "초기 예제",
+  "version": "0.1.0",
+  "source": "./source.json",
+  "transform": "./transform.js",
+  "menu": { "title": "초기 예제", "icon": "repository", "group": "수집 데이터", "order": 10, "path": "/starter", "dataType": "item" },
+  "data": {
+    "types": {
+      "item": {
+        "uniqueKey": "id",
+        "views": {
+          "list": { "columns": ["id", "name"] },
+          "detail": { "sections": [{ "title": "기본 정보", "fields": ["id", "name"] }] }
+        },
+        "fields": {
+          "id": { "type": "string", "label": "식별자", "required": true },
+          "name": { "type": "string", "label": "이름", "required": true }
+        }
+      }
+    }
+  }
+}

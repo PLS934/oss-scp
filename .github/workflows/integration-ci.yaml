@@ -77,6 +77,7 @@ jobs:
       - run: pnpm lint
       - run: pnpm test
       - run: pnpm test:release
+      - run: pnpm test:plugin-init
       # JSON offset·single HTTP 수집의 loopback 통합·오류·자원 제한 검증
       - run: pnpm test:http-collector
       # HTTP CSV의 공통 파서 재사용·압축·한도·중단·backpressure 검증
@@ -107,6 +108,8 @@ jobs:
       - run: pnpm test:docker:web
       # Compose·이미지 단독 실행·비루트·개발 파일 제외·무응답 unhealthy 전환
       - run: bash scripts/test-docker.sh
+      - run: docker image tag oss-scp-api:local oss-scp-api:0.0.0-plugin-init
+      - run: node scripts/test-plugin-init-docker.mjs oss-scp-api:0.0.0-plugin-init
       # 실제 archive load, migration, 두 제품 버전 전환과 DB·설정 보존 검증
       - run: pnpm test:docker:release
       # 폐쇄망 PostgreSQL 포함 번들의 최초 설치·두 버전 업데이트·복구 경계 검증

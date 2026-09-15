@@ -1,0 +1,23 @@
+{
+  "json-single": {
+    "apiVersion": "oss-scp/source-v1", "connectionRef": "starter-source",
+    "path": "/items", "method": "GET", "format": "json", "itemsPath": "items",
+    "pagination": { "type": "single" },
+    "limits": { "timeoutMs": 5000, "maxResponseBytes": 2097152, "maxRecordBytes": 262144 }
+  },
+  "json-offset": {
+    "apiVersion": "oss-scp/source-v1", "connectionRef": "starter-source",
+    "path": "/items", "method": "GET", "format": "json", "itemsPath": "items",
+    "pagination": { "type": "offset", "offsetParam": "offset", "limitParam": "limit", "start": 0, "limit": 20, "totalPath": "total" },
+    "limits": { "timeoutMs": 5000, "maxResponseBytes": 2097152, "maxRecordBytes": 262144 }
+  },
+  "csv-file": {
+    "apiVersion": "oss-scp/source-v1", "transport": "file", "format": "csv",
+    "path": "fixtures/items.csv", "batchSize": 20
+  },
+  "csv-http": {
+    "apiVersion": "oss-scp/source-v1", "transport": "http", "format": "csv",
+    "connectionRef": "starter-source", "path": "/items.csv", "method": "GET", "batchSize": 20,
+    "limits": { "timeoutMs": 5000, "maxDownloadBytes": 2097152, "maxCsvBytes": 2097152, "maxRecordSize": 262144 }
+  }
+}
