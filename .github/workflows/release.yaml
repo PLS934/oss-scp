@@ -33,6 +33,8 @@ jobs:
     permissions:
       contents: read
     uses: ./.github/workflows/integration-ci.yaml
+    with:
+      full: true
 
   publish:
     name: 검증 자산 게시
