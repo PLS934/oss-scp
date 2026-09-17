@@ -224,6 +224,10 @@ try {
   const syncApiPort = await freePort();
   api = processRun(process.execPath, [path.join(root, 'apps/api/dist/main.js')], { env: { ...env, HOST: '127.0.0.1', PORT: String(syncApiPort) } });
   await waitFor(async () => (await fetch(`http://127.0.0.1:${syncApiPort}/api/v1/ready`)).ok, 'manual sync API');
+  await waitFor(async () => await databaseSql({
+    postgres: "SELECT count(*) FROM collection_runs WHERE plugin_id='sample1-offset-api' AND trigger='startup' AND status IN ('success', 'partial', 'failed')",
+    mysql: "SELECT count(*) FROM collection_runs WHERE plugin_id='sample1-offset-api' AND `trigger`='startup' AND status IN ('success', 'partial', 'failed')",
+  }) === '1', 'startup collection terminal run');
   await waitFor(async () => {
     const state = await (await fetch(`http://127.0.0.1:${syncApiPort}/api/v1/plugins/sample1-offset-api/sync`)).json();
     return state.canExecute === true;
