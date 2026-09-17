@@ -6,9 +6,9 @@ import { expect } from '@playwright/test';
 export async function checkPluginHome(page, url, menus, root) {
   const main = page.getByRole('main');
   await expect(main.getByRole('heading', { name: '플러그인 목록', exact: true })).toBeVisible();
-  await expect(main.locator('.plugin-card')).toHaveCount(4);
+  await expect(main.locator('.plugin-card')).toHaveCount(5);
   const apiPlugins = await (await page.request.get(`${url}/api/v1/plugins`)).json();
-  assert.equal(apiPlugins.length, 4);
+  assert.equal(apiPlugins.length, 5);
   for (const plugin of apiPlugins) assert.equal(Object.keys(plugin).every(key => ['enabled', 'id', 'name', 'sourceType', 'endpoint', 'fileName', 'description'].includes(key)), true);
   await expect(main.getByText('http://127.0.0.1:3001/sample1', { exact: true })).toBeVisible();
   const localCard = main.locator('.plugin-card').filter({ hasText: 'Vulnerabilities Local CSV' });
@@ -76,5 +76,5 @@ export async function checkPluginHome(page, url, menus, root) {
   await page.unroute('**/api/v1/plugins', loadingHandler);
   await page.unroute('**/api/v1/plugins', handler);
   await page.reload();
-  await expect(main.locator('.plugin-card')).toHaveCount(4);
+  await expect(main.locator('.plugin-card')).toHaveCount(5);
 }

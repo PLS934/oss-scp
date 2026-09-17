@@ -5,6 +5,7 @@ import { basename, isAbsolute, join, relative, resolve, sep } from 'node:path';
 import { loadSourceDefinition } from './source-loader';
 import { loadLocalCsvSource } from './source-loaders/file';
 import { loadHttpCsvSource } from './source-loaders/http-csv';
+import { loadPostgresSource } from './source-loaders/db';
 import type {
   CollectionDefinition,
   ClientDetailDefinition,
@@ -15,13 +16,16 @@ import type {
   ConfigurationIssue,
   FieldDefinition,
   ConfigurationResult,
-  HttpConnectionConfig,
+  ConnectionConfig,
   PluginConfig,
   PluginRuntimeDefinition,
+  PostgresSourceConfig,
   SourceConfig,
 } from './types';
 
 export type * from './types';
+export { isLivePostgresDefinition, validateReadQuery } from './source-loaders/db';
+export { resolveSecret } from './secrets';
 
 interface Registry {
   plugins?: string[];
@@ -31,6 +35,10 @@ interface Registry {
 interface Candidate<T> {
   file: string;
   value: T;
+}
+
+function isPostgresSource(source: SourceConfig): source is PostgresSourceConfig {
+  return 'type' in source && source.type === 'db-postgres';
 }
 
 const schemaRoot = join(__dirname, '..', 'schemas');
@@ -45,7 +53,7 @@ ajv.addSchema(schema('source-single.schema.json'));
 
 const validatePlugin = ajv.compile<PluginConfig>(schema('plugin.schema.json'));
 const validateSource = ajv.compile<SourceConfig>(schema('source.schema.json'));
-const validateConnection = ajv.compile<HttpConnectionConfig>(
+const validateConnection = ajv.compile<ConnectionConfig>(
   schema('connection.schema.json'),
 );
 
@@ -169,11 +177,11 @@ function readRegistry(
 function loadConnections(
   root: string,
   errors: ConfigurationIssue[],
-): Map<string, Candidate<HttpConnectionConfig>> {
+): Map<string, Candidate<ConnectionConfig>> {
   const connectionRoot = join(root, 'connections');
   const registryFile = join(connectionRoot, 'registry.json');
   const entries = readRegistry(root, registryFile, 'connections', errors);
-  const connections = new Map<string, Candidate<HttpConnectionConfig>>();
+  const connections = new Map<string, Candidate<ConnectionConfig>>();
 
   for (const entry of entries) {
     const file = safeResolve(
@@ -200,7 +208,7 @@ function loadConnections(
 
 function loadPlugins(
   root: string,
-  connections: Map<string, Candidate<HttpConnectionConfig>>,
+  connections: Map<string, Candidate<ConnectionConfig>>,
   errors: ConfigurationIssue[],
   menus: ClientMenuItem[],
   plugins: ClientPluginSummary[],
@@ -386,11 +394,47 @@ function loadPlugins(
     }
     let endpoint: ClientPluginSummary['endpoint'];
     let fileName: string | undefined;
-    if (sourceValue.format === 'csv' && sourceValue.transport === 'file') {
+    if (isPostgresSource(sourceValue)) {
+      const connection = connections.get(sourceValue.connectionRef);
+      if (!connection) {
+        issue(errors, root, sourceFile, '/connectionRef', `unknown connection id: ${sourceValue.connectionRef}`);
+        continue;
+      }
+      if (connection.value.connector !== 'postgres') {
+        issue(errors, root, sourceFile, '/connectionRef', 'db-postgres source requires a postgres connection');
+        continue;
+      }
+      const liveType = pluginValue.menu ? pluginValue.data.types[pluginValue.menu.dataType] : undefined;
+      if (liveType) {
+        if (sourceValue.externalKeyColumn !== liveType.uniqueKey) {
+          issue(errors, root, sourceFile, '/externalKeyColumn', 'must match the menu data type uniqueKey');
+          continue;
+        }
+        const queryFieldsValid = Object.entries(liveType.fields).every(([key, field]) => {
+          if (field.type === 'object' || field.type === 'array' || (!field.searchable && !field.sortable && !field.filter)) return true;
+          const queryField = sourceValue.queryFields[key];
+          if (queryField?.type === field.type) return true;
+          issue(errors, root, sourceFile, `/queryFields/${key}`, 'searchable, filterable and sortable fields require a matching query field');
+          return false;
+        });
+        if (!queryFieldsValid) continue;
+      }
+      let liveDefinition;
+      try { liveDefinition = loadPostgresSource(runtimePlugin, sourceValue, connection.value); }
+      catch (error) {
+        issue(errors, root, sourceFile, '/', error instanceof Error ? error.message : 'invalid live query');
+        continue;
+      }
+      plugins.push({ id: pluginValue.id, name: pluginValue.name, ...(pluginValue.description === undefined ? {} : { description: pluginValue.description }), enabled: pluginValue.enabled ?? true, sourceType: 'db-postgres' });
+      if (pluginValue.enabled === false) continue;
+      definitions.push(liveDefinition);
+      if (pluginValue.menu) menus.push({ ...pluginValue.menu, pluginId: pluginValue.id, sourceId: connection.value.id, sourceMode: 'live', list: clientLists.get(pluginValue.menu.dataType)!, detail: clientDetails.get(pluginValue.menu.dataType)! });
+      continue;
+    } else if (sourceValue.format === 'csv' && sourceValue.transport === 'file') {
       fileName = basename(sourceValue.path);
     } else {
       const connection = connections.get(sourceValue.connectionRef);
-      if (connection) {
+      if (connection?.value.connector === 'http') {
         let url: URL;
         try { url = new URL(sourceValue.path, connection.value.config.baseUrl); }
         catch {
@@ -433,7 +477,7 @@ function loadPlugins(
         continue;
       }
       const connection = connections.get(sourceValue.connectionRef);
-      if (!connection) {
+      if (!connection || connection.value.connector !== 'http') {
         issue(errors, root, sourceFile, '/connectionRef', `unknown connection id: ${sourceValue.connectionRef}`);
         continue;
       }
@@ -454,7 +498,7 @@ function loadPlugins(
     }
 
     const connection = connections.get(sourceValue.connectionRef);
-    if (!connection) {
+    if (!connection || connection.value.connector !== 'http') {
       issue(
         errors,
         root,

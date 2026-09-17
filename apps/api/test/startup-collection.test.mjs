@@ -27,6 +27,13 @@ describe('기동 전체 수집 프로세스', () => {
     expect(children[1].kill).toHaveBeenCalledWith('SIGTERM');
   });
 
+  it('무저장 라이브 source는 기동 수집 대상에서 제외한다', () => {
+    const calls = [];
+    const manager = new StartupCollectionManager('/config', console, '/collector.js', pluginId => { calls.push(pluginId); return child(); });
+    manager.start([{ ...definition('live'), mode: 'live', persistence: 'none' }, definition('stored')]);
+    expect(calls).toEqual(['stored']);
+  });
+
   it('한 대상 실패를 기록하되 다른 대상을 종료하지 않는다', () => {
     const errors = []; const children = [];
     const manager = new StartupCollectionManager('/config', { error: value => errors.push(value) }, '/collector.js', () => { const value = child(); children.push(value); return value; });

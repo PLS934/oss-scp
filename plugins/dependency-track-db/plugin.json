@@ -1,0 +1,16 @@
+{
+  "apiVersion": "oss-scp/plugin-v1", "id": "dependency-track-db", "name": "Dependency Track PostgreSQL", "version": "0.1.0",
+  "description": "합성 PostgreSQL 프로젝트·컴포넌트·SSCS 라이브 조회 예제", "source": "./source.json", "transform": "./dist/transform.js",
+  "menu": { "title": "의존성 추적", "icon": "repository", "group": "자산 관리", "order": 30, "path": "/dependencies", "dataType": "dependency-item" },
+  "data": { "types": { "dependency-item": {
+    "uniqueKey": "external_key",
+    "views": { "list": { "columns": ["entity_kind", "name", "severity", "updated_at"] }, "detail": { "sections": [{ "title": "원천 정보", "fields": ["external_key", "entity_kind", "name", "severity", "updated_at"] }] } },
+    "fields": {
+      "external_key": { "type": "string", "label": "외부 키", "required": true },
+      "entity_kind": { "type": "string", "label": "종류", "required": true, "sortable": true, "filter": { "kind": "multiSelect", "options": [{ "value": "project", "label": "프로젝트" }, { "value": "component", "label": "컴포넌트" }, { "value": "sscs", "label": "SSCS" }] } },
+      "name": { "type": "string", "label": "이름", "required": true, "searchable": true, "sortable": true },
+      "severity": { "type": "string", "label": "심각도", "filter": { "kind": "select", "options": [{ "value": "critical", "label": "Critical" }, { "value": "high", "label": "High" }, { "value": "medium", "label": "Medium" }, { "value": "low", "label": "Low" }] } },
+      "updated_at": { "type": "datetime", "label": "갱신 시각", "required": true, "sortable": true, "filter": { "kind": "dateRange" } }
+    }
+  } } }
+}

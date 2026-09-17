@@ -70,6 +70,7 @@ function isMenu(value: unknown): value is MenuItem {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
   const item = value as Record<string, unknown>;
   return ['title', 'group', 'path', 'dataType', 'pluginId', 'sourceId'].every(key => typeof item[key] === 'string')
+    && (item.sourceMode === undefined || item.sourceMode === 'live')
     && typeof item.order === 'number' && Number.isInteger(item.order)
     && typeof item.icon === 'string' && icons.has(item.icon)
     && isList(item.list)

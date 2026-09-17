@@ -84,6 +84,14 @@ describe('실행 조립과 결과', () => {
     expect(deps.run).not.toHaveBeenCalled();
   });
 
+  it('무저장 라이브 source는 플랫폼 DB 연결과 실행 이력 생성 전에 거부한다', async () => {
+    const live = { mode: 'live', persistence: 'none', plugin, connection: { id: 'live-db' }, source: { type: 'db-postgres' } };
+    const deps = dependencies({ validate: vi.fn(() => ({ ok: true, definitions: [live] })) });
+    const outcome = await executeManualCollection({ args: ['sample-plugin'], root: '/repo', env: {}, signal: new AbortController().signal, dependencies: deps });
+    expect(outcome).toMatchObject({ exitCode: 1, errorCode: 'unsupported_collector' });
+    expect(deps.connectStorage).not.toHaveBeenCalled(); expect(deps.run).not.toHaveBeenCalled();
+  });
+
   it('하위 오류 문자열을 폐기하고 공개 필드만 직렬화한다', async () => {
     const secret = 'postgres://admin:secret-token@example.test/db';
     const deps = dependencies({ run: vi.fn(async () => { throw new Error(`${secret} Authorization password stack`); }) });

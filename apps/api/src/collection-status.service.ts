@@ -11,7 +11,7 @@ export class CollectionStatusService {
   ) {}
 
   async list() {
-    return Promise.all(this.registry.menus.map(async menu => {
+    return Promise.all(this.registry.menus.filter(menu => menu.sourceMode !== 'live').map(async menu => {
       const result = await this.query.listRecords({
         pluginId: menu.pluginId, sourceId: menu.sourceId, dataType: menu.dataType, limit: 20,
       });

@@ -6,6 +6,7 @@
     { "$ref": "#/$defs/jsonSource" },
     { "$ref": "#/$defs/localCsvSource" },
     { "$ref": "#/$defs/httpCsvSource" }
+    ,{ "$ref": "#/$defs/postgresSource" }
   ],
   "$defs": {
     "jsonSource": {
@@ -77,6 +78,32 @@
         }
       }
     },
+    "postgresSource": {
+      "type": "object", "additionalProperties": false,
+      "required": ["apiVersion", "type", "persistence", "connectionRef", "listQuery", "detailQuery", "externalKeyColumn", "queryFields", "batchSize", "limits"],
+      "properties": {
+        "apiVersion": { "const": "oss-scp/source-v1" },
+        "type": { "const": "db-postgres" },
+        "persistence": { "const": "none" },
+        "connectionRef": { "type": "string", "pattern": "^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$", "maxLength": 100 },
+        "listQuery": { "type": "string", "minLength": 1, "maxLength": 100000 },
+        "detailQuery": { "type": "string", "minLength": 1, "maxLength": 100000 },
+        "externalKeyColumn": { "$ref": "#/$defs/sqlIdentifier" },
+        "queryFields": { "type": "object", "minProperties": 1, "maxProperties": 100, "additionalProperties": { "$ref": "#/$defs/queryField" } },
+        "batchSize": { "type": "integer", "minimum": 1, "maximum": 500 },
+        "limits": { "type": "object", "additionalProperties": false, "required": ["rowCap", "timeoutMs", "maxResponseBytes"], "properties": {
+          "rowCap": { "type": "integer", "minimum": 1, "maximum": 500 },
+          "timeoutMs": { "type": "integer", "minimum": 100, "maximum": 5000 },
+          "maxResponseBytes": { "type": "integer", "minimum": 1024, "maximum": 16777216 }
+        } },
+        "cache": { "type": "object", "additionalProperties": false, "required": ["kind", "ttlSeconds"], "properties": { "kind": { "const": "watchlist" }, "ttlSeconds": { "const": 600 } } }
+      }
+    },
+    "queryField": {
+      "type": "object", "additionalProperties": false, "required": ["column", "type"],
+      "properties": { "column": { "$ref": "#/$defs/sqlIdentifier" }, "type": { "enum": ["string", "number", "boolean", "datetime"] } }
+    },
+    "sqlIdentifier": { "type": "string", "pattern": "^[a-z_][a-z0-9_]*$", "maxLength": 63 },
     "jsonPath": {
       "type": "string",
       "pattern": "^[A-Za-z_$][A-Za-z0-9_$-]*(?:\\.[A-Za-z_$][A-Za-z0-9_$-]*)*$",

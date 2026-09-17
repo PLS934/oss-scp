@@ -3,7 +3,7 @@ export interface PluginSummary {
   name: string;
   description?: string;
   enabled: boolean;
-  sourceType: 'http-json' | 'http-csv' | 'local-csv';
+  sourceType: 'http-json' | 'http-csv' | 'local-csv' | 'db-postgres';
   endpoint?: { url: string; method: 'GET' };
   fileName?: string;
 }
@@ -27,7 +27,7 @@ function isPlugin(value: unknown): value is PluginSummary {
     && (item.endpoint === undefined || isEndpoint(item.endpoint))
     && (item.fileName === undefined || (typeof item.fileName === 'string' && item.fileName.length > 0 && !/[\\/]/.test(item.fileName)))
     && typeof item.enabled === 'boolean'
-    && ['http-json', 'http-csv', 'local-csv'].includes(item.sourceType as string);
+    && ['http-json', 'http-csv', 'local-csv', 'db-postgres'].includes(item.sourceType as string);
 }
 
 export async function loadPlugins(options: { request?: typeof fetch; signal?: AbortSignal } = {}): Promise<PluginSummary[]> {

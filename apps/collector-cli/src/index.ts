@@ -13,7 +13,7 @@ import {
   type CollectionScope,
   type RecordStorage,
 } from '@oss-scp/platform-db';
-import { preflightConfiguration, type CollectionDefinition, type ConfigurationResult, type HttpCsvCollectionDefinition, type OffsetCollectionDefinition, type SingleCollectionDefinition } from '@oss-scp/plugin-config';
+import { isLivePostgresDefinition, preflightConfiguration, type CollectionDefinition, type ConfigurationResult, type HttpCsvCollectionDefinition, type OffsetCollectionDefinition, type SingleCollectionDefinition } from '@oss-scp/plugin-config';
 
 export type CliErrorCode =
   | 'usage'
@@ -118,6 +118,7 @@ function numericCheckpoint(value: unknown, fallback: number): number {
 }
 
 export function collectorFor(definition: CollectionDefinition, now: () => string): CollectionCollector {
+  if (isLivePostgresDefinition(definition)) throw new ManualCollectionError('unsupported_collector', 'config');
   if ('pagination' in definition && definition.pagination.type === 'offset') {
     const offsetDefinition = definition as OffsetCollectionDefinition;
     return async ({ checkpoint, signal }, onBatch) => {
@@ -157,7 +158,7 @@ export function collectorFor(definition: CollectionDefinition, now: () => string
       }, { signal });
     };
   }
-  if ('source' in definition && definition.source.transport === 'file') {
+  if ('source' in definition && 'transport' in definition.source && definition.source.transport === 'file') {
     return async ({ checkpoint, signal }, onBatch) => {
       let consumed = numericCheckpoint(checkpoint, 0);
       let expectedCheckpoint = checkpoint;

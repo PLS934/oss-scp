@@ -204,6 +204,36 @@ describe('저장 레코드 조회 API', () => {
   });
 });
 
+describe('PostgreSQL 라이브 레코드 API', () => {
+  const definition = {
+    mode: 'live', persistence: 'none',
+    plugin: { id: 'live-plugin', name: 'Live', version: '1.0.0', transformPath: '/transform.js', data: { types: { asset: { uniqueKey: 'external_key', fields: { external_key: { type: 'string', label: '키' }, name: { type: 'string', label: '이름', searchable: true, sortable: true } }, views: { list: { columns: ['name'] }, detail: { sections: [{ title: '정보', fields: ['external_key', 'name'] }] } } } } } },
+    connection: { apiVersion: 'oss-scp/connection-v1', id: 'live-db', connector: 'postgres', config: { host: 'localhost', port: 5432, database: 'source', user: 'reader', passwordRef: { env: 'LIVE_PASSWORD' } } },
+    source: { apiVersion: 'oss-scp/source-v1', type: 'db-postgres', persistence: 'none', connectionRef: 'live-db', listQuery: 'SELECT 1', detailQuery: 'SELECT 1 WHERE 1 = $1', externalKeyColumn: 'external_key', queryFields: { name: { column: 'name', type: 'string' } }, batchSize: 20, limits: { rowCap: 500, timeoutMs: 5000, maxResponseBytes: 100000 } },
+  };
+  const menu = { title: '라이브', icon: 'server', group: '자산', order: 1, path: '/live', dataType: 'asset', pluginId: 'live-plugin', sourceId: 'live-db', sourceMode: 'live', list: { columns: [{ key: 'name', label: '이름', type: 'string' }], query: { searchEnabled: true, filters: [] }, sorts: [{ key: 'name', label: '이름', type: 'string' }] }, detail: { sections: [{ title: '정보', fields: [{ key: 'name', label: '이름', type: 'string' }] }] } };
+
+  it('목록과 범위 기반 상세를 라이브 manager로 보내고 플랫폼 DB에는 쓰지 않는다', async () => {
+    const listCalls = []; const detailCalls = []; let platformReads = 0;
+    const liveRecord = { mode: 'live', id: 'project:1', pluginId: 'live-plugin', sourceId: 'live-db', dataType: 'asset', externalKey: 'project:1', sourceValues: { external_key: 'project:1', name: 'alpha' } };
+    const live = { list: async (...args) => { listCalls.push(args); return { mode: 'live', items: [{ ...liveRecord, omittedFields: [] }], pageInfo: { page: 1, pageSize: 20, totalItems: 1, totalPages: 1, hasNextPage: false }, queriedAt: '2026-09-17T00:00:00.000Z' }; }, detail: async (...args) => { detailCalls.push(args); return liveRecord; }, close: async () => undefined };
+    const query = { listRecords: async () => { platformReads += 1; }, getRecord: async () => { platformReads += 1; } };
+    const registry = createPluginRuntimeRegistry({ definitions: [definition], menus: [menu] });
+    const connection = { checkReady: async () => true, close: async () => undefined };
+    const module = await Test.createTestingModule({ imports: [AppModule.register(connection, query, registry, undefined, live)] }).compile();
+    const app = module.createNestApplication(); await app.listen(0, '127.0.0.1');
+    try {
+      const base = await app.getUrl();
+      const list = await fetch(`${base}/api/v1/records?pluginId=live-plugin&sourceId=live-db&dataType=asset&q=a&sort=name&direction=asc`);
+      expect(list.status).toBe(200); expect(await list.json()).toMatchObject({ mode: 'live', pageInfo: { page: 1 } });
+      const detail = await fetch(`${base}/api/v1/live-records/detail?pluginId=live-plugin&sourceId=live-db&dataType=asset&externalKey=project%3A1`);
+      expect(detail.status).toBe(200); expect(await detail.json()).toEqual(liveRecord);
+      expect(listCalls).toHaveLength(1); expect(detailCalls).toEqual([['live-plugin', 'live-db', 'asset', 'project:1']]); expect(platformReads).toBe(0);
+      expect((await fetch(`${base}/api/v1/records?pluginId=live-plugin&sourceId=live-db&dataType=asset&cursor=bad`)).status).toBe(400);
+    } finally { await app.close(); }
+  });
+});
+
 describe('등록 플러그인 API', () => {
   it('활성·비활성 등록 정보를 반환하고 내부 속성은 제외한다', async () => {
     const connection = { checkReady: async () => true, close: async () => undefined };
