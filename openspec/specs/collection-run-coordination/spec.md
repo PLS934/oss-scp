@@ -57,3 +57,29 @@ PostgreSQL과 MySQL storage-adapter는 실행 등록, 단일 실행권, lease �
 #### Scenario: 양쪽 DB의 계약 검증
 - **WHEN** 같은 동시 요청·lease 만료·늦은 저장 시나리오를 PostgreSQL과 MySQL 어댑터에 실행한다
 - **THEN** 실행 승자, 중복 처리, 저장 데이터, checkpoint 및 최종 상태가 동일한 계약을 충족한다
+
+### Requirement: 모든 trigger가 같은 대상 실행권을 공유한다
+기동, 수동 CLI 및 수동 API trigger는 같은 plugin·source·설정 revision·full 범위에 대해 동일한 DB 실행권과 lease 계약에 SHALL 참여해야 한다. trigger 종류나 요청을 받은 API 인스턴스가 달라도 동시에 하나의 실행만 데이터를 확정해야 하며(MUST), 중복 요청은 현재 실행을 참조할 수 있어야 한다(MUST).
+
+#### Scenario: 수동 API와 기동 수집 충돌
+- **WHEN** 기동 수집이 진행 중인 대상에 수동 API 동기화 요청이 도착한다
+- **THEN** 수동 요청은 별도 원천 수집을 시작하지 않고 진행 중 실행을 참조하는 중복 결과를 반환한다
+
+#### Scenario: 서로 다른 API 인스턴스의 수동 요청
+- **WHEN** 두 API 인스턴스가 같은 대상의 수동 동기화를 동시에 접수한다
+- **THEN** DB 실행권을 얻은 하나만 원천 수집을 수행하고 다른 요청은 현재 실행을 참조한다
+
+#### Scenario: 수동 API와 CLI 충돌
+- **WHEN** 수동 CLI 실행 중 같은 대상의 수동 API 요청이 접수된다
+- **THEN** 두 경로는 같은 실행권을 공유해 두 번째 실행의 데이터·checkpoint 확정을 허용하지 않는다
+
+### Requirement: trigger와 요청 상관관계를 비밀정보 없이 기록한다
+플랫폼은 실행 이력에서 `startup | cli | api` trigger를 구분하고, 수동 API 요청 식별자와 대상 실행의 상관관계를 SHALL 조회할 수 있어야 한다. 이 상관관계에는 인증 자격증명, Connection 비밀, 원천 응답이나 사용자 제공 임의 문자열을 기록해서는 안 된다(MUST NOT).
+
+#### Scenario: API 실행 이력
+- **WHEN** 수동 API 요청이 하나 이상의 대상 실행을 시작하거나 기존 실행과 중복된다
+- **THEN** 요청 식별자, api trigger, 대상 결과 또는 참조 실행이 비밀정보 없이 기록된다
+
+#### Scenario: 기존 trigger 호환성
+- **WHEN** 기동 수집 또는 수동 CLI 실행이 완료된다
+- **THEN** 기존 데이터·checkpoint 의미를 유지하면서 해당 trigger 종류가 실행 이력에 식별된다
