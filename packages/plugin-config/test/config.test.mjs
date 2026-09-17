@@ -32,6 +32,30 @@ afterEach(() => {
 });
 
 describe('validateRepository', () => {
+  test('source별 공개 상세와 안전한 transform 후보를 생성하고 비밀정보는 제외한다', () => {
+    const result = validateRepository(repositoryRoot);
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.pluginDetails).toHaveLength(5);
+    const http = result.pluginDetails.find(item => item.configuration.id === 'sample1-offset-api');
+    expect(http?.configuration).toMatchObject({
+      id: 'sample1-offset-api', version: '0.1.0', enabled: true,
+      source: { type: 'http-json', connection: { id: 'mock-api-sample1', baseUrl: 'http://127.0.0.1:3001' }, pagination: { type: 'offset', totalPath: 'total' } },
+      data: { types: { asset: { fields: { hostname: { type: 'string', label: '호스트명' } } } } },
+      menu: { path: '/assets/servers', list: { columns: expect.any(Array) }, detail: { sections: expect.any(Array) } },
+    });
+    expect(http?.transformFiles).toEqual({
+      pluginRoot: join(repositoryRoot, 'plugins/sample1-offset-api'),
+      runtimePath: join(repositoryRoot, 'plugins/sample1-offset-api/dist/transform.js'),
+      sourcePath: join(repositoryRoot, 'plugins/sample1-offset-api/transform.ts'),
+    });
+    expect(result.pluginDetails.find(item => item.configuration.id === 'vulnerabilities-local-csv')?.configuration.source).toMatchObject({ type: 'local-csv', fileName: 'vulnerabilities.csv' });
+    expect(result.pluginDetails.find(item => item.configuration.id === 'vulnerabilities-http-csv')?.configuration.source).toMatchObject({ type: 'http-csv', request: { format: 'csv' } });
+    const live = result.pluginDetails.find(item => item.configuration.id === 'dependency-track-db')?.configuration;
+    expect(live?.source).toMatchObject({ type: 'db-postgres', mode: 'live', persistence: 'none', connection: { host: '127.0.0.1', port: 5433, database: 'dependency_track' }, queries: { list: expect.any(String), detail: expect.any(String) } });
+    expect(JSON.stringify(live)).not.toMatch(/password|passwordRef|user|LIVE_|transformPath|pluginRoot/);
+  });
+
   test('명시적 외부 설정 루트에서 전체 registry를 검증한다', () => {
     const root = temporaryRepository();
     const result = validateRepository(root);

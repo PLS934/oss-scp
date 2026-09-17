@@ -1,7 +1,8 @@
-import { Controller, Get, Header, Inject, Param } from '@nestjs/common';
+import { Controller, Get, Header, HttpException, Inject, Param } from '@nestjs/common';
 import { downloadLocalCsv } from './plugin-source-file';
 import type { ClientPluginSummary } from '@oss-scp/plugin-config';
 import { PLUGIN_RUNTIME_REGISTRY, type PluginRuntimeRegistry } from './plugin-runtime-registry';
+import { readPluginTransform } from './plugin-transform-code';
 
 @Controller('api/v1/plugins')
 export class PluginController {
@@ -12,6 +13,14 @@ export class PluginController {
   @Header('X-Content-Type-Options', 'nosniff')
   download(@Param('id') id: string) {
     return downloadLocalCsv(this.registry, id);
+  }
+
+  @Get(':id')
+  @Header('Cache-Control', 'no-store')
+  async detail(@Param('id') id: string) {
+    const detail = this.registry.getPluginDetail(id);
+    if (!detail) throw new HttpException({ code: 'PLUGIN_NOT_FOUND', message: '플러그인을 찾을 수 없습니다.' }, 404);
+    return { ...detail.configuration, transform: await readPluginTransform(detail.transformFiles) };
   }
 
   @Get()

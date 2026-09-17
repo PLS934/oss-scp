@@ -10,18 +10,21 @@ const menu = (title: string, path: string): MenuItem => ({ title, path, pluginId
 const menus = [menu('서버', '/servers'), menu('저장소', '/repositories')];
 const render = (plugins: PluginSummary[], state: 'success' | 'loading' | 'failure' = 'success', menuState: 'success' | 'loading' | 'failure' = 'success') => renderToStaticMarkup(<MemoryRouter><PluginHomeContent plugins={plugins} state={state} menus={menus} menuState={menuState} /></MemoryRouter>);
 
-test('등록 정보와 메뉴별 데이터 조회 링크를 표시한다', () => {
+test('제목 옆 설정 상세 링크와 메뉴 경로별 데이터 조회 링크를 표시한다', () => {
   const html = render([{ ...plugin, description: '<script>설명</script>' }]);
   expect(html).toContain('플러그인 목록');
   expect(html).toContain('외부 API (JSON)');
   expect(html).toContain('활성화');
   expect(html).toContain('&lt;script&gt;설명&lt;/script&gt;');
   expect(html).toContain('href="/servers"');
+  expect(html).toContain('href="/plugins/sample"');
   expect(html).toContain('href="/repositories"');
+  expect(html).toContain('aria-label="샘플 설정 상세 보기"');
+  expect(html).toContain('title="설정 상세 보기"');
   expect(html).toContain('aria-label="샘플 · 서버 데이터 보기"');
-  expect(html).toMatch(/class="plugin-title"[\s\S]*href="\/servers"/);
-  expect(html).toContain('자산 &gt; 서버');
-  expect(html).toContain('자산 &gt; 저장소');
+  expect(html).toMatch(/class="plugin-title"><h3>샘플<\/h3><a[^>]*href="\/plugins\/sample"/);
+  expect(html).toMatch(/href="\/servers"[^>]*>자산 &gt; 서버<\/a>/);
+  expect(html).toMatch(/href="\/repositories"[^>]*>자산 &gt; 저장소<\/a>/);
   expect(html).not.toContain('<dt>메뉴 그룹</dt>');
   expect(html).not.toContain('<dt>메뉴 이름</dt>');
   expect(html.indexOf('class="plugin-menu-paths"')).toBeLessThan(html.indexOf('class="plugin-description"'));
@@ -35,7 +38,10 @@ test('선택 설명 누락, 비활성 및 메뉴 없는 플러그인을 처리�
   expect(html).toContain('비활성화');
   expect(html).toContain('로컬 CSV');
   expect(html).toContain('조회 가능한 메뉴가 없습니다');
-  expect(html).not.toContain('href=');
+  expect(html).toContain('href="/plugins/sample"');
+  expect(html).toContain('href="/plugins/no-menu"');
+  expect(html).toContain('aria-label="샘플 설정 상세 보기"');
+  expect(html).not.toContain('aria-label="샘플 · 서버 데이터 보기"');
 });
 
 test('목록과 메뉴의 로딩·실패를 빈 결과와 구분한다', () => {
@@ -45,7 +51,8 @@ test('목록과 메뉴의 로딩·실패를 빈 결과와 구분한다', () => {
   expect(render([plugin], 'success', 'loading')).toContain('조회 메뉴를 확인하는 중');
   const html = render([plugin], 'success', 'failure');
   expect(html).toContain('조회 메뉴를 불러오지 못했습니다');
-  expect(html).not.toContain('href=');
+  expect(html).toContain('href="/plugins/sample"');
+  expect(html).not.toContain('aria-label="샘플 · 서버 데이터 보기"');
 });
 
 test('등록 API의 정상 응답과 요청 취소 signal을 사용한다', async () => {

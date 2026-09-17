@@ -7,6 +7,7 @@ import { observeHealth, type ConnectionState } from './health';
 import { activeMenuPath, groupMenus, type MenuItem } from './menu';
 import { loadPluginMenus } from './plugin-menus';
 import { PluginHome } from './plugin-home';
+import { PluginConfigDetail } from './plugin-config-detail';
 import { RecordList } from './record-list';
 import { ThemePicker } from './theme-picker';
 
@@ -50,6 +51,7 @@ export default function App({ menus: providedMenus, customViews = customPluginVi
       {entries.map(menu => <li key={menu.path}><Link aria-current={activePath === menu.path ? 'page' : undefined} className={activePath === menu.path ? 'active' : ''} to={menu.path}>{menu.title}</Link></li>)}</ul></section>)}</nav>
     </aside><div className="workspace"><header className="app-header"><div className="header-actions"><p role="status" className={`status ${state}`}>{labels[state]}</p><span className="version">v{productVersion}</span><ThemePicker /></div></header><main><Routes>
       <Route path="/" element={<PluginHome menus={menus} menuState={menuState} />} />
+      <Route path="/plugins/:pluginId" element={<PluginConfigDetail />} />
       {menuState === 'success' ? menus.flatMap(menu => [
         <Route key={menu.path} path={menu.path} element={<ListRoute menu={menu} registry={customViews} />} />,
         <Route key={`${menu.path}/:recordId`} path={`${menu.path}/:recordId`} element={<DetailRoute menu={menu} registry={customViews} />} />,

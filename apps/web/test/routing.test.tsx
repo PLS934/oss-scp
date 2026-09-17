@@ -36,6 +36,7 @@ test('아이콘 렌더러가 없으면 아이콘 영역 없이 메뉴 제목만 
 test('직접 경로에서 해당 플러그인 목록을 복원한다', () => { const html = render('/assets/repositories'); expect(html).toContain('id="record-list-title">저장소'); expect(html).toContain('저장된 목록을 불러오는 중입니다'); expect(html).toContain('aria-current="page"'); });
 test('직접 상세 경로에서 같은 플러그인 범위를 복원한다', () => { const html = render('/assets/repositories/00000000-0000-4000-8000-000000000001'); expect(html).toContain('상세 정보를 불러오는 중입니다'); expect(html).toContain('aria-current="page"'); });
 test('알 수 없는 경로에는 목록을 만들지 않는다', () => { const html = render('/removed-plugin'); expect(html).toContain('페이지를 찾을 수 없습니다'); expect(html).not.toContain('record-list-title'); });
+test('플러그인 설정 직접 경로를 복원한다', () => { const html = render('/plugins/sample1-offset-api'); expect(html).toContain('플러그인 설정을 불러오는 중입니다'); expect(html).not.toContain('페이지를 찾을 수 없습니다'); });
 
 test('목록과 상세 사용자 정의 화면에 검증된 route context를 전달한다', () => {
   const List = ({ menu }: CustomPluginListProps) => <p>사용자 목록 {menu.pluginId}:{menu.sourceId}:{menu.dataType}</p>;

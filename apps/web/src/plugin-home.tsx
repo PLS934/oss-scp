@@ -44,9 +44,9 @@ export function PluginHomeContent({ plugins, state, menus, menuState }: {
         const targets = plugin.enabled && menuState === 'success' ? menus.filter(menu => menu.pluginId === plugin.id) : [];
         return <li className="plugin-card" key={plugin.id}>
           <div className="plugin-heading"><div className="plugin-title"><h3>{plugin.name}</h3>
-            {targets.map(menu => <Link key={menu.path} className="plugin-icon-link" to={menu.path} aria-label={`${plugin.name} · ${menu.title} 데이터 보기`} title={`${menu.title} 데이터 보기`}><ArrowIcon /></Link>)}
+            <Link className="plugin-icon-link" to={`/plugins/${encodeURIComponent(plugin.id)}`} aria-label={`${plugin.name} 설정 상세 보기`} title="설정 상세 보기"><ArrowIcon /></Link>
           </div><span className={`plugin-badge ${plugin.enabled ? 'enabled' : 'disabled'}`}>{plugin.enabled ? '활성화' : '비활성화'}</span></div>
-          {targets.length > 0 ? <ul className="plugin-menu-paths" aria-label="메뉴 위치">{targets.map(menu => <li key={menu.path}>{menu.group} &gt; {menu.title}</li>)}</ul> : null}
+          {targets.length > 0 ? <ul className="plugin-menu-paths" aria-label="메뉴 위치">{targets.map(menu => <li key={menu.path}><Link className="plugin-menu-link" to={menu.path} aria-label={`${plugin.name} · ${menu.title} 데이터 보기`}>{menu.group} &gt; {menu.title}</Link></li>)}</ul> : null}
           {plugin.description?.trim() ? <p className="plugin-description">{plugin.description}</p> : null}
           <dl className="plugin-source">
             <div><dt>데이터 출처</dt><dd>{sourceLabels[plugin.sourceType]}</dd></div>
