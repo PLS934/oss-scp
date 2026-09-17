@@ -86,18 +86,19 @@ export function RecordListView({ menu, title, loadingMessage, renderItems, limit
     <p className="eyebrow">{menu.group}</p>
     <div className="list-heading">
       <h2 id="record-list-title">{title ?? menu.title}</h2>
-
+      <div className="sync-heading-actions">
+        <button className={`sync-button${syncBusy ? ' syncing' : ''}`} type="button" onClick={onSync} disabled={syncBusy || !syncCapability?.canExecute} aria-label="플러그인 전체 동기화" title="플러그인의 활성 수집 대상 전체 동기화">
+          <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M20 11a8.1 8.1 0 0 0-15.5-2M4 5v4h4M4 13a8.1 8.1 0 0 0 15.5 2M20 19v-4h-4" /></svg>
+        </button>
+        <span className="sync-time">{syncCapability?.lastSuccessAt ? `마지막 동기화 ${dateTimeFormat.format(new Date(syncCapability.lastSuccessAt))}` : '동기화 이력 없음'}</span>
+        {syncBusy ? <span className="sync-state" role="status">동기화 중</span> : null}
+        {!syncBusy && syncError && syncError.kind !== 'ABORTED' ? <span className="sync-state error" role="alert">{syncError.message}</span> : null}
+        {!syncBusy && !syncError && syncRequest?.status === 'success' ? <span className="sync-state success" role="status">동기화 완료</span> : null}
+        {!syncBusy && !syncError && syncRequest?.status === 'partial' ? <span className="sync-state partial" role="status">부분 완료</span> : null}
+        {!syncBusy && !syncError && syncRequest?.status === 'failed' ? <span className="sync-state failed" role="alert">동기화 실패</span> : null}
+        {!syncBusy && !syncError && !syncRequest && syncCapability && !syncCapability.canExecute && syncCapability.reason === 'NO_ACTIVE_TARGETS' ? <span className="sync-state">활성 대상 없음</span> : null}
+      </div>
     </div>
-    <div className="sync-panel">
-      <div><strong>플러그인 전체 동기화</strong><p>이 플러그인의 활성화된 수집 대상 전체를 동기화합니다.</p></div>
-      <button type="button" onClick={onSync} disabled={syncBusy || !syncCapability?.canExecute}>{syncBusy ? '동기화 중' : '지금 동기화'}</button>
-    </div>
-    {syncCapability && !syncCapability.canExecute && syncCapability.reason === 'NO_ACTIVE_TARGETS' ? <p className="list-message">활성화된 수집 대상이 없습니다.</p> : null}
-    {syncError && syncError.kind !== 'ABORTED' ? <p className="list-message error" role="alert">{syncError.message}</p> : null}
-    {syncRequest?.status === 'success' ? <p className="list-message success" role="status">동기화가 완료되었습니다.</p> : null}
-    {syncRequest?.status === 'partial' ? <p className="list-message partial" role="status">동기화가 부분 완료되었습니다.</p> : null}
-    {syncRequest?.status === 'failed' ? <p className="list-message failed" role="alert">동기화에 실패했습니다. 기존 저장 데이터는 유지됩니다.</p> : null}
-    {syncCapability?.lastSuccessAt ? <p>마지막 성공: {dateTimeFormat.format(new Date(syncCapability.lastSuccessAt))}</p> : null}
     {searchState ? <RecordSearchToolbar state={searchState} /> : searchControls}
     {renderItems && searchState && menu.list.query?.filters.length ? <div className="record-card-filters" aria-label="필터">{menu.list.query.filters.map(field => <RecordFilterHeader key={field.key} field={field} state={searchState} />)}</div> : null}
     {loading ? <p role="status">{loadingMessage ?? '저장된 목록을 불러오는 중입니다.'}</p> : null}

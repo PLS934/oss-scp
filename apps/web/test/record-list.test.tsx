@@ -51,12 +51,12 @@ test('기본 컬럼 순서와 표시명만 렌더링한다', () => {
   expect(html).not.toContain('secret'); expect(html).not.toContain('not-visible'); expect(html).not.toContain('details');
 });
 
-test('플러그인 전체 동기화 범위와 실행 상태를 표시한다', () => {
+test('목록 제목 옆에 동기화 아이콘과 마지막 동기화 시각을 표시한다', () => {
   const capability = { pluginId: menu.pluginId, available: true, canExecute: true, reason: null, currentRun: null, lastSuccessAt: '2026-09-11T01:02:00.000Z' } as const;
   const html = render({ syncCapability: capability, syncBusy: false, onSync: vi.fn() });
-  expect(html).toContain('지금 동기화'); expect(html).toContain('활성화된 수집 대상 전체'); expect(html).toContain('마지막 성공');
+  expect(html).toContain('aria-label="플러그인 전체 동기화"'); expect(html).toContain('title="플러그인의 활성 수집 대상 전체 동기화"'); expect(html).toContain('마지막 동기화'); expect(html).not.toContain('sync-panel');
   const busy = render({ syncCapability: { ...capability, canExecute: false }, syncBusy: true });
-  expect(busy).toMatch(/<button[^>]*disabled=""[^>]*>동기화 중<\/button>/);
+  expect(busy).toMatch(/class="sync-button syncing"[^>]*disabled=""/); expect(busy).toContain('동기화 중');
 });
 
 test('필터가 선언된 컬럼명만 필터 버튼으로 렌더링한다', () => {
