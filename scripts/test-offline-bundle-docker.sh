@@ -149,7 +149,7 @@ external_case() {
     test "$(docker exec "$database" mysql -N -uoss_scp_app -p"$password" oss_scp -e 'SELECT value FROM bundle_smoke_marker')" = "$marker"
     migration_count="$(docker exec "$database" mysql -N -uoss_scp_app -p"$password" oss_scp -e 'SELECT count(*) FROM oss_scp_schema_migrations')"
   fi
-  if test "$db_type" = postgres; then test "$migration_count" = 4; else test "$migration_count" = 7; fi
+  if test "$db_type" = postgres; then test "$migration_count" = 5; else test "$migration_count" = 8; fi
 
   cp "$first_external/README.md" "$temporary/README.$db_type"
   printf '\nchanged\n' >>"$first_external/README.md"
