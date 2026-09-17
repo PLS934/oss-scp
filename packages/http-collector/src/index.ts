@@ -3,6 +3,7 @@ import type {
   OffsetCollectionDefinition,
   SingleCollectionDefinition,
 } from '@oss-scp/plugin-config';
+import { HttpAuthenticationError, resolveHttpAuthenticationHeaders } from '@oss-scp/plugin-config';
 
 export type HttpCollectorErrorCode =
   | 'http_status'
@@ -14,7 +15,8 @@ export type HttpCollectorErrorCode =
   | 'invalid_response'
   | 'total_changed'
   | 'count_mismatch'
-  | 'processing';
+  | 'processing'
+  | 'authentication';
 
 export class HttpCollectorError extends Error {
   constructor(
@@ -82,6 +84,7 @@ function collectorError(
     total_changed: 'HTTP response total changed during collection',
     count_mismatch: 'HTTP response item count did not match total',
     processing: 'Batch processing failed',
+    authentication: 'HTTP authentication configuration is invalid',
   };
   return new HttpCollectorError(code, `${labels[code]}: ${location(url, offset)}`, {
     cause,
@@ -142,6 +145,7 @@ async function fetchJson(
   limits: HttpCollectionLimits,
   method: 'GET',
   requestUrl: URL,
+  headers: Readonly<Record<string, string>>,
   callerSignal?: AbortSignal,
   offset?: number,
 ): Promise<unknown> {
@@ -153,6 +157,7 @@ async function fetchJson(
   try {
     const response = await fetch(requestUrl, {
       method,
+      ...(Object.keys(headers).length > 0 ? { headers } : {}),
       signal,
       redirect: 'error',
     });
@@ -186,6 +191,20 @@ async function fetchJson(
   }
 }
 
+function authenticationHeaders(
+  definition: OffsetCollectionDefinition | SingleCollectionDefinition,
+  url: URL,
+): Readonly<Record<string, string>> {
+  try {
+    return resolveHttpAuthenticationHeaders(definition.connection.auth);
+  } catch (error) {
+    if (error instanceof HttpAuthenticationError) {
+      throw new HttpCollectorError('authentication', error.message);
+    }
+    throw collectorError('authentication', url);
+  }
+}
+
 function validateRecords(
   items: unknown[],
   maximum: number,
@@ -214,6 +233,7 @@ export async function collectHttpOffset(
   options: { signal?: AbortSignal } = {},
 ): Promise<CollectionSummary> {
   const baseUrl = new URL(definition.request.path, definition.connection.baseUrl);
+  const headers = authenticationHeaders(definition, baseUrl);
   let offset = definition.pagination.start;
   let initialTotal: number | undefined;
   let pages = 0;
@@ -233,6 +253,7 @@ export async function collectHttpOffset(
       definition.limits,
       definition.request.method,
       requestUrl,
+      headers,
       options.signal,
       offset,
     );
@@ -280,6 +301,7 @@ export async function collectHttpSingle(
   options: { signal?: AbortSignal } = {},
 ): Promise<SingleCollectionSummary> {
   const requestUrl = new URL(definition.request.path, definition.connection.baseUrl);
+  const headers = authenticationHeaders(definition, requestUrl);
   if (options.signal?.aborted) {
     throw collectorError('cancelled', requestUrl, undefined, options.signal.reason);
   }
@@ -288,6 +310,7 @@ export async function collectHttpSingle(
     definition.limits,
     definition.request.method,
     requestUrl,
+    headers,
     options.signal,
   );
   const items = valueAtPath(payload, definition.response.itemsPath);

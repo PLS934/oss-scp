@@ -32,6 +32,39 @@ afterEach(() => {
 });
 
 describe('validateRepository', () => {
+  test.each([
+    ['apiKey', { type: 'apiKey', header: 'X-API-Key', valueRef: { env: 'SOURCE_API_KEY' } }],
+    ['bearer', { type: 'bearer', tokenRef: { env: 'SOURCE_API_TOKEN' } }],
+    ['basic', { type: 'basic', usernameRef: { env: 'SOURCE_API_USER' }, passwordRef: { env: 'SOURCE_API_PASSWORD' } }],
+  ])('HTTP Connection의 %s 인증 참조를 내부 정의에만 유지한다', (_type, auth) => {
+    const root = temporaryRepository();
+    const connection = readJson(root, 'connections/mock-api-sample1.json');
+    connection.config.auth = auth;
+    writeJson(root, 'connections/mock-api-sample1.json', connection);
+
+    const result = validateRepository(root);
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    const definition = result.definitions.find(item => item.plugin.id === 'sample1-offset-api');
+    expect(definition.connection.auth).toEqual(auth);
+    expect(JSON.stringify(result.pluginDetails)).not.toContain('SOURCE_API_');
+    expect(JSON.stringify(result.menus)).not.toContain('SOURCE_API_');
+  });
+
+  test('HTTP 인증의 실제 값과 잘못된 환경변수 참조를 거부한다', () => {
+    const root = temporaryRepository();
+    const connection = readJson(root, 'connections/mock-api-sample1.json');
+    connection.config.auth = { type: 'bearer', token: 'secret-value' };
+    writeJson(root, 'connections/mock-api-sample1.json', connection);
+    let result = validateRepository(root);
+    expect(result.ok).toBe(false);
+
+    connection.config.auth = { type: 'bearer', tokenRef: { env: 'lowercase-name' } };
+    writeJson(root, 'connections/mock-api-sample1.json', connection);
+    result = validateRepository(root);
+    expect(result.ok).toBe(false);
+  });
+
   test('source별 공개 상세와 안전한 transform 후보를 생성하고 비밀정보는 제외한다', () => {
     const result = validateRepository(repositoryRoot);
     expect(result.ok).toBe(true);

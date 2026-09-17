@@ -3,7 +3,10 @@
   "oneOf": [
     { "type": "object", "additionalProperties": false, "required": ["apiVersion", "id", "connector", "config"], "properties": {
       "apiVersion": { "const": "oss-scp/connection-v1" }, "id": { "$ref": "#/$defs/id" }, "connector": { "const": "http" },
-      "config": { "type": "object", "additionalProperties": false, "required": ["baseUrl"], "properties": { "baseUrl": { "type": "string", "pattern": "^https?://[^/?#\\s]+(?::[0-9]{1,5})?$", "maxLength": 2048 } } }
+      "config": { "type": "object", "additionalProperties": false, "required": ["baseUrl"], "properties": {
+        "baseUrl": { "type": "string", "pattern": "^https?://[^/?#\\s]+(?::[0-9]{1,5})?$", "maxLength": 2048 },
+        "auth": { "$ref": "#/$defs/httpAuth" }
+      } }
     } },
     { "type": "object", "additionalProperties": false, "required": ["apiVersion", "id", "connector", "config"], "properties": {
       "apiVersion": { "const": "oss-scp/connection-v1" }, "id": { "$ref": "#/$defs/id" }, "connector": { "const": "postgres" },
@@ -16,6 +19,18 @@
   ],
   "$defs": {
     "id": { "type": "string", "pattern": "^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$", "maxLength": 100 },
+    "envRef": { "type": "object", "additionalProperties": false, "required": ["env"], "properties": { "env": { "type": "string", "pattern": "^[A-Z_][A-Z0-9_]*$", "maxLength": 128 } } },
+    "httpAuth": { "oneOf": [
+      { "type": "object", "additionalProperties": false, "required": ["type", "header", "valueRef"], "properties": {
+        "type": { "const": "apiKey" }, "header": { "type": "string", "pattern": "^[!#$%&'*+.^_`|~0-9A-Za-z-]+$", "maxLength": 128 }, "valueRef": { "$ref": "#/$defs/envRef" }
+      } },
+      { "type": "object", "additionalProperties": false, "required": ["type", "tokenRef"], "properties": {
+        "type": { "const": "bearer" }, "tokenRef": { "$ref": "#/$defs/envRef" }
+      } },
+      { "type": "object", "additionalProperties": false, "required": ["type", "usernameRef", "passwordRef"], "properties": {
+        "type": { "const": "basic" }, "usernameRef": { "$ref": "#/$defs/envRef" }, "passwordRef": { "$ref": "#/$defs/envRef" }
+      } }
+    ] },
     "passwordRef": { "oneOf": [
       { "type": "object", "additionalProperties": false, "required": ["env"], "properties": { "env": { "type": "string", "pattern": "^[A-Z_][A-Z0-9_]*$", "maxLength": 128 } } },
       { "type": "object", "additionalProperties": false, "required": ["file"], "properties": { "file": { "type": "string", "pattern": "^(?!/)(?!.*(?:^|/)\\.\\.(?:/|$))[^\\u0000]+$", "maxLength": 1024 } } }

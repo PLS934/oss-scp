@@ -4,7 +4,11 @@ import { PassThrough, Transform, type Readable } from 'node:stream';
 import { pipeline } from 'node:stream/promises';
 import { createBrotliDecompress, createGunzip, createInflate } from 'node:zlib';
 import { parseCsv, CsvReadError } from '@oss-scp/csv-reader';
-import type { HttpCsvCollectionDefinition } from '@oss-scp/plugin-config';
+import {
+  HttpAuthenticationError,
+  resolveHttpAuthenticationHeaders,
+  type HttpCsvCollectionDefinition,
+} from '@oss-scp/plugin-config';
 
 export type HttpCsvErrorCode =
   | 'http_status'
@@ -19,7 +23,8 @@ export type HttpCsvErrorCode =
   | 'invalid_compression'
   | 'invalid_csv'
   | 'processing'
-  | 'network';
+  | 'network'
+  | 'authentication';
 
 export class HttpCsvSourceError extends Error {
   constructor(
@@ -67,6 +72,7 @@ function sourceError(
     invalid_csv: 'HTTP response was not valid CSV',
     processing: 'HTTP CSV batch processing failed',
     network: 'HTTP CSV request failed',
+    authentication: 'HTTP authentication configuration is invalid',
   };
   return new HttpCsvSourceError(code, `${labels[code]}: ${safeLocation(url)}`, {
     cause,
@@ -140,12 +146,13 @@ function normalizeFailure(
 async function openResponse(
   url: URL,
   signal: AbortSignal,
+  authenticationHeaders: Readonly<Record<string, string>>,
 ): Promise<{ response: IncomingMessage; request: ReturnType<typeof httpRequest> }> {
   return new Promise((resolve, reject) => {
     const transport = url.protocol === 'https:' ? httpsRequest : httpRequest;
     const outgoing = transport(url, {
       method: 'GET',
-      headers: { 'accept-encoding': 'gzip, deflate, br' },
+      headers: { 'accept-encoding': 'gzip, deflate, br', ...authenticationHeaders },
       agent: false,
       signal,
     });
@@ -161,6 +168,15 @@ export async function collectHttpCsv(
   options: { signal?: AbortSignal } = {},
 ): Promise<HttpCsvSummary> {
   const url = new URL(definition.request.path, definition.connection.baseUrl);
+  let authenticationHeaders: Readonly<Record<string, string>>;
+  try {
+    authenticationHeaders = resolveHttpAuthenticationHeaders(definition.connection.auth);
+  } catch (error) {
+    if (error instanceof HttpAuthenticationError) {
+      throw new HttpCsvSourceError('authentication', error.message);
+    }
+    throw sourceError('authentication', url);
+  }
   const timeoutController = new AbortController();
   const state: {
     timeout: boolean;
@@ -183,7 +199,7 @@ export async function collectHttpCsv(
   let csvInput: PassThrough | undefined;
   try {
     if (options.signal?.aborted) throw sourceError('cancelled', url, options.signal.reason);
-    const opened = await openResponse(url, signal);
+    const opened = await openResponse(url, signal, authenticationHeaders);
     response = opened.response;
     request = opened.request;
     state.response = response;

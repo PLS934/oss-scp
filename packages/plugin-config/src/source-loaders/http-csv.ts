@@ -12,7 +12,11 @@ export function loadHttpCsvSource(
 ): HttpCsvCollectionDefinition {
   return {
     plugin,
-    connection: { id: connection.id, baseUrl: connection.config.baseUrl },
+    connection: {
+      id: connection.id,
+      baseUrl: connection.config.baseUrl,
+      ...(connection.config.auth ? { auth: connection.config.auth } : {}),
+    },
     request: {
       transport: 'http',
       method: source.method,
