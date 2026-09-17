@@ -25,7 +25,7 @@ main section { background: var(--surface); border: 1px solid var(--border); bord
 .success { color: var(--success); } .failure { color: var(--failure); }
 .route-context div { display: grid; grid-template-columns: 110px 1fr; gap: 16px; }
 .route-context dt { font-weight: 700; } .route-context dd { margin: 0; overflow-wrap: anywhere; }
-.list-heading { display: flex; align-items: center; justify-content: space-between; gap: 20px; }
+.list-heading { display: flex; align-items: center; justify-content: flex-start; gap: .75rem; }
 .list-heading h2 { margin-bottom: 0; }
 .record-table-toolbar label { color: var(--muted); font-size: 14px; white-space: nowrap; }
 .record-table-toolbar select { margin-left: 6px; padding: 5px 8px; }
