@@ -47,10 +47,10 @@ try {
   assert.equal((await fetch(`${url}/api/unknown`)).status, 404);
   await page.goto(`${url}/assets/servers`);
   await expect(page.getByRole('heading', { name: '서버 자산', exact: true })).toBeVisible();
-  await expect(page.getByRole('alert')).toContainText('플랫폼 데이터를 조회할 수 없습니다');
+  await expect(page.getByRole('alert').filter({ hasText: '플랫폼 데이터를 조회할 수 없습니다' })).toBeVisible();
   await page.reload();
   await expect(page.getByRole('heading', { name: '서버 자산', exact: true })).toBeVisible();
-  await expect(page.getByRole('alert')).toContainText('플랫폼 데이터를 조회할 수 없습니다');
+  await expect(page.getByRole('alert').filter({ hasText: '플랫폼 데이터를 조회할 수 없습니다' })).toBeVisible();
   await page.goto(`${url}/unknown-menu`);
   await expect(page.getByRole('heading', { name: '페이지를 찾을 수 없습니다' })).toBeVisible();
   await page.goto(url);

@@ -8,10 +8,10 @@
   ],
   "scripts": {
     "dev": "nest start --watch",
-    "prebuild": "pnpm --filter @oss-scp/platform-db build && pnpm --filter @oss-scp/plugin-config build",
+    "prebuild": "pnpm --filter @oss-scp/platform-db build && pnpm --filter @oss-scp/plugin-config build && pnpm --filter @oss-scp/collector-cli build",
     "build": "nest build",
     "start": "node dist/main.js",
-    "pretypecheck": "pnpm --filter @oss-scp/platform-db build && pnpm --filter @oss-scp/plugin-config build",
+    "pretypecheck": "pnpm --filter @oss-scp/platform-db build && pnpm --filter @oss-scp/plugin-config build && pnpm --filter @oss-scp/collector-cli build",
     "typecheck": "tsc --noEmit",
     "test": "pnpm build && vitest run"
   },

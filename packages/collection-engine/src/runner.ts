@@ -1,7 +1,7 @@
 import { isDeepStrictEqual } from 'node:util';
 import type { PluginRuntimeDefinition } from '@oss-scp/plugin-config';
 import type { Transform } from '@oss-scp/plugin-sdk';
-import type { CollectionScope, JsonValue, RecordStorage, StorageRecord } from '@oss-scp/platform-db';
+import { StorageError, type CollectionScope, type CollectionTrigger, type JsonValue, type RecordStorage, type StorageRecord } from '@oss-scp/platform-db';
 import { loadTransform, processRecords, TransformExecutionError, type ValidatedBatch } from './index.js';
 
 export interface CollectorBatch {
@@ -16,19 +16,20 @@ export interface CollectorContext { checkpoint: JsonValue | null; signal: AbortS
 export type CollectorBatchHandler = (batch: CollectorBatch) => Promise<void>;
 export type CollectionCollector = (context: CollectorContext, onBatch: CollectorBatchHandler) => Promise<void>;
 
-export type CollectionRunnerErrorCode = 'module_load' | 'collection' | 'transform_consumer' | 'storage' | 'cancelled';
+export type CollectionRunnerErrorCode = 'module_load' | 'collection' | 'transform_consumer' | 'storage' | 'already_running' | 'cancelled';
 
 const runnerErrorMessages: Record<CollectionRunnerErrorCode, string> = {
   module_load: '플러그인 가공 모듈을 불러올 수 없습니다.',
   collection: '원천 데이터 수집에 실패했습니다.',
   transform_consumer: '가공 결과 처리에 실패했습니다.',
   storage: '수집 결과 저장에 실패했습니다.',
+  already_running: '같은 대상과 범위의 수집이 이미 진행 중입니다.',
   cancelled: '수집 실행이 취소되었습니다.',
 };
 
 /** 하위 오류, 원천 데이터 또는 비밀정보를 노출하지 않는 공개 실행 오류. */
 export class CollectionRunnerError extends Error {
-  constructor(readonly code: CollectionRunnerErrorCode) {
+  constructor(readonly code: CollectionRunnerErrorCode, readonly activeRunId?: string) {
     super(runnerErrorMessages[code]);
     this.name = 'CollectionRunnerError';
   }
@@ -52,6 +53,8 @@ export interface RunCollectionOptions {
   signal?: AbortSignal;
   transform?: Transform;
   now?: () => string;
+  trigger?: CollectionTrigger;
+  requestId?: string;
 }
 
 function abortIfNeeded(signal: AbortSignal): void {
@@ -103,8 +106,9 @@ export async function runCollection(options: RunCollectionOptions): Promise<Coll
 
   let runId: string;
   try {
-    runId = await options.storage.startRun({ ...options.scope, startedAt: now(), exclusive: true });
-  } catch {
+    runId = await options.storage.startRun({ ...options.scope, startedAt: now(), exclusive: true, trigger: options.trigger ?? 'cli', ...(options.requestId ? { requestId: options.requestId } : {}) });
+  } catch (error) {
+    if (error instanceof StorageError && error.code === 'RUN_ALREADY_ACTIVE') throw new CollectionRunnerError('already_running', error.activeRunId);
     throw new CollectionRunnerError('storage');
   }
 

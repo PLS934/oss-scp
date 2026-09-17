@@ -10,7 +10,7 @@ export interface StartupCollectionLogger {
 export type SpawnCollectionProcess = (pluginId: string, configRoot: string, processPath: string) => ChildProcess;
 
 const defaultSpawn: SpawnCollectionProcess = (pluginId, configRoot, processPath) => spawn(process.execPath, [processPath, pluginId], {
-  env: { ...process.env, OSS_SCP_CONFIG_ROOT: configRoot },
+  env: { ...process.env, OSS_SCP_CONFIG_ROOT: configRoot, OSS_SCP_COLLECTION_TRIGGER: 'startup' },
   stdio: ['ignore', 'ignore', 'pipe'],
 });
 

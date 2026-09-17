@@ -40,6 +40,14 @@ HTTP 200, JSON 콘텐츠 유형, 본문 `{"status":"ok"}`를 반환합니다. �
 
 API는 기동할 때 검증된 registry의 모든 수집 정의를 수동 CLI와 같은 공통 실행 경로로 비동기 실행합니다. HTTP 수신은 장시간 수집 완료를 기다리지 않으며 `/api/v1/collection-status`에서 대상별 `uncollected`, `running`, `success`, `partial`, `failed` 상태와 설정 revision·시작·종료 시각을 조회할 수 있습니다. 등록 대상이 없으면 실행을 만들지 않습니다. 같은 대상의 API 기동이나 수동 수집이 겹치면 DB 실행권을 얻은 하나만 저장하며, 중단된 실행권은 2분 후 회수됩니다. 정상 종료 시 API가 실행 중인 자식 수집 프로세스에 종료 신호를 전달합니다.
 
+### 플러그인 수동 동기화 API
+
+목록 화면과 운영자는 `POST /api/v1/plugins/<plugin-id>/sync-runs`로 해당 플러그인의 활성 수집 대상 전체를 full 범위로 요청할 수 있습니다. API는 완료를 기다리지 않고 HTTP 202와 `requestId`를 반환합니다. `GET /api/v1/sync-runs/<request-id>`는 `accepted`, `running`, `success`, `partial`, `failed` 상태를 반환하고, `GET /api/v1/plugins/<plugin-id>/sync`는 실행 가능 여부·현재 실행·마지막 성공 시각을 반환합니다.
+
+계정관리가 비활성화된 현재 배포 모드에서는 명시적인 기본 권한 정책이 `collection:execute`를 허용합니다. 후속 계정관리 활성 모드는 같은 authorizer 경계에서 권한을 거부할 수 있으며 거부 응답은 플러그인이나 실행 존재 여부를 노출하지 않습니다. 같은 대상의 기동·CLI·API 실행이 겹치면 DB 실행권이 하나만 저장을 확정하고, API의 중복 요청은 HTTP 409를 반환합니다. 원천·가공·저장 실패의 원문과 자격증명은 응답하지 않습니다.
+
+요청 상태는 API 프로세스 메모리에 제한적으로 유지되므로 재시작 뒤 이전 `requestId`는 조회되지 않을 수 있습니다. 실제 collection run, 마지막 성공과 저장 데이터는 DB에 남으며 plugin sync 상태 endpoint로 다시 확인할 수 있습니다.
+
 샘플 자산을 컨테이너에서 기동 수집할 때는 mock 서비스뿐 아니라 Docker 네트워크용 Connection 주소가 필요합니다. 호스트용 `127.0.0.1` 설정과 컨테이너용 `mock-api:3001` 설정의 차이, 올바른 시작 순서와 상태 확인 방법은 [Mock API 실행 안내](mock-api.md)를 따릅니다.
 
 ## 환경변수

@@ -26,6 +26,7 @@ export interface RecordQuery {
   listRecords(input: ListRecordsInput & { page?: undefined }): Promise<ListRecordsResult>;
   listRecords(input: ListRecordsInput): Promise<AnyListRecordsResult>;
   getRecord(id: string): Promise<QueryRecord | null>;
+  getLastSuccessAt?(pluginId: string, sourceId: string): Promise<string | null>;
 }
 export type QueryErrorCode = 'INVALID_QUERY' | 'INVALID_CURSOR' | 'QUERY_FAILED';
 const queryMessages: Record<QueryErrorCode, string> = { INVALID_QUERY: '조회 입력을 확인하세요.', INVALID_CURSOR: '목록 cursor를 확인하세요.', QUERY_FAILED: '플랫폼 데이터 조회에 실패했습니다.' };

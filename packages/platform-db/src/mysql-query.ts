@@ -101,5 +101,6 @@ export function createMysqlRecordQuery(connection: MysqlPlatformDbConnection): R
         return rows[0] ? record(rows[0]) : null;
       } catch (error) { throw failure(error); }
     },
+    async getLastSuccessAt(pluginId, sourceId) { try { const [rows] = await connection.withClient(client => client.query<(RowDataPacket & { value: Date | string | null })[]>(`SELECT max(finished_at) AS value FROM collection_runs WHERE plugin_id=? AND source_id=? AND scope_type='full' AND status='success'`, [pluginId, sourceId])); const value = rows[0]?.value ?? null; return value === null ? null : timestamp(value); } catch (error) { throw failure(error); } },
   };
 }

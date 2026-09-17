@@ -209,6 +209,8 @@ export async function executeManualCollection(options: {
   root: string;
   env: Readonly<Record<string, string | undefined>>;
   signal: AbortSignal;
+  trigger?: 'startup' | 'cli' | 'api';
+  requestId?: string;
   dependencies?: ManualCollectionDependencies;
 }): Promise<CliOutcome> {
   const dependencies = options.dependencies ?? defaultDependencies;
@@ -220,7 +222,7 @@ export async function executeManualCollection(options: {
     const collector = collectorFor(definition, dependencies.now);
     const connected = await dependencies.connectStorage(options.env);
     resource = idempotentClose(connected.resource);
-    const result = await dependencies.run({ plugin: definition.plugin, scope: collectionScope(options.root, definition), collector, storage: connected.storage, signal: options.signal, now: dependencies.now });
+    const result = await dependencies.run({ plugin: definition.plugin, scope: collectionScope(options.root, definition), collector, storage: connected.storage, signal: options.signal, now: dependencies.now, trigger: options.trigger ?? 'cli', ...(options.requestId ? { requestId: options.requestId } : {}) });
     return { exitCode: result.status === 'success' ? 0 : 2, status: result.status, pluginId, result };
   } catch (error) {
     const normalized = error instanceof ManualCollectionError ? error
