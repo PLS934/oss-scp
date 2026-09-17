@@ -7,6 +7,7 @@ API가 시작될 때 확정된 설정 revision의 모든 활성 수집 대상을
 ## Requirements
 
 ### Requirement: 기동 시 활성 대상 전체 수집
+이 요구사항의 수집 대상은 저장형 소스에 한정한다. `persistence: none` 소스는 대상과 상위 수집 집계에서 SHALL 제외하고 실행·lease·checkpoint를 생성하지 않아야 한다.
 API는 최초 실행과 모든 재시작에서 확정된 runtime registry에 등록되고 활성화된 각 수집 대상을 full 범위로 한 번씩 요청해야 한다(SHALL). 누락된 과거 일정을 보충하는 조건으로 기동 실행을 제한해서는 안 된다(MUST NOT).
 
 #### Scenario: 최초 실행
@@ -20,6 +21,10 @@ API는 최초 실행과 모든 재시작에서 확정된 runtime registry에 등
 #### Scenario: 빈 registry
 - **WHEN** API가 등록·활성 수집 대상이 없는 유효한 registry로 시작한다
 - **THEN** API는 정상적으로 요청을 처리하고 새로운 수집 실행이나 대상 작업을 만들지 않는다
+
+#### Scenario: Registry contains only live sources
+- **WHEN** 활성 registry에 라이브 소스만 존재한다
+- **THEN** 자동 수집과 수집 이력을 만들지 않고 API를 시작한다
 
 ### Requirement: 비차단 요청 처리와 상태 가시성
 API는 registry 검증과 기동 수집 요청 등록에 필요한 유한한 초기화만 완료한 뒤 HTTP 요청을 받아야 하며, 장시간 수집 완료를 기다려서는 안 된다(MUST NOT). 최초 수집 전, 실행 중 및 종료 상태를 플랫폼 DB에서 조회할 수 있어야 한다(SHALL).

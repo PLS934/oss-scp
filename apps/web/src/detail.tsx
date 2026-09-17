@@ -1,7 +1,7 @@
 import { useEffect, useState, type ReactNode } from 'react';
 import { Link } from 'react-router-dom';
 import type { DetailField, MenuItem } from './menu';
-import { getRecord, type JsonValue, type QueryRecord, type RecordApiError } from './records';
+import { getLiveRecord, getRecord, type JsonValue, type LiveRecord, type QueryRecord, type RecordApiError } from './records';
 
 function JsonValueView({ value }: { value: JsonValue }): ReactNode {
   if (value === null) return <span className="empty-value">값 없음</span>;
@@ -31,7 +31,7 @@ export function DetailValue({ field, value, present = true }: { field: DetailFie
   return <JsonValueView value={value} />;
 }
 
-export function DetailContent({ menu, record }: { menu: MenuItem; record: QueryRecord }) {
+export function DetailContent({ menu, record }: { menu: MenuItem; record: QueryRecord | LiveRecord }) {
   return <section aria-labelledby="detail-title"><p className="eyebrow">{menu.group}</p><h2 id="detail-title">{menu.title} 상세</h2>
     {menu.detail.sections.map(section => <section className="detail-section" key={section.title}><h3>{section.title}</h3><dl>{section.fields.map(field => {
       const present = Object.prototype.hasOwnProperty.call(record.sourceValues, field.key);
@@ -41,7 +41,7 @@ export function DetailContent({ menu, record }: { menu: MenuItem; record: QueryR
   </section>;
 }
 
-type State = { kind: 'loading' } | { kind: 'success'; record: QueryRecord } | { kind: 'invalid' | 'missing' | 'mismatch' | 'failure'; error?: RecordApiError };
+type State = { kind: 'loading' } | { kind: 'success'; record: QueryRecord | LiveRecord } | { kind: 'invalid' | 'missing' | 'mismatch' | 'failure'; error?: RecordApiError };
 
 export function RecordDetail({ menu, recordId, request }: { menu: MenuItem; recordId: string; request?: typeof fetch }) {
   const [attempt, setAttempt] = useState(0);
@@ -49,7 +49,10 @@ export function RecordDetail({ menu, recordId, request }: { menu: MenuItem; reco
   useEffect(() => {
     const controller = new AbortController();
     setState({ kind: 'loading' });
-    void getRecord(recordId, { signal: controller.signal, request }).then(result => {
+    const load = menu.sourceMode === 'live'
+      ? getLiveRecord({ pluginId: menu.pluginId, sourceId: menu.sourceId, dataType: menu.dataType, externalKey: recordId }, { signal: controller.signal, request })
+      : getRecord(recordId, { signal: controller.signal, request });
+    void load.then(result => {
       if (controller.signal.aborted) return;
       if (!result.ok) {
         setState({ kind: result.error.kind === 'INVALID_INPUT' ? 'invalid' : result.error.kind === 'NOT_FOUND' ? 'missing' : 'failure', error: result.error });

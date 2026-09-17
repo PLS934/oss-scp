@@ -21,7 +21,7 @@ export interface ClientListDefinition { columns: ClientListColumn[]; query?: { s
 export interface ClientDetailField { key: string; label: string; type: FieldType; }
 export interface ClientDetailSection { title: string; fields: ClientDetailField[]; }
 export interface ClientDetailDefinition { sections: ClientDetailSection[]; }
-export interface ClientMenuItem extends PluginMenuDefinition { pluginId: string; sourceId: string; list: ClientListDefinition; detail: ClientDetailDefinition; }
+export interface ClientMenuItem extends PluginMenuDefinition { pluginId: string; sourceId: string; sourceMode?: 'live'; list: ClientListDefinition; detail: ClientDetailDefinition; }
 
 export type ScalarFieldType = 'string' | 'number' | 'boolean' | 'datetime';
 export type FieldType = ScalarFieldType | 'object' | 'array';
@@ -97,11 +97,26 @@ export interface HttpCsvSourceConfig {
   };
 }
 
+export interface PostgresSourceConfig {
+  apiVersion: 'oss-scp/source-v1';
+  type: 'db-postgres';
+  persistence: 'none';
+  connectionRef: string;
+  listQuery: string;
+  detailQuery: string;
+  externalKeyColumn: string;
+  queryFields: Record<string, { column: string; type: ScalarFieldType }>;
+  batchSize: number;
+  limits: { rowCap: number; timeoutMs: number; maxResponseBytes: number };
+  cache?: { kind: 'watchlist'; ttlSeconds: 600 };
+}
+
 export type SourceConfig =
   | OffsetSourceConfig
   | SingleSourceConfig
   | LocalCsvSourceConfig
-  | HttpCsvSourceConfig;
+  | HttpCsvSourceConfig
+  | PostgresSourceConfig;
 
 export interface HttpConnectionConfig {
   apiVersion: 'oss-scp/connection-v1';
@@ -109,6 +124,15 @@ export interface HttpConnectionConfig {
   connector: 'http';
   config: { baseUrl: string };
 }
+
+export type SecretReference = { env: string } | { file: string };
+export interface PostgresConnectionConfig {
+  apiVersion: 'oss-scp/connection-v1';
+  id: string;
+  connector: 'postgres';
+  config: { host: string; port: number; database: string; user: string; passwordRef: SecretReference; ssl?: 'disable' | 'require' };
+}
+export type ConnectionConfig = HttpConnectionConfig | PostgresConnectionConfig;
 
 export interface CollectionDefinitionBase {
   plugin: PluginRuntimeDefinition;
@@ -149,11 +173,20 @@ export interface HttpCsvCollectionDefinition {
   limits: HttpCsvSourceConfig['limits'];
 }
 
+export interface LivePostgresDefinition {
+  plugin: PluginRuntimeDefinition;
+  mode: 'live';
+  persistence: 'none';
+  connection: PostgresConnectionConfig;
+  source: PostgresSourceConfig;
+}
+
 export type CollectionDefinition =
   | OffsetCollectionDefinition
   | SingleCollectionDefinition
   | LocalCsvCollectionDefinition
-  | HttpCsvCollectionDefinition;
+  | HttpCsvCollectionDefinition
+  | LivePostgresDefinition;
 
 export interface ConfigurationIssue {
   file: string;
@@ -166,7 +199,7 @@ export interface ClientPluginSummary {
   name: string;
   description?: string;
   enabled: boolean;
-  sourceType: 'http-json' | 'http-csv' | 'local-csv';
+  sourceType: 'http-json' | 'http-csv' | 'local-csv' | 'db-postgres';
   endpoint?: { url: string; method: 'GET' };
   fileName?: string;
 }

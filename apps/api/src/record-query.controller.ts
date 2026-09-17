@@ -34,3 +34,20 @@ export class RecordQueryController {
     }
   }
 }
+
+@Controller('api/v1/live-records')
+export class LiveRecordQueryController {
+  constructor(private readonly records: RecordQueryService) {}
+  @Get('detail')
+  async detail(@Query('pluginId') pluginId?: string, @Query('sourceId') sourceId?: string, @Query('dataType') dataType?: string, @Query('externalKey') externalKey?: string) {
+    try {
+      if ([pluginId, sourceId, dataType, externalKey].some(value => typeof value !== 'string')) throw new QueryError('INVALID_QUERY');
+      const found = await this.records.getLive(pluginId!, sourceId!, dataType!, externalKey!);
+      if (!found) throw new HttpException(errors.RECORD_NOT_FOUND, 404);
+      return found;
+    } catch (error) {
+      if (error instanceof HttpException) throw error;
+      mapError(error);
+    }
+  }
+}

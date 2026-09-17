@@ -22,6 +22,7 @@
     "@oss-scp/collector-cli": "workspace:*",
     "@oss-scp/platform-db": "workspace:*",
     "@oss-scp/plugin-config": "workspace:*",
+    "pg": "8.23.0",
     "reflect-metadata": "0.2.2",
     "rxjs": "7.8.2"
   },
@@ -29,6 +30,8 @@
     "@nestjs/cli": "11.0.24",
     "@nestjs/testing": "11.2.3",
     "@types/node": "24.13.3",
+    "@types/pg": "8.23.1",
+    "testcontainers": "12.1.0",
     "typescript": "5.9.3",
     "vitest": "4.1.11"
   }

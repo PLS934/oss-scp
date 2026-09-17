@@ -3,6 +3,7 @@
     "./sample1-offset-api",
     "./vulnerabilities-local-csv",
     "./vulnerabilities-http-csv",
-    "./sample2-single-api"
+    "./sample2-single-api",
+    "./dependency-track-db"
   ]
 }

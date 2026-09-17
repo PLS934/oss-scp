@@ -30,7 +30,7 @@ export function formatColumnValue(type: ListColumn['type'], value: JsonValue | u
   return Number.isNaN(timestamp) ? '—' : dateTimeFormat.format(new Date(timestamp));
 }
 
-const collectionMessages: Partial<Record<NumberedListRecordsResult['collection']['status'], string>> = {
+const collectionMessages: Partial<Record<'never_collected' | 'running' | 'success' | 'partial' | 'failed', string>> = {
   running: '현재 수집이 진행 중입니다. 아래 목록은 마지막으로 저장된 데이터입니다.',
   partial: '마지막 수집이 부분 완료되었습니다. 저장된 데이터만 표시합니다.',
   failed: '마지막 수집이 실패했습니다. 마지막으로 저장된 데이터가 있으면 계속 표시합니다.',
@@ -71,7 +71,8 @@ function activateRowLink(event: MouseEvent<HTMLTableRowElement>) {
 }
 
 export function RecordListView({ menu, title, loadingMessage, renderItems, limit, page, loading, result, error, onLimitChange, onPageChange, onRetry, searchControls, searchState, activeConditions = false, sort, onSortChange }: RecordListViewProps) {
-  const collectionMessage = result ? collectionMessages[result.collection.status] : undefined;
+  const stored = result && !('mode' in result) ? result : null;
+  const collectionMessage = stored ? collectionMessages[stored.collection.status] : undefined;
   const hasItems = Boolean(result?.items.length);
   const navigationDisabled = loading || error !== null || !result || result.pageInfo.totalPages === 0;
   const totalPages = result?.pageInfo.totalPages ?? 0;
@@ -85,11 +86,12 @@ export function RecordListView({ menu, title, loadingMessage, renderItems, limit
     {renderItems && searchState && menu.list.query?.filters.length ? <div className="record-card-filters" aria-label="필터">{menu.list.query.filters.map(field => <RecordFilterHeader key={field.key} field={field} state={searchState} />)}</div> : null}
     {loading ? <p role="status">{loadingMessage ?? '저장된 목록을 불러오는 중입니다.'}</p> : null}
     {!loading && error ? <div className="list-message error" role="alert"><p>{error.message}</p><button type="button" onClick={onRetry}>다시 시도</button></div> : null}
-    {!loading && !error && collectionMessage ? <p className={`list-message ${result?.collection.status}`} role="status">{collectionMessage}</p> : null}
+    {!loading && !error && result && 'mode' in result ? <p className="list-message success" role="status">원천 PostgreSQL을 실시간으로 조회했습니다.</p> : null}
+    {!loading && !error && collectionMessage ? <p className={`list-message ${stored?.collection.status}`} role="status">{collectionMessage}</p> : null}
     {!loading && !error && result && activeConditions && !hasItems ? <p className="empty-state">검색·필터 결과가 없습니다.</p> : null}
-    {!loading && !error && result?.collection.status === 'never_collected' && !hasItems ? <p className="empty-state">아직 수집된 데이터가 없습니다.</p> : null}
-    {!loading && !error && !activeConditions && result?.collection.status === 'success' && !hasItems ? <p className="empty-state">수집이 완료됐지만 표시할 결과가 없습니다.</p> : null}
-    {!loading && !error && !activeConditions && result && result.collection.status !== 'never_collected' && result.collection.status !== 'success' && !hasItems ? <p className="empty-state">현재 표시할 저장 데이터가 없습니다.</p> : null}
+    {!loading && !error && stored?.collection.status === 'never_collected' && !hasItems ? <p className="empty-state">아직 수집된 데이터가 없습니다.</p> : null}
+    {!loading && !error && !activeConditions && stored?.collection.status === 'success' && !hasItems ? <p className="empty-state">수집이 완료됐지만 표시할 결과가 없습니다.</p> : null}
+    {!loading && !error && !activeConditions && stored && stored.collection.status !== 'never_collected' && stored.collection.status !== 'success' && !hasItems ? <p className="empty-state">현재 표시할 저장 데이터가 없습니다.</p> : null}
     <div className="record-table-toolbar">
       <div className="record-list-summary"><p className="record-total" aria-live="polite">전체 {numberFormat.format(result?.pageInfo.totalItems ?? 0)}건</p>{menu.list.sorts?.length ? <div className="sort-chips" aria-label="정렬 기준">{menu.list.sorts.map(field => {
         const direction = sort?.field === field.key ? sort.direction : undefined;

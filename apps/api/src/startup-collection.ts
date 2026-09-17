@@ -1,6 +1,6 @@
 import { spawn, type ChildProcess } from 'node:child_process';
 import { createRequire } from 'node:module';
-import type { CollectionDefinition } from '@oss-scp/plugin-config';
+import { isLivePostgresDefinition, type CollectionDefinition } from '@oss-scp/plugin-config';
 
 const localRequire = createRequire(__filename);
 
@@ -28,6 +28,7 @@ export class StartupCollectionManager {
   start(definitions: readonly CollectionDefinition[]): void {
     if (this.closing) return;
     for (const definition of definitions) {
+      if (isLivePostgresDefinition(definition)) continue;
       let child: ChildProcess;
       try {
         child = this.spawnProcess(definition.plugin.id, this.configRoot, this.processPath);

@@ -2,7 +2,7 @@ import { cpSync, mkdtempSync, mkdirSync, readFileSync, rmSync, symlinkSync, writ
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { afterEach, describe, expect, test } from 'vitest';
-import { preflightConfiguration, validateRepository } from '../dist/index.js';
+import { preflightConfiguration, resolveSecret, validateReadQuery, validateRepository } from '../dist/index.js';
 
 const repositoryRoot = resolve(import.meta.dirname, '../../..');
 const temporaryRoots = [];
@@ -36,7 +36,7 @@ describe('validateRepository', () => {
     const root = temporaryRepository();
     const result = validateRepository(root);
     expect(result.ok).toBe(true);
-    if (result.ok) expect(result.definitions.map(item => item.plugin.id)).toEqual(['sample1-offset-api', 'vulnerabilities-local-csv', 'vulnerabilities-http-csv', 'sample2-single-api']);
+    if (result.ok) expect(result.definitions.map(item => item.plugin.id)).toEqual(['sample1-offset-api', 'vulnerabilities-local-csv', 'vulnerabilities-http-csv', 'sample2-single-api', 'dependency-track-db']);
   });
 
   test('심볼릭 링크를 통한 설정 루트 이탈을 거부한다', () => {
@@ -68,13 +68,15 @@ describe('validateRepository', () => {
 
     expect(result.ok).toBe(true);
     if (!result.ok) return;
-    expect(result.definitions).toHaveLength(4);
-    expect(result.menus).toEqual([
+    expect(result.definitions).toHaveLength(5);
+    expect(result.menus.slice(0, 4)).toEqual([
       { title: '취약점', icon: 'shield', group: '보안 관리', order: 10, path: '/vulnerabilities', dataType: 'vulnerability', pluginId: 'vulnerabilities-local-csv', sourceId: 'file:fixtures/csv/vulnerabilities.csv', list: { columns: [{ key: 'cve', label: 'CVE', type: 'string' }, { key: 'name', label: '취약점명', type: 'string' }, { key: 'score', label: '점수', type: 'number' }, { key: 'affected', label: '영향 여부', type: 'boolean' }, { key: 'observedAt', label: '관측 시각', type: 'datetime' }], query: { searchEnabled: true, filters: [{ key: 'score', label: '점수', type: 'number', kind: 'numberRange' }, { key: 'affected', label: '영향 여부', type: 'boolean', kind: 'select', options: [{ value: true, label: '영향 있음' }, { value: false, label: '영향 없음' }] }, { key: 'observedAt', label: '관측 시각', type: 'datetime', kind: 'dateRange' }] }, sorts: [{ key: 'cve', label: 'CVE', type: 'string' }, { key: 'name', label: '취약점명', type: 'string' }, { key: 'score', label: '점수', type: 'number' }, { key: 'affected', label: '영향 여부', type: 'boolean' }, { key: 'observedAt', label: '관측 시각', type: 'datetime' }] }, detail: { sections: [{ title: '취약점 정보', fields: [{ key: 'cve', label: 'CVE', type: 'string' }, { key: 'name', label: '취약점명', type: 'string' }, { key: 'score', label: '점수', type: 'number' }] }, { title: '영향 및 관측', fields: [{ key: 'affected', label: '영향 여부', type: 'boolean' }, { key: 'observedAt', label: '관측 시각', type: 'datetime' }] }] } },
       { title: 'HTTP 취약점', icon: 'shield', group: '보안 관리', order: 20, path: '/vulnerabilities/http', dataType: 'vulnerability', pluginId: 'vulnerabilities-http-csv', sourceId: 'mock-api-vulnerabilities-csv', list: { columns: [{ key: 'cve', label: 'CVE', type: 'string' }, { key: 'name', label: '취약점명', type: 'string' }, { key: 'score', label: '점수', type: 'number' }, { key: 'affected', label: '영향 여부', type: 'boolean' }, { key: 'observedAt', label: '관측 시각', type: 'datetime' }], query: { searchEnabled: true, filters: [{ key: 'score', label: '점수', type: 'number', kind: 'numberRange' }, { key: 'affected', label: '영향 여부', type: 'boolean', kind: 'select', options: [{ value: true, label: '영향 있음' }, { value: false, label: '영향 없음' }] }, { key: 'observedAt', label: '관측 시각', type: 'datetime', kind: 'dateRange' }] }, sorts: [{ key: 'cve', label: 'CVE', type: 'string' }, { key: 'name', label: '취약점명', type: 'string' }, { key: 'score', label: '점수', type: 'number' }, { key: 'affected', label: '영향 여부', type: 'boolean' }, { key: 'observedAt', label: '관측 시각', type: 'datetime' }] }, detail: { sections: [{ title: '식별 정보', fields: [{ key: 'cve', label: 'CVE', type: 'string' }, { key: 'name', label: '취약점명', type: 'string' }] }, { title: 'HTTP 수집 결과', fields: [{ key: 'score', label: '점수', type: 'number' }, { key: 'affected', label: '영향 여부', type: 'boolean' }, { key: 'observedAt', label: '관측 시각', type: 'datetime' }] }] } },
       { title: '서버 자산', icon: 'server', group: '자산 관리', order: 10, path: '/assets/servers', dataType: 'asset', pluginId: 'sample1-offset-api', sourceId: 'mock-api-sample1', list: { columns: [{ key: 'hostname', label: '호스트명', type: 'string' }, { key: 'environment', label: '환경', type: 'string' }, { key: 'ip', label: 'IP 주소', type: 'string' }, { key: 'enabled', label: '활성 상태', type: 'boolean' }], query: { searchEnabled: true, filters: [{ key: 'environment', label: '환경', type: 'string', kind: 'multiSelect', options: [{ value: 'sandbox', label: 'sandbox' }] }, { key: 'enabled', label: '활성 상태', type: 'boolean', kind: 'select', options: [{ value: true, label: '활성' }, { value: false, label: '비활성' }] }] }, sorts: [{ key: 'hostname', label: '호스트명', type: 'string' }, { key: 'environment', label: '환경', type: 'string' }, { key: 'ip', label: 'IP 주소', type: 'string' }, { key: 'enabled', label: '활성 상태', type: 'boolean' }] }, detail: { sections: [{ title: '기본 정보', fields: [{ key: 'hostname', label: '호스트명', type: 'string' }, { key: 'environment', label: '환경', type: 'string' }, { key: 'ip', label: 'IP 주소', type: 'string' }] }, { title: '수집 정보', fields: [{ key: 'integerValue', label: '정수 값', type: 'number' }, { key: 'decimalValue', label: '소수 값', type: 'number' }, { key: 'enabled', label: '활성 상태', type: 'boolean' }] }] } },
       { title: '저장소', icon: 'repository', group: '자산 관리', order: 20, path: '/assets/repositories', dataType: 'repository', pluginId: 'sample2-single-api', sourceId: 'mock-api-sample2', list: { columns: [{ key: 'fullName', label: '저장소 전체 이름', type: 'string' }, { key: 'active', label: '활성 상태', type: 'boolean' }, { key: 'feed', label: '피드', type: 'string' }], query: { searchEnabled: true, filters: [{ key: 'active', label: '활성 상태', type: 'boolean', kind: 'select', options: [{ value: true, label: '활성' }, { value: false, label: '비활성' }] }, { key: 'feed', label: '피드', type: 'string', kind: 'select', options: [{ value: 'true', label: 'true' }, { value: 'false', label: 'false' }] }] }, sorts: [{ key: 'fullName', label: '저장소 전체 이름', type: 'string' }, { key: 'active', label: '활성 상태', type: 'boolean' }, { key: 'feed', label: '피드', type: 'string' }] }, detail: { sections: [{ title: '저장소 정보', fields: [{ key: 'assetKey', label: '자산 키', type: 'string' }, { key: 'fullName', label: '저장소 전체 이름', type: 'string' }, { key: 'active', label: '활성 상태', type: 'boolean' }, { key: 'feed', label: '피드', type: 'string' }] }, { title: '상세 구성', fields: [{ key: 'details', label: '상세 정보', type: 'object' }, { key: 'members', label: '구성원', type: 'array' }] }] } },
     ]);
+    expect(result.menus[4]).toEqual(expect.objectContaining({ pluginId: 'dependency-track-db', sourceId: 'dependency-track-postgres', sourceMode: 'live', dataType: 'dependency-item' }));
+    expect(result.definitions[4]).toEqual(expect.objectContaining({ mode: 'live', persistence: 'none', connection: expect.objectContaining({ connector: 'postgres' }), source: expect.objectContaining({ type: 'db-postgres' }) }));
     expect(result.definitions[0]).toEqual(expect.objectContaining({
       plugin: expect.objectContaining({
         id: 'sample1-offset-api',
@@ -387,6 +389,7 @@ describe('validateRepository', () => {
         './mock-api-sample1.json',
         './mock-api-sample2.json',
         './mock-api-vulnerabilities-csv.json',
+        './dependency-track-postgres.json',
         './other-source.json',
       ],
     });
@@ -536,6 +539,7 @@ describe('validateRepository', () => {
         './mock-api-sample1.json',
         './mock-api-sample2.json',
         './mock-api-vulnerabilities-csv.json',
+        './dependency-track-postgres.json',
         './other-source.json',
       ],
     });
@@ -717,6 +721,46 @@ describe('validateRepository', () => {
   });
 });
 
+describe('PostgreSQL 라이브 source 안전 계약', () => {
+  test.each([
+    'SELECT * FROM one UNION ALL SELECT * FROM two',
+    'WITH rows AS (SELECT * FROM one) SELECT * FROM rows',
+  ])('읽기 전용 단일 문장을 허용한다: %s', sql => expect(() => validateReadQuery(sql)).not.toThrow());
+
+  test.each([
+    'SELECT 1; SELECT 2',
+    'WITH changed AS (DELETE FROM one RETURNING *) SELECT * FROM changed',
+    'SELECT * INTO copied FROM one',
+    'SELECT * FROM one FOR UPDATE',
+    'DELETE FROM one',
+  ])('변경·다중·잠금 문장을 거부한다: %s', sql => expect(() => validateReadQuery(sql)).toThrow());
+
+  test('목록 parameter를 거부하고 상세는 $1 하나만 허용한다', () => {
+    expect(() => validateReadQuery('SELECT * FROM one WHERE id = $1')).toThrow();
+    expect(() => validateReadQuery('SELECT * FROM one WHERE id = $1', true)).not.toThrow();
+    expect(() => validateReadQuery('SELECT * FROM one WHERE id = $2', true)).toThrow();
+  });
+
+  test('환경변수와 secret root 파일만 읽고 비밀 값을 오류에 포함하지 않는다', () => {
+    expect(resolveSecret({ env: 'LIVE_SECRET' }, { env: { LIVE_SECRET: 'private-value' } })).toBe('private-value');
+    const root = mkdtempSync(join(tmpdir(), 'oss-scp-secret-')); temporaryRoots.push(root);
+    writeFileSync(join(root, 'password'), 'file-secret\n');
+    expect(resolveSecret({ file: 'password' }, { secretRoot: root })).toBe('file-secret');
+    expect(() => resolveSecret({ file: '../password' }, { secretRoot: root })).toThrowError(expect.not.stringContaining('file-secret'));
+    expect(() => resolveSecret({ env: 'MISSING' }, { env: {} })).toThrowError(expect.not.stringContaining('private-value'));
+  });
+
+  test('외부 source SQL 변경을 다시 읽어 이미지 빌드 없이 새 정의를 만든다', () => {
+    const root = temporaryRepository();
+    const before = validateRepository(root); expect(before.ok).toBe(true);
+    const file = 'plugins/dependency-track-db/source.json';
+    const source = readJson(root, file); source.listQuery = `${source.listQuery} ORDER BY external_key`;
+    writeJson(root, file, source);
+    const after = validateRepository(root); expect(after.ok).toBe(true);
+    if (before.ok && after.ok) expect(after.definitions.find(item => item.plugin.id === 'dependency-track-db').source.listQuery).not.toBe(before.definitions.find(item => item.plugin.id === 'dependency-track-db').source.listQuery);
+  });
+});
+
 
 test('등록 요약은 실제 출처와 기본 활성화를 제공하며 원천 설정을 노출하지 않는다', () => {
   const result = validateRepository(temporaryRepository());
@@ -726,6 +770,7 @@ test('등록 요약은 실제 출처와 기본 활성화를 제공하며 원천 
     ['vulnerabilities-local-csv', 'local-csv', true],
     ['vulnerabilities-http-csv', 'http-csv', true],
     ['sample2-single-api', 'http-json', true],
+    ['dependency-track-db', 'db-postgres', true],
   ]);
   expect(result.plugins[0].endpoint).toEqual({ url: 'http://127.0.0.1:3001/sample1', method: 'GET' });
   expect(result.plugins[1].fileName).toBe('vulnerabilities.csv');

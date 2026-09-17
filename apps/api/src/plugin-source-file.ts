@@ -14,7 +14,7 @@ function inside(root: string, file: string): boolean {
 export async function downloadLocalCsv(registry: PluginRuntimeRegistry, pluginId: string): Promise<StreamableFile> {
   const plugin = registry.plugins.find(item => item.id === pluginId);
   const definition = registry.getDefinition(pluginId);
-  if (!plugin?.enabled || !definition || !('source' in definition) || definition.source.transport !== 'file' || !registry.configRoot) {
+  if (!plugin?.enabled || !definition || 'mode' in definition || !('source' in definition) || !('transport' in definition.source) || definition.source.transport !== 'file' || !registry.configRoot) {
     throw unavailable();
   }
   let file: FileHandle | undefined;

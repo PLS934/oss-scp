@@ -50,6 +50,9 @@ jobs:
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       - run: pnpm --filter @oss-scp/platform-db test
+      # 실제 PostgreSQL의 UNION 라이브 조회·검색·필터·정렬·상세·캐시 계약 검증
+      - run: pnpm build:plugin-transforms
+      - run: pnpm --filter @oss-scp/api test
       # sample1과 HTTP CSV 수집·저장·실패 재개, partial 및 원천 독립 조회 검증
       - run: pnpm test:integration:sample1
       - run: pnpm exec playwright install --with-deps chromium

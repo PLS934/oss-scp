@@ -1,29 +1,24 @@
 {
-  "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://oss-scp.dev/schemas/connection-v1.json",
-  "title": "oss-scp HTTP connection",
-  "type": "object",
-  "additionalProperties": false,
-  "required": ["apiVersion", "id", "connector", "config"],
-  "properties": {
-    "apiVersion": { "const": "oss-scp/connection-v1" },
-    "id": {
-      "type": "string",
-      "pattern": "^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$",
-      "maxLength": 100
-    },
-    "connector": { "const": "http" },
-    "config": {
-      "type": "object",
-      "additionalProperties": false,
-      "required": ["baseUrl"],
-      "properties": {
-        "baseUrl": {
-          "type": "string",
-          "pattern": "^https?://[^/?#\\s]+(?::[0-9]{1,5})?$",
-          "maxLength": 2048
-        }
-      }
-    }
+  "$schema": "https://json-schema.org/draft/2020-12/schema", "$id": "https://oss-scp.dev/schemas/connection-v1.json", "title": "oss-scp connection",
+  "oneOf": [
+    { "type": "object", "additionalProperties": false, "required": ["apiVersion", "id", "connector", "config"], "properties": {
+      "apiVersion": { "const": "oss-scp/connection-v1" }, "id": { "$ref": "#/$defs/id" }, "connector": { "const": "http" },
+      "config": { "type": "object", "additionalProperties": false, "required": ["baseUrl"], "properties": { "baseUrl": { "type": "string", "pattern": "^https?://[^/?#\\s]+(?::[0-9]{1,5})?$", "maxLength": 2048 } } }
+    } },
+    { "type": "object", "additionalProperties": false, "required": ["apiVersion", "id", "connector", "config"], "properties": {
+      "apiVersion": { "const": "oss-scp/connection-v1" }, "id": { "$ref": "#/$defs/id" }, "connector": { "const": "postgres" },
+      "config": { "type": "object", "additionalProperties": false, "required": ["host", "port", "database", "user", "passwordRef"], "properties": {
+        "host": { "type": "string", "minLength": 1, "maxLength": 253 }, "port": { "type": "integer", "minimum": 1, "maximum": 65535 },
+        "database": { "type": "string", "minLength": 1, "maxLength": 63 }, "user": { "type": "string", "minLength": 1, "maxLength": 63 },
+        "passwordRef": { "$ref": "#/$defs/passwordRef" }, "ssl": { "enum": ["disable", "require"] }
+      } }
+    } }
+  ],
+  "$defs": {
+    "id": { "type": "string", "pattern": "^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$", "maxLength": 100 },
+    "passwordRef": { "oneOf": [
+      { "type": "object", "additionalProperties": false, "required": ["env"], "properties": { "env": { "type": "string", "pattern": "^[A-Z_][A-Z0-9_]*$", "maxLength": 128 } } },
+      { "type": "object", "additionalProperties": false, "required": ["file"], "properties": { "file": { "type": "string", "pattern": "^(?!/)(?!.*(?:^|/)\\.\\.(?:/|$))[^\\u0000]+$", "maxLength": 1024 } } }
+    ] }
   }
 }

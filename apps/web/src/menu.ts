@@ -32,6 +32,7 @@ export interface MenuItem {
   dataType: string;
   pluginId: string;
   sourceId: string;
+  sourceMode?: 'live';
   list: { columns: ListColumn[]; query?: ListQuery; sorts?: ListSort[] };
   detail: { sections: DetailSection[] };
 }

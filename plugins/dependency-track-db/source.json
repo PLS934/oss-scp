@@ -1,0 +1,8 @@
+{
+  "apiVersion": "oss-scp/source-v1", "type": "db-postgres", "persistence": "none", "connectionRef": "dependency-track-postgres",
+  "listQuery": "SELECT 'project'::text AS entity_kind, 'project:' || id::text AS external_key, name::text AS name, severity::text AS severity, updated_at::text AS updated_at FROM projects UNION ALL SELECT 'component'::text, 'component:' || id::text, name::text, severity::text, updated_at::text FROM components UNION ALL SELECT 'sscs'::text, 'sscs:' || id::text, name::text, severity::text, updated_at::text FROM sscs",
+  "detailQuery": "SELECT * FROM (SELECT 'project'::text AS entity_kind, 'project:' || id::text AS external_key, name::text AS name, severity::text AS severity, updated_at::text AS updated_at FROM projects UNION ALL SELECT 'component'::text, 'component:' || id::text, name::text, severity::text, updated_at::text FROM components UNION ALL SELECT 'sscs'::text, 'sscs:' || id::text, name::text, severity::text, updated_at::text FROM sscs) AS combined WHERE external_key = $1",
+  "externalKeyColumn": "external_key",
+  "queryFields": { "entity_kind": { "column": "entity_kind", "type": "string" }, "name": { "column": "name", "type": "string" }, "severity": { "column": "severity", "type": "string" }, "updated_at": { "column": "updated_at", "type": "datetime" } },
+  "batchSize": 100, "limits": { "rowCap": 500, "timeoutMs": 5000, "maxResponseBytes": 4194304 }, "cache": { "kind": "watchlist", "ttlSeconds": 600 }
+}

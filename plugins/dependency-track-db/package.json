@@ -1,0 +1,11 @@
+{
+  "name": "@oss-scp/plugin-dependency-track-db", "version": "0.1.0", "private": true, "main": "dist/transform.js",
+  "scripts": {
+    "prebuild": "pnpm --filter @oss-scp/plugin-sdk build",
+    "build": "tsc",
+    "pretypecheck": "pnpm --filter @oss-scp/plugin-sdk build",
+    "typecheck": "tsc --noEmit",
+    "test": "pnpm build"
+  },
+  "dependencies": { "@oss-scp/plugin-sdk": "workspace:*" }, "devDependencies": { "typescript": "5.9.3" }
+}

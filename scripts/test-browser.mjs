@@ -68,6 +68,7 @@ try {
   const browserMenus = [
     { title: '서버 자산', icon: 'server', group: '자산 관리', order: 10, path: '/assets/servers', dataType: 'asset', pluginId: 'sample1-offset-api', sourceId: 'mock-api-sample1', list: { columns: [{ key: 'hostname', label: '호스트명', type: 'string' }, { key: 'score', label: '점수', type: 'number' }, { key: 'enabled', label: '활성', type: 'boolean' }, { key: 'observedAt', label: '관측 시각', type: 'datetime' }] }, detail: { sections: [{ title: '기본 정보', fields: [{ key: 'hostname', label: '호스트명', type: 'string' }] }] } },
     { title: '저장소', icon: 'repository', group: '자산 관리', order: 20, path: '/assets/repositories', dataType: 'repository', pluginId: 'sample2-single-api', sourceId: 'mock-api-sample2', list: { columns: [{ key: 'fullName', label: '저장소 전체 이름', type: 'string' }] }, detail: { sections: [{ title: '기본 정보', fields: [{ key: 'fullName', label: '저장소 전체 이름', type: 'string' }] }] } },
+    { title: '의존성 추적', icon: 'repository', group: '자산 관리', order: 30, path: '/dependencies', dataType: 'dependency-item', pluginId: 'dependency-track-db', sourceId: 'dependency-track-postgres', sourceMode: 'live', list: { columns: [{ key: 'entity_kind', label: '종류', type: 'string' }, { key: 'name', label: '이름', type: 'string' }], query: { searchEnabled: true, filters: [] }, sorts: [{ key: 'name', label: '이름', type: 'string' }] }, detail: { sections: [{ title: '원천 정보', fields: [{ key: 'external_key', label: '외부 키', type: 'string' }, { key: 'name', label: '이름', type: 'string' }] }] } },
   ];
   const recordRequests = [];
   const detailRequests = [];
@@ -111,12 +112,16 @@ try {
       await route.fulfill({ status: 503, json: { code: 'QUERY_FAILED' } });
       return;
     }
+    const live = pluginId === 'dependency-track-db';
     const total = pluginId === 'sample1-offset-api' ? recordTotal : 1;
     const currentPage = Math.min(requestedPage, Math.max(1, Math.ceil(total / limit)));
     const start = (currentPage - 1) * limit;
     const rows = Array.from({ length: Math.min(limit, total - start) }, (_, index) => {
       const number = start + index + 1;
-      return {
+      return live ? {
+        mode: 'live', id: 'project:1', pluginId, sourceId: 'dependency-track-postgres', dataType: 'dependency-item', externalKey: 'project:1',
+        sourceValues: { external_key: 'project:1', entity_kind: 'project', name: 'live-project' }, omittedFields: [],
+      } : {
         id: `00000000-0000-4000-8000-${String(number).padStart(12, '0')}`,
         pluginId, sourceId: pluginId === 'sample1-offset-api' ? 'mock-api-sample1' : 'mock-api-sample2',
         dataType: pluginId === 'sample1-offset-api' ? 'asset' : 'repository', externalKey: `key-${number}`,
@@ -127,14 +132,29 @@ try {
       };
     });
     const hasNextPage = start + rows.length < total;
-    await route.fulfill({ json: {
+    await route.fulfill({ json: live ? {
+      mode: 'live', items: rows, pageInfo: { page: currentPage, pageSize: limit, totalItems: total, totalPages: Math.ceil(total / limit), hasNextPage }, queriedAt: '2026-09-17T00:00:00.000Z',
+    } : {
       items: rows, pageInfo: { page: currentPage, pageSize: limit, totalItems: total, totalPages: Math.ceil(total / limit), hasNextPage },
       collection: { scope: 'source', status: 'success', runId: '00000000-0000-4000-8000-000000009999', startedAt: '2026-09-11T01:00:00.000Z', finishedAt: '2026-09-11T01:02:00.000Z' },
       lastStoredAt: '2026-09-11T01:01:00.000Z',
     } });
   });
+  await page.route('**/api/v1/live-records/detail?*', route => route.fulfill({ json: {
+    mode: 'live', id: 'project:1', pluginId: 'dependency-track-db', sourceId: 'dependency-track-postgres', dataType: 'dependency-item', externalKey: 'project:1',
+    sourceValues: { external_key: 'project:1', entity_kind: 'project', name: 'live-project' },
+  } }));
   await page.goto(url);
   await checkPluginHome(page, url, browserMenus, root);
+  await page.goto(`${url}/dependencies`);
+  await expect(page.getByText('원천 PostgreSQL을 실시간으로 조회했습니다.')).toBeVisible();
+  await expect(page.getByRole('cell', { name: 'live-project', exact: true })).toBeVisible();
+  await page.getByRole('link', { name: /의존성 추적 project/ }).click();
+  await expect(page).toHaveURL(`${url}/dependencies/project%3A1`);
+  await expect(page.getByText('project:1', { exact: true })).toBeVisible();
+  await page.reload();
+  await expect(page.getByText('live-project', { exact: true })).toBeVisible();
+  await page.goto(url);
   await expect(page.getByRole('heading', { name: 'OSS-SCP', exact: true })).toBeVisible();
   await expect(page.locator('.app-header').getByRole('status')).toHaveText('서버 연결 성공');
   await expect(page.getByText('vdev', { exact: true })).toBeVisible();

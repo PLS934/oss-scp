@@ -30,10 +30,14 @@ export interface QueryRecord {
 }
 
 export interface QueryRecordSummary extends QueryRecord { omittedFields: string[] }
+export interface LiveRecord { mode: 'live'; id: string; pluginId: string; sourceId: string; dataType: string; externalKey: string | number; sourceValues: Record<string, JsonValue> }
+export interface LiveRecordSummary extends LiveRecord { omittedFields: string[] }
 export interface RecordPageInfo { nextCursor: string | null; hasNextPage: boolean }
 export interface NumberedPageInfo { page: number; pageSize: RecordListLimit; totalItems: number; totalPages: number; hasNextPage: boolean }
 export interface NumberedListRecordsInput extends ListRecordsInput { page: number; cursor?: never }
-export interface NumberedListRecordsResult extends Omit<ListRecordsResult, 'pageInfo'> { pageInfo: NumberedPageInfo }
+export interface StoredNumberedListRecordsResult extends Omit<ListRecordsResult, 'pageInfo' | 'items'> { items: Array<QueryRecordSummary | LiveRecordSummary>; pageInfo: NumberedPageInfo }
+export interface LiveNumberedListRecordsResult { mode: 'live'; items: Array<QueryRecordSummary | LiveRecordSummary>; pageInfo: NumberedPageInfo; queriedAt: string }
+export type NumberedListRecordsResult = StoredNumberedListRecordsResult | LiveNumberedListRecordsResult;
 export interface CollectionStatus {
   scope: 'source';
   status: 'never_collected' | 'running' | 'success' | 'partial' | 'failed';
@@ -106,6 +110,17 @@ function isRecordSummary(value: unknown): value is QueryRecordSummary {
   return isRecord(value) && Array.isArray(omittedFields) && omittedFields.every(field => typeof field === 'string');
 }
 
+function isLiveRecord(value: unknown): value is LiveRecord {
+  return isObject(value) && value.mode === 'live' && typeof value.id === 'string' && value.id.length > 0
+    && typeof value.pluginId === 'string' && typeof value.sourceId === 'string' && typeof value.dataType === 'string'
+    && (typeof value.externalKey === 'string' || (typeof value.externalKey === 'number' && Number.isFinite(value.externalKey)))
+    && isObject(value.sourceValues) && isJsonValue(value.sourceValues);
+}
+
+function isLiveRecordSummary(value: unknown): value is LiveRecordSummary {
+  return isLiveRecord(value) && isObject(value) && Array.isArray(value.omittedFields) && value.omittedFields.every(field => typeof field === 'string');
+}
+
 function isListResult(value: unknown): value is ListRecordsResult {
   if (!isObject(value) || !Array.isArray(value.items) || !value.items.every(isRecordSummary)) return false;
   const pageInfo = value.pageInfo;
@@ -122,7 +137,9 @@ function isListMetadata(value: Record<string, unknown>): boolean {
 }
 
 function isNumberedListResult(value: unknown, input: NumberedListRecordsInput): value is NumberedListRecordsResult {
-  if (!isObject(value) || !Array.isArray(value.items) || !value.items.every(isRecordSummary) || !isListMetadata(value)) return false;
+  if (!isObject(value) || !Array.isArray(value.items)) return false;
+  const live = value.mode === 'live';
+  if (live ? !value.items.every(isLiveRecordSummary) || !isTimestamp(value.queriedAt) : !value.items.every(isRecordSummary) || !isListMetadata(value)) return false;
   const info = value.pageInfo;
   if (!isObject(info) || 'nextCursor' in info) return false;
   const { page, pageSize, totalItems, totalPages, hasNextPage } = info;
@@ -188,6 +205,12 @@ export async function listRecords(input: ListRecordsInput, options: RecordReques
 export async function getRecord(id: string, options: RecordRequestOptions = {}): Promise<ApiResult<QueryRecord>> {
   if (!uuidPattern.test(id)) return failure('INVALID_INPUT');
   return requestJson(`/api/v1/records/${encodeURIComponent(id)}`, isRecord, options);
+}
+
+export async function getLiveRecord(input: { pluginId: string; sourceId: string; dataType: string; externalKey: string }, options: RecordRequestOptions = {}): Promise<ApiResult<LiveRecord>> {
+  if (![input.pluginId, input.sourceId, input.dataType, input.externalKey].every(validIdentifier)) return failure('INVALID_INPUT');
+  const params = new URLSearchParams(input);
+  return requestJson(`/api/v1/live-records/detail?${params.toString()}`, isLiveRecord, options);
 }
 
 export function listNumberedRecords(input: NumberedListRecordsInput, options: RecordRequestOptions = {}): Promise<ApiResult<NumberedListRecordsResult>> {

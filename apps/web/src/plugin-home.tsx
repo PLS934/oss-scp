@@ -10,6 +10,7 @@ const sourceLabels: Record<PluginSummary['sourceType'], string> = {
   'http-json': '외부 API (JSON)',
   'http-csv': '외부 HTTP (CSV)',
   'local-csv': '로컬 CSV',
+  'db-postgres': 'PostgreSQL 실시간 조회',
 };
 
 function ArrowIcon() {
