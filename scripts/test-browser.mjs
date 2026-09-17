@@ -194,7 +194,7 @@ try {
   await expect(page.getByRole('cell', { name: 'test-host-1', exact: true })).toBeVisible();
   failPage = 2;
   await page.getByRole('button', { name: '다음 페이지', exact: true }).click();
-  await expect(page.getByRole('alert')).toBeVisible();
+  await expect(page.getByRole('alert').filter({ hasText: '플랫폼 데이터를 조회할 수 없습니다' })).toBeVisible();
   await expect(pagination.locator('[aria-current="page"]')).toHaveText('1');
   await expect(page.getByRole('cell', { name: 'test-host-1', exact: true })).toBeVisible();
   await page.getByRole('button', { name: '다시 시도', exact: true }).click();
