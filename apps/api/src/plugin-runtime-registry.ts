@@ -1,4 +1,4 @@
-import type { ClientPluginSummary, ClientMenuItem, CollectionDefinition } from '@oss-scp/plugin-config';
+import type { ClientPluginSummary, ClientMenuItem, CollectionDefinition, LoadedPluginDetail } from '@oss-scp/plugin-config';
 import { createHash } from 'node:crypto';
 
 export const PLUGIN_RUNTIME_REGISTRY = Symbol('PLUGIN_RUNTIME_REGISTRY');
@@ -8,7 +8,9 @@ export interface PluginRuntimeRegistry {
   readonly plugins: readonly ClientPluginSummary[];
   readonly definitions: readonly CollectionDefinition[];
   readonly menus: readonly ClientMenuItem[];
+  readonly pluginDetails: readonly LoadedPluginDetail[];
   getDefinition(pluginId: string): CollectionDefinition | undefined;
+  getPluginDetail(pluginId: string): LoadedPluginDetail | undefined;
 }
 
 function stable(value: unknown): unknown {
@@ -35,19 +37,23 @@ function deepFreeze<T>(value: T): T {
 }
 
 export function createPluginRuntimeRegistry(
-  input: Pick<PluginRuntimeRegistry, 'definitions' | 'menus'> & Partial<Pick<PluginRuntimeRegistry, 'plugins' | 'configRoot'>>,
+  input: Pick<PluginRuntimeRegistry, 'definitions' | 'menus'> & Partial<Pick<PluginRuntimeRegistry, 'plugins' | 'pluginDetails' | 'configRoot'>>,
 ): PluginRuntimeRegistry {
   const definitions = deepFreeze(structuredClone(input.definitions));
   const menus = deepFreeze(structuredClone(input.menus));
   const definitionsByPluginId = new Map(
     definitions.map((definition) => [definition.plugin.id, definition]),
   );
+  const pluginDetails = deepFreeze(structuredClone(input.pluginDetails ?? []));
+  const pluginDetailsById = new Map(pluginDetails.map((detail) => [detail.configuration.id, detail]));
 
   return Object.freeze({
     definitions,
     menus,
     configRoot: input.configRoot,
     plugins: deepFreeze(structuredClone(input.plugins ?? [])),
+    pluginDetails,
     getDefinition: (pluginId: string) => definitionsByPluginId.get(pluginId),
+    getPluginDetail: (pluginId: string) => pluginDetailsById.get(pluginId),
   });
 }

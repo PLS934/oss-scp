@@ -87,12 +87,16 @@ describe('플러그인 runtime registry', () => {
       { title: '서버', icon: 'server', group: '자산', order: 20, path: '/servers', dataType: 'asset', pluginId: 'sample', sourceId: 'source', list: { columns: [] }, detail: { sections: [] } },
       { title: '취약점', icon: 'shield', group: '보안', order: 10, path: '/findings', dataType: 'finding', pluginId: 'finding', sourceId: 'source', list: { columns: [] }, detail: { sections: [] } },
     ];
-    const registry = createPluginRuntimeRegistry({ definitions: [definition], menus });
+    const pluginDetails = [{ configuration: { id: 'sample', name: '샘플', version: '1.0.0', enabled: true, source: { type: 'local-csv', fileName: 'data.csv', batching: { size: 20 }, limits: {} }, data: { types: {} } }, transformFiles: { pluginRoot: '/config/plugins/sample', runtimePath: '/config/plugins/sample/dist/transform.js' } }];
+    const registry = createPluginRuntimeRegistry({ definitions: [definition], menus, pluginDetails });
     definition.plugin.name = '변경';
     menus[0].title = '변경';
+    pluginDetails[0].configuration.name = '변경';
     expect(registry.getDefinition('sample')?.plugin.name).toBe('샘플');
     expect(registry.getDefinition('missing')).toBeUndefined();
     expect(registry.menus.map(menu => menu.pluginId)).toEqual(['sample', 'finding']);
+    expect(registry.getPluginDetail('sample')?.configuration.name).toBe('샘플');
+    expect(registry.getPluginDetail('missing')).toBeUndefined();
     expect(Object.isFrozen(registry.definitions[0].plugin)).toBe(true);
     expect(() => { registry.menus[0].title = '실패'; }).toThrow(TypeError);
     expect(registry.menus[0].title).toBe('서버');
@@ -252,6 +256,34 @@ describe('등록 플러그인 API', () => {
         { id: 'active', name: 'API', description: '외부 데이터', enabled: true, sourceType: 'http-json' },
         { id: 'disabled', name: 'CSV', enabled: false, sourceType: 'local-csv' },
       ]);
+    } finally { await app.close(); }
+  });
+
+  it('등록된 설정 상세와 코드 실패를 분리하고 없는 ID는 404로 반환한다', async () => {
+    const connection = { checkReady: async () => true, close: async () => undefined };
+    const pluginDetails = [{
+      configuration: {
+        id: 'sample', name: '샘플', version: '1.2.3', enabled: true,
+        source: { type: 'local-csv', fileName: 'data.csv', batching: { size: 10 }, limits: { maxBytes: 1000 } },
+        data: { types: { asset: { uniqueKey: 'id', fields: { id: { type: 'string', label: 'ID', required: true } }, views: { list: { columns: ['id'] }, detail: { sections: [{ title: '기본', fields: ['id'] }] } } } } },
+      },
+      transformFiles: { pluginRoot: '/private/plugins/sample', runtimePath: '/private/plugins/sample/dist/transform.js' },
+    }];
+    const registry = createPluginRuntimeRegistry({ definitions: [], menus: [], pluginDetails });
+    const module = await Test.createTestingModule({ imports: [AppModule.register(connection, undefined, registry)] }).compile();
+    const app = module.createNestApplication(); await app.listen(0, '127.0.0.1');
+    try {
+      const base = await app.getUrl();
+      const response = await fetch(`${base}/api/v1/plugins/sample`);
+      expect(response.status).toBe(200);
+      expect(response.headers.get('cache-control')).toBe('no-store');
+      const body = await response.json();
+      expect(body).toMatchObject({ id: 'sample', version: '1.2.3', source: { type: 'local-csv', fileName: 'data.csv' }, transform: { status: 'unavailable' } });
+      expect(JSON.stringify(body)).not.toMatch(/\/private|runtimePath|pluginRoot|ENOENT/);
+      const missing = await fetch(`${base}/api/v1/plugins/missing`);
+      expect(missing.status).toBe(404);
+      expect(await missing.json()).toMatchObject({ code: 'PLUGIN_NOT_FOUND' });
+      expect(registry.getPluginDetail('sample')?.configuration.name).toBe('샘플');
     } finally { await app.close(); }
   });
 });

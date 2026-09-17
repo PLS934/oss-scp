@@ -11,12 +11,15 @@ import type {
   ClientDetailDefinition,
   ClientListDefinition,
   ClientMenuItem,
+  ClientPluginConfiguration,
+  LoadedPluginDetail,
   ClientPluginSummary,
   CollectionDefinitionBase,
   ConfigurationIssue,
   FieldDefinition,
   ConfigurationResult,
   ConnectionConfig,
+  HttpConnectionConfig,
   PluginConfig,
   PluginRuntimeDefinition,
   PostgresSourceConfig,
@@ -60,6 +63,11 @@ const validateConnection = ajv.compile<ConnectionConfig>(
 function displayPath(root: string, file: string): string {
   const path = relative(root, file);
   return path.length > 0 ? path : '.';
+}
+
+function publicHttpTarget(raw: string): string {
+  const url = new URL(raw);
+  return `${url.origin}${url.pathname === '/' ? '' : url.pathname}`;
 }
 
 function issue(
@@ -212,6 +220,7 @@ function loadPlugins(
   errors: ConfigurationIssue[],
   menus: ClientMenuItem[],
   plugins: ClientPluginSummary[],
+  pluginDetails: LoadedPluginDetail[],
 ): CollectionDefinition[] {
   const pluginRoot = join(root, 'plugins');
   const registryFile = join(pluginRoot, 'registry.json');
@@ -375,6 +384,29 @@ function loadPlugins(
       data: pluginValue.data,
       menu: pluginValue.menu,
     };
+    const sourceCandidate = join(pluginDirectory, `${basename(transformPath, '.js')}.ts`);
+    const transformFiles = {
+      pluginRoot: pluginDirectory,
+      runtimePath: transformPath,
+      ...(existsSync(sourceCandidate) ? { sourcePath: sourceCandidate } : {}),
+    };
+    const configurationBase = {
+      id: pluginValue.id,
+      name: pluginValue.name,
+      version: pluginValue.version,
+      ...(pluginValue.description === undefined ? {} : { description: pluginValue.description }),
+      enabled: pluginValue.enabled ?? true,
+      data: pluginValue.data,
+    };
+    const clientMenu = pluginValue.menu ? {
+      ...pluginValue.menu,
+      list: clientLists.get(pluginValue.menu.dataType)!,
+      detail: clientDetails.get(pluginValue.menu.dataType)!,
+    } : undefined;
+    const addDetail = (source: ClientPluginConfiguration['source']) => pluginDetails.push({
+      configuration: { ...configurationBase, source, ...(clientMenu ? { menu: clientMenu } : {}) },
+      transformFiles,
+    });
 
     const sourceFile = safeResolve(
       root,
@@ -394,6 +426,7 @@ function loadPlugins(
     }
     let endpoint: ClientPluginSummary['endpoint'];
     let fileName: string | undefined;
+    let httpConnection: HttpConnectionConfig | undefined;
     if (isPostgresSource(sourceValue)) {
       const connection = connections.get(sourceValue.connectionRef);
       if (!connection) {
@@ -426,6 +459,22 @@ function loadPlugins(
         continue;
       }
       plugins.push({ id: pluginValue.id, name: pluginValue.name, ...(pluginValue.description === undefined ? {} : { description: pluginValue.description }), enabled: pluginValue.enabled ?? true, sourceType: 'db-postgres' });
+      addDetail({
+        type: 'db-postgres', mode: 'live', persistence: 'none',
+        connection: {
+          id: connection.value.id,
+          host: connection.value.config.host,
+          port: connection.value.config.port,
+          database: connection.value.config.database,
+          ...(connection.value.config.ssl ? { ssl: connection.value.config.ssl } : {}),
+        },
+        queries: { list: sourceValue.listQuery, detail: sourceValue.detailQuery },
+        externalKeyColumn: sourceValue.externalKeyColumn,
+        queryFields: sourceValue.queryFields,
+        batching: { size: sourceValue.batchSize },
+        limits: sourceValue.limits,
+        ...(sourceValue.cache ? { cache: sourceValue.cache } : {}),
+      });
       if (pluginValue.enabled === false) continue;
       definitions.push(liveDefinition);
       if (pluginValue.menu) menus.push({ ...pluginValue.menu, pluginId: pluginValue.id, sourceId: connection.value.id, sourceMode: 'live', list: clientLists.get(pluginValue.menu.dataType)!, detail: clientDetails.get(pluginValue.menu.dataType)! });
@@ -435,6 +484,7 @@ function loadPlugins(
     } else {
       const connection = connections.get(sourceValue.connectionRef);
       if (connection?.value.connector === 'http') {
+        httpConnection = connection.value;
         let url: URL;
         try { url = new URL(sourceValue.path, connection.value.config.baseUrl); }
         catch {
@@ -446,6 +496,10 @@ function loadPlugins(
         if (sourceValue.format === 'csv') fileName = basename(url.pathname);
       }
     }
+    if (!(sourceValue.format === 'csv' && sourceValue.transport === 'file') && !httpConnection) {
+      issue(errors, root, sourceFile, '/connectionRef', `unknown connection id: ${sourceValue.connectionRef}`);
+      continue;
+    }
     plugins.push({
       id: pluginValue.id,
       name: pluginValue.name,
@@ -455,6 +509,33 @@ function loadPlugins(
       ...(endpoint ? { endpoint } : {}),
       ...(fileName === undefined ? {} : { fileName }),
     });
+    if (sourceValue.format === 'csv' && sourceValue.transport === 'file') {
+      addDetail({
+        type: 'local-csv', fileName: basename(sourceValue.path),
+        batching: { size: sourceValue.batchSize },
+        limits: {
+          ...(sourceValue.maxBytes === undefined ? {} : { maxBytes: sourceValue.maxBytes }),
+          ...(sourceValue.maxRecordSize === undefined ? {} : { maxRecordSize: sourceValue.maxRecordSize }),
+        },
+      });
+    } else if (sourceValue.format === 'csv') {
+      addDetail({
+        type: 'http-csv', connection: { id: httpConnection!.id, baseUrl: publicHttpTarget(httpConnection!.config.baseUrl) },
+        request: { method: sourceValue.method, path: sourceValue.path, format: 'csv' },
+        batching: { size: sourceValue.batchSize }, limits: sourceValue.limits,
+      });
+    } else {
+      addDetail({
+        type: 'http-json', connection: { id: httpConnection!.id, baseUrl: publicHttpTarget(httpConnection!.config.baseUrl) },
+        request: { method: sourceValue.method, path: sourceValue.path, format: 'json' },
+        response: {
+          itemsPath: sourceValue.itemsPath,
+          ...(sourceValue.pagination.type === 'offset' ? { totalPath: sourceValue.pagination.totalPath } : {}),
+          ...(sourceValue.metadataPaths ? { metadataPaths: sourceValue.metadataPaths } : {}),
+        },
+        pagination: sourceValue.pagination, limits: sourceValue.limits,
+      });
+    }
     if (pluginValue.enabled === false) continue;
     if (sourceValue.format === 'csv' && sourceValue.transport === 'file') {
       const csvPath = safeResolve(
@@ -532,9 +613,10 @@ export function validateRepository(rootDirectory: string): ConfigurationResult {
   const connections = loadConnections(root, errors);
   const menus: ClientMenuItem[] = [];
   const plugins: ClientPluginSummary[] = [];
-  const definitions = loadPlugins(root, connections, errors, menus, plugins);
+  const pluginDetails: LoadedPluginDetail[] = [];
+  const definitions = loadPlugins(root, connections, errors, menus, plugins, pluginDetails);
   menus.sort((a, b) => a.group < b.group ? -1 : a.group > b.group ? 1 : a.order - b.order || (a.title < b.title ? -1 : a.title > b.title ? 1 : a.path < b.path ? -1 : a.path > b.path ? 1 : 0));
-  return errors.length > 0 ? { ok: false, errors } : { ok: true, definitions, menus, plugins };
+  return errors.length > 0 ? { ok: false, errors } : { ok: true, definitions, menus, plugins, pluginDetails };
 }
 
 const loadModule = createRequire(__filename);

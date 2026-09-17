@@ -326,3 +326,17 @@ MOCK_PORT=3002 pnpm start:mock
 기본 목록에 포함된 최상위 scalar 필드는 `"sortable": true`로 정렬을 허용할 수 있다. string, number, boolean, datetime만 지원하며 생략한 필드는 정렬 뱃지와 API 허용 목록에 포함되지 않는다. object·array, 중첩 필드와 목록 밖 필드는 정렬 가능으로 선언할 수 없다.
 
 검증된 메뉴에는 정렬 필드의 `key`, `label`, `type`만 `list.sorts` 선언 순서로 전달된다. 예를 들어 `"score": { "type": "number", "label": "점수", "sortable": true }`는 점수 정렬을 허용한다. 여러 플러그인이 서로 다른 필드를 선언할 수 있으며 플랫폼 코어에 필드명을 추가할 필요가 없다.
+
+## 읽기 전용 설정 상세
+
+웹 홈에서 플러그인 이름을 선택하면 `/plugins/<plugin-id>` 설정 상세 화면으로 이동한다. 이 화면과 `GET /api/v1/plugins/<plugin-id>` API는 서버가 현재 검증해 로드한 다음 공개 구성만 표시한다.
+
+- 플러그인 이름·ID·버전·설명·활성화 여부
+- source 종류별 연결 대상, 요청 또는 로컬 파일명, pagination·batch·실행 한도
+- 데이터 타입·중첩 필드·유일키·관계
+- 메뉴와 목록 컬럼·검색·필터·정렬, 상세 섹션
+- 등록 transform 코드와 표시한 파일 종류
+
+Connection의 인증 사용자·비밀번호·secret 참조와 서버의 설정 루트·절대 파일 경로는 공개하지 않는다. HTTP 연결 대상은 userinfo·query·fragment를 제거하고 로컬 source는 basename만 표시한다. 설정 상세 조회는 수집, 저장, 파일 또는 registry 변경을 실행하지 않는다.
+
+플러그인 개발 트리에서는 등록된 `<plugin>/dist/<name>.js`에 대응하는 `<plugin>/<name>.ts`가 일반 파일로 존재하면 TypeScript 원본을 우선 표시한다. 배포 환경처럼 원본이 없으면 실제 등록된 JavaScript를 표시한다. 두 파일 모두 등록된 플러그인 디렉터리 안에서만 읽으며, 안전하게 읽을 수 없거나 크기 제한을 넘으면 다른 구성은 유지하고 코드 영역만 조회 불가로 표시한다. 원본을 다른 이름이나 위치에 두었을 때 임의 탐색하지 않는다.

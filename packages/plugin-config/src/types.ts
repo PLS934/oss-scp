@@ -204,6 +204,42 @@ export interface ClientPluginSummary {
   fileName?: string;
 }
 
+export type ClientPluginSourceDetail =
+  | { type: 'http-json'; connection: { id: string; baseUrl: string }; request: { method: 'GET'; path: string; format: 'json' }; response: { itemsPath: string; totalPath?: string; metadataPaths?: string[] }; pagination: OffsetSourceConfig['pagination'] | SingleSourceConfig['pagination']; limits: HttpCollectionLimits }
+  | { type: 'local-csv'; fileName: string; batching: { size: number }; limits: LocalCsvCollectionDefinition['limits'] }
+  | { type: 'http-csv'; connection: { id: string; baseUrl: string }; request: { method: 'GET'; path: string; format: 'csv' }; batching: { size: number }; limits: HttpCsvSourceConfig['limits'] }
+  | { type: 'db-postgres'; mode: 'live'; persistence: 'none'; connection: { id: string; host: string; port: number; database: string; ssl?: 'disable' | 'require' }; queries: { list: string; detail: string }; externalKeyColumn: string; queryFields: PostgresSourceConfig['queryFields']; batching: { size: number }; limits: PostgresSourceConfig['limits']; cache?: PostgresSourceConfig['cache'] };
+
+export type ClientTransformDetail =
+  | { status: 'available'; kind: 'typescript-source' | 'javascript-runtime'; code: string }
+  | { status: 'unavailable'; reason: string };
+
+export interface ClientPluginConfiguration {
+  id: string;
+  name: string;
+  version: string;
+  description?: string;
+  enabled: boolean;
+  source: ClientPluginSourceDetail;
+  data: PluginDataDefinition;
+  menu?: PluginMenuDefinition & { list: ClientListDefinition; detail: ClientDetailDefinition };
+}
+
+export interface ClientPluginDetail extends ClientPluginConfiguration {
+  transform: ClientTransformDetail;
+}
+
+export interface PluginTransformFiles {
+  pluginRoot: string;
+  runtimePath: string;
+  sourcePath?: string;
+}
+
+export interface LoadedPluginDetail {
+  configuration: ClientPluginConfiguration;
+  transformFiles: PluginTransformFiles;
+}
+
 export type ConfigurationResult =
-  | { ok: true; definitions: CollectionDefinition[]; menus: ClientMenuItem[]; plugins: ClientPluginSummary[] }
+  | { ok: true; definitions: CollectionDefinition[]; menus: ClientMenuItem[]; plugins: ClientPluginSummary[]; pluginDetails: LoadedPluginDetail[] }
   | { ok: false; errors: ConfigurationIssue[] };
