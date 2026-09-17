@@ -51,9 +51,9 @@ transform 코드가 실패해도 나머지 구성은 유효하므로 전체 요�
 
 PostgreSQL user와 password reference는 인증 정보로 제외한다. HTTP base URL에는 userinfo·query·fragment를 허용하지 않는다. 내부 절대 경로는 어떤 variant에도 넣지 않는다. 데이터와 view는 검증된 runtime plugin 정의를 구조화 복제해 전달한다.
 
-### 5. 홈 이름 링크과 전용 상세 route를 추가한다
+### 5. 홈 상세 화살표와 전용 상세 route를 추가한다
 
-홈의 플러그인 이름은 `/plugins/:pluginId`로 이동하고 기존 화살표는 레코드 메뉴 이동을 유지한다. 새 `plugin-details` client 모듈이 응답 구조를 런타임 검증하며, `PluginConfigDetail`은 섹션별 semantic markup과 재귀 필드 tree를 렌더링한다. route parameter가 바뀌면 이전 상태를 지우고 새 요청을 시작하며 unmount 또는 재탐색 시 AbortController로 취소한다.
+홈의 플러그인 제목 옆 화살표는 `/plugins/:pluginId`로 이동하고, 제목 아래의 검증된 메뉴 경로 텍스트는 기존 레코드 메뉴로 이동한다. 비활성 또는 조회 메뉴가 없는 플러그인도 설정 상세 화살표는 유지한다. 새 `plugin-details` client 모듈이 응답 구조를 런타임 검증하며, `PluginConfigDetail`은 섹션별 semantic markup과 재귀 필드 tree를 렌더링한다. route parameter가 바뀌면 이전 상태를 지우고 새 요청을 시작하며 unmount 또는 재탐색 시 AbortController로 취소한다.
 
 코드는 실행·하이라이트하지 않고 `<pre><code>`에 text node로 표시해 스크립트 삽입을 방지한다. source별 label은 UI에 명시하고 JSON dump에 의존하지 않는다.
 

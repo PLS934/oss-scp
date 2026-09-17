@@ -103,8 +103,6 @@ main .plugin-home { background: transparent; border: 0; border-radius: 0; paddin
 .plugin-card { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 20px; overflow-wrap: anywhere; min-width: 0; }
 .plugin-heading { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; }
 .plugin-heading h3 { margin: 0; font-size: 18px; }
-.plugin-config-link { padding: 0; text-decoration: none; }
-.plugin-config-link:hover { color: var(--focus); text-decoration: underline; }
 .plugin-badge { border-radius: 20px; padding: 3px 10px; font-size: 13px; white-space: nowrap; }
 .plugin-badge.enabled { color: var(--success); background: var(--info); }
 .plugin-badge.disabled { color: var(--muted); background: var(--info); }
@@ -147,6 +145,9 @@ main .repository-members { padding: 20px; }
 @media (max-width: 700px) { .repository-detail-header { flex-direction: column; } .repository-summary { grid-template-columns: 1fr; } }
 
 .plugin-menu-paths { display: grid; gap: 4px; margin-top: 0; margin-bottom: 20px; color: var(--muted); font-size: 13px; }
+.plugin-menu-link { display: inline-block; padding: 2px 0; color: inherit; text-decoration: none; }
+.plugin-menu-link:hover { color: var(--focus); background: transparent; text-decoration: underline; }
+.plugin-menu-link:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
 
 .plugin-sort-toolbar { display: flex; align-items: center; margin-top: 24px; }
 .plugin-sort-toolbar + .plugin-cards { margin-top: 8px; }
