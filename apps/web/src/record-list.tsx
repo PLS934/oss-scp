@@ -12,6 +12,7 @@ import {
   type RecordListLimit,
   type RecordSort,
 } from './records';
+import { getManualSyncCapability, getManualSyncRequest, scheduleManualSyncPoll, startManualSync, type ManualSyncCapability, type ManualSyncError, type ManualSyncRequest } from './manual-sync';
 
 const limits: readonly RecordListLimit[] = [20, 50, 100, 200];
 const numberFormat = new Intl.NumberFormat('ko-KR');
@@ -54,6 +55,11 @@ interface RecordListViewProps {
   activeConditions?: boolean;
   sort?: RecordSort;
   onSortChange?: (sort: RecordSort | undefined) => void;
+  syncCapability?: ManualSyncCapability | null;
+  syncRequest?: ManualSyncRequest | null;
+  syncError?: ManualSyncError | null;
+  syncBusy?: boolean;
+  onSync?: () => void;
 }
 
 export function nextRecordSort(current: RecordSort | undefined, field: string): RecordSort | undefined {
@@ -70,7 +76,7 @@ function activateRowLink(event: MouseEvent<HTMLTableRowElement>) {
   event.currentTarget.querySelector<HTMLAnchorElement>('a')?.click();
 }
 
-export function RecordListView({ menu, title, loadingMessage, renderItems, limit, page, loading, result, error, onLimitChange, onPageChange, onRetry, searchControls, searchState, activeConditions = false, sort, onSortChange }: RecordListViewProps) {
+export function RecordListView({ menu, title, loadingMessage, renderItems, limit, page, loading, result, error, onLimitChange, onPageChange, onRetry, searchControls, searchState, activeConditions = false, sort, onSortChange, syncCapability = null, syncRequest = null, syncError = null, syncBusy = false, onSync }: RecordListViewProps) {
   const stored = result && !('mode' in result) ? result : null;
   const collectionMessage = stored ? collectionMessages[stored.collection.status] : undefined;
   const hasItems = Boolean(result?.items.length);
@@ -82,6 +88,16 @@ export function RecordListView({ menu, title, loadingMessage, renderItems, limit
       <h2 id="record-list-title">{title ?? menu.title}</h2>
 
     </div>
+    <div className="sync-panel">
+      <div><strong>플러그인 전체 동기화</strong><p>이 플러그인의 활성화된 수집 대상 전체를 동기화합니다.</p></div>
+      <button type="button" onClick={onSync} disabled={syncBusy || !syncCapability?.canExecute}>{syncBusy ? '동기화 중' : '지금 동기화'}</button>
+    </div>
+    {syncCapability && !syncCapability.canExecute && syncCapability.reason === 'NO_ACTIVE_TARGETS' ? <p className="list-message">활성화된 수집 대상이 없습니다.</p> : null}
+    {syncError && syncError.kind !== 'ABORTED' ? <p className="list-message error" role="alert">{syncError.message}</p> : null}
+    {syncRequest?.status === 'success' ? <p className="list-message success" role="status">동기화가 완료되었습니다.</p> : null}
+    {syncRequest?.status === 'partial' ? <p className="list-message partial" role="status">동기화가 부분 완료되었습니다.</p> : null}
+    {syncRequest?.status === 'failed' ? <p className="list-message failed" role="alert">동기화에 실패했습니다. 기존 저장 데이터는 유지됩니다.</p> : null}
+    {syncCapability?.lastSuccessAt ? <p>마지막 성공: {dateTimeFormat.format(new Date(syncCapability.lastSuccessAt))}</p> : null}
     {searchState ? <RecordSearchToolbar state={searchState} /> : searchControls}
     {renderItems && searchState && menu.list.query?.filters.length ? <div className="record-card-filters" aria-label="필터">{menu.list.query.filters.map(field => <RecordFilterHeader key={field.key} field={field} state={searchState} />)}</div> : null}
     {loading ? <p role="status">{loadingMessage ?? '저장된 목록을 불러오는 중입니다.'}</p> : null}
@@ -163,13 +179,17 @@ export interface RecordListProps {
   title?: string;
   loadingMessage?: string;
   renderItems?: (result: NumberedListRecordsResult) => ReactNode;
+  capabilityRequest?: typeof getManualSyncCapability;
+  startSyncRequest?: typeof startManualSync;
+  syncStatusRequest?: typeof getManualSyncRequest;
+  pollIntervalMs?: number;
 }
 
 export function RecordList(props: RecordListProps) {
   const { menu } = props;
   return <RecordListSession key={JSON.stringify([menu.path, menu.pluginId, menu.sourceId, menu.dataType, menu.list.query, menu.list.sorts])} {...props} />;
 }
-function RecordListSession({ menu, request = listNumberedRecords, title, loadingMessage, renderItems }: RecordListProps) {
+function RecordListSession({ menu, request = listNumberedRecords, title, loadingMessage, renderItems, capabilityRequest = getManualSyncCapability, startSyncRequest = startManualSync, syncStatusRequest = getManualSyncRequest, pollIntervalMs = 1000 }: RecordListProps) {
   const [conditions, setConditions] = useState<SearchConditions>({});
   const [conditionVersion, setConditionVersion] = useState(0);
   const [limit, setLimit] = useState<RecordListLimit>(20);
@@ -183,6 +203,46 @@ function RecordListSession({ menu, request = listNumberedRecords, title, loading
   const [result, setResult] = useState<NumberedListRecordsResult | null>(null);
   const [error, setError] = useState<RecordApiError | null>(null);
   const requestId = useRef(0);
+  const [syncCapability, setSyncCapability] = useState<ManualSyncCapability | null>(null);
+  const [syncRequest, setSyncRequest] = useState<ManualSyncRequest | null>(null);
+  const [syncError, setSyncError] = useState<ManualSyncError | null>(null);
+  const [syncSubmitting, setSyncSubmitting] = useState(false);
+  const [syncRefresh, setSyncRefresh] = useState(0);
+
+  useEffect(() => {
+    const controller = new AbortController(); setSyncCapability(null); setSyncRequest(null); setSyncError(null);
+    void capabilityRequest(menu.pluginId, { signal: controller.signal }).then(response => {
+      if (controller.signal.aborted) return;
+      if (response.ok) setSyncCapability(response.data); else if (response.error.kind !== 'ABORTED') setSyncError(response.error);
+    });
+    return () => controller.abort();
+  }, [capabilityRequest, menu.pluginId, syncRefresh]);
+
+  useEffect(() => {
+    if (!syncRequest || (syncRequest.status !== 'accepted' && syncRequest.status !== 'running')) return;
+    return scheduleManualSyncPoll(syncRequest.requestId, pollIntervalMs, response => {
+      if (response.ok) {
+        setSyncRequest(response.data);
+        if (!['accepted', 'running'].includes(response.data.status)) {
+          dispatchNavigation({ type: 'reset', sessionKey }); setResult(null); setRetry(value => value + 1); setSyncRefresh(value => value + 1);
+        }
+      } else if (response.error.kind !== 'ABORTED') setSyncError(response.error);
+    }, syncStatusRequest);
+  }, [pollIntervalMs, sessionKey, syncRequest, syncStatusRequest]);
+
+  const beginSync = () => {
+    if (syncSubmitting || !syncCapability?.canExecute) return;
+    setSyncSubmitting(true); setSyncError(null);
+    void startSyncRequest(menu.pluginId).then(response => {
+      setSyncSubmitting(false);
+      if (response.ok) { setSyncRequest(response.data); setSyncCapability(value => value ? { ...value, canExecute: false, reason: 'SYNC_ALREADY_RUNNING' } : value); }
+      else {
+        setSyncError(response.error);
+        const currentRun = 'currentRun' in response.error ? response.error.currentRun : undefined;
+        if (currentRun?.requestId) setSyncRequest({ requestId: currentRun.requestId, pluginId: menu.pluginId, status: currentRun.status, runId: currentRun.runId, startedAt: currentRun.startedAt ?? new Date().toISOString(), finishedAt: null, errorCode: null });
+      }
+    });
+  };
 
   useEffect(() => {
     if (navigation.sessionKey !== sessionKey) {
@@ -223,5 +283,6 @@ function RecordListSession({ menu, request = listNumberedRecords, title, loading
         setError(null); dispatchNavigation({ type: 'navigate', page });
       }
     }}
-    onRetry={() => { setError(null); setRetry(value => value + 1); }} />;
+    onRetry={() => { setError(null); setRetry(value => value + 1); }} syncCapability={syncCapability} syncRequest={syncRequest} syncError={syncError}
+    syncBusy={syncSubmitting || syncRequest?.status === 'accepted' || syncRequest?.status === 'running'} onSync={beginSync} />;
 }

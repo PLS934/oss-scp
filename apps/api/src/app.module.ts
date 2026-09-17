@@ -11,6 +11,7 @@ import { CollectionStatusController } from './collection-status.controller';
 import { CollectionStatusService } from './collection-status.service';
 import type { StartupCollectionManager } from './startup-collection';
 import { LIVE_QUERY, LiveQueryManager } from './live-query';
+import { AccountManagementDisabledAuthorizer, MANUAL_SYNC_AUTHORIZER, MANUAL_SYNC_EXECUTOR, ManualSyncController, ManualSyncManager, ManualSyncService, manualSyncExecutor, type ManualSyncAuthorizer, type ManualSyncExecutor } from './manual-sync';
 
 class PlatformDbLifecycle implements OnApplicationShutdown {
   constructor(private readonly connection: PlatformDbConnection, private readonly live: LiveQueryManager, private readonly startup?: StartupCollectionManager) {}
@@ -25,6 +26,7 @@ export class AppModule {
     registry: PluginRuntimeRegistry = createPluginRuntimeRegistry({ definitions: [], menus: [] }),
     startup?: StartupCollectionManager,
     live: LiveQueryManager = new LiveQueryManager(registry),
+    manualSync?: { executor?: ManualSyncExecutor; authorizer?: ManualSyncAuthorizer; configRoot?: string },
   ): DynamicModule {
     const unavailable: RecordQuery = {
       listRecords: async () => { throw new Error('record query adapter unavailable'); },
@@ -32,7 +34,7 @@ export class AppModule {
     };
     return {
       module: AppModule,
-      controllers: [HealthController, RecordQueryController, LiveRecordQueryController, PluginMenuController, PluginController, CollectionStatusController],
+      controllers: [HealthController, RecordQueryController, LiveRecordQueryController, PluginMenuController, PluginController, CollectionStatusController, ManualSyncController],
       providers: [
         { provide: PLATFORM_DB_CONNECTION, useValue: connection },
         { provide: RECORD_QUERY, useValue: query ?? unavailable },
@@ -41,6 +43,10 @@ export class AppModule {
         HealthService,
         RecordQueryService,
         CollectionStatusService,
+        { provide: MANUAL_SYNC_AUTHORIZER, useValue: manualSync?.authorizer ?? new AccountManagementDisabledAuthorizer() },
+        { provide: MANUAL_SYNC_EXECUTOR, useValue: manualSync?.executor ?? manualSyncExecutor(manualSync?.configRoot ?? process.env.OSS_SCP_CONFIG_ROOT ?? process.cwd()) },
+        ManualSyncManager,
+        ManualSyncService,
         { provide: PlatformDbLifecycle, useFactory: (live: LiveQueryManager) => new PlatformDbLifecycle(connection, live, startup), inject: [LIVE_QUERY] },
       ],
       exports: [PLUGIN_RUNTIME_REGISTRY],

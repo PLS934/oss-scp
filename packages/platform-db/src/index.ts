@@ -11,7 +11,7 @@ export { discoverMigrations, runMigrations, runPostgresMigrations, runMysqlMigra
 export type { Migration } from './migrations';
 export { canonicalExternalKey, serializedBytes, STORAGE_LIMITS, StorageError, validateCommitBatch, validateScope, validateStartRun } from './storage';
 export type {
-  CanonicalKey, CollectionScope, CommitStorageBatch, ExternalKey, FinishCollectionRun,
+  CanonicalKey, CollectionScope, CollectionTrigger, CommitStorageBatch, ExternalKey, FinishCollectionRun,
   JsonPrimitive, JsonValue, RecordStorage, StartCollectionRun, StorageErrorCode,
   StorageIssue, StorageRecord, StorageRecordReference, StorageRelation,
 } from './storage';

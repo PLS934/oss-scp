@@ -221,20 +221,39 @@ try {
   assert.equal(await databaseSql({ postgres: "SELECT checkpoint::text FROM collection_checkpoints WHERE plugin_id='vulnerabilities-http-csv'", mysql: "SELECT checkpoint FROM collection_checkpoints WHERE plugin_id='vulnerabilities-http-csv'" }), '53');
   assert.equal(await databaseSql({ postgres: "SELECT count(*) FROM platform_records WHERE plugin_id='vulnerabilities-http-csv'", mysql: "SELECT count(*) FROM platform_records WHERE plugin_id='vulnerabilities-http-csv'" }), '53');
 
+  const syncApiPort = await freePort();
+  api = processRun(process.execPath, [path.join(root, 'apps/api/dist/main.js')], { env: { ...env, HOST: '127.0.0.1', PORT: String(syncApiPort) } });
+  await waitFor(async () => (await fetch(`http://127.0.0.1:${syncApiPort}/api/v1/ready`)).ok, 'manual sync API');
+  await waitFor(async () => {
+    const state = await (await fetch(`http://127.0.0.1:${syncApiPort}/api/v1/plugins/sample1-offset-api/sync`)).json();
+    return state.canExecute === true;
+  }, 'startup collection completion');
+  const accepted = await fetch(`http://127.0.0.1:${syncApiPort}/api/v1/plugins/sample1-offset-api/sync-runs`, { method: 'POST' });
+  assert.equal(accepted.status, 202);
+  const syncRequest = await accepted.json();
+  let syncTerminal;
+  await waitFor(async () => {
+    const state = await (await fetch(`http://127.0.0.1:${syncApiPort}/api/v1/sync-runs/${syncRequest.requestId}`)).json();
+    syncTerminal = state;
+    return ['success', 'partial', 'failed'].includes(state.status);
+  }, 'manual sync completion');
+  assert.equal(await databaseSql({ postgres: `SELECT count(*) FROM collection_runs WHERE trigger='api' AND request_id='${syncRequest.requestId}'`, mysql: `SELECT count(*) FROM collection_runs WHERE \`trigger\`='api' AND request_id='${syncRequest.requestId}'` }), '1');
+  await stopProcess(api); api = undefined;
+
   await mock.close();
   mock = undefined;
   const registryPath = path.join(temporaryRoot, 'plugins/registry.json');
   const registry = JSON.parse(await readFile(registryPath, 'utf8'));
   registry.plugins = registry.plugins.filter(pluginPath => pluginPath.includes('sample2-single-api'));
   await writeFile(registryPath, `${JSON.stringify(registry, null, 2)}\n`);
-  const apiPort = await freePort();
-  api = processRun(process.execPath, [path.join(root, 'apps/api/dist/main.js')], { env: { ...env, HOST: '127.0.0.1', PORT: String(apiPort) } });
-  await waitFor(async () => (await fetch(`http://127.0.0.1:${apiPort}/api/v1/ready`)).ok, 'record API');
-  const list = await (await fetch(`http://127.0.0.1:${apiPort}/api/v1/records?pluginId=sample1-offset-api&sourceId=mock-api-sample1&dataType=asset&limit=20`)).json();
+  const offlineApiPort = await freePort();
+  api = processRun(process.execPath, [path.join(root, 'apps/api/dist/main.js')], { env: { ...env, HOST: '127.0.0.1', PORT: String(offlineApiPort) } });
+  await waitFor(async () => (await fetch(`http://127.0.0.1:${offlineApiPort}/api/v1/ready`)).ok, 'record API');
+  const list = await (await fetch(`http://127.0.0.1:${offlineApiPort}/api/v1/records?pluginId=sample1-offset-api&sourceId=mock-api-sample1&dataType=asset&limit=20`)).json();
   assert.equal(list.items.length, 20);
-  assert.equal(list.collection.status, 'partial');
-  assert.equal(list.collection.runId, partial.runId);
-  const detail = await (await fetch(`http://127.0.0.1:${apiPort}/api/v1/records/${list.items[0].id}`)).json();
+  assert.equal(list.collection.status, syncTerminal.status);
+  assert.equal(list.collection.runId, syncTerminal.runId);
+  const detail = await (await fetch(`http://127.0.0.1:${offlineApiPort}/api/v1/records/${list.items[0].id}`)).json();
   assert.equal(detail.id, list.items[0].id);
   assert.equal(detail.pluginId, 'sample1-offset-api');
   console.log(`sample1 및 HTTP CSV ${databaseType} 수집·재실행·실패 재개·partial·원천 독립 조회 검증 통과`);

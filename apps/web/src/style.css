@@ -48,6 +48,8 @@ th { background: var(--background); }
 .empty-value { color: var(--muted); } .invalid-value { color: var(--error-text); }
 .back-link { display: inline-block; margin-top: 8px; }
 @media (max-width: 700px) { .app-shell { grid-template-columns: 1fr; } main { margin: 24px auto; } }
+.sync-panel { align-items: center; background: var(--background); border: 1px solid var(--border); border-radius: .75rem; display: flex; gap: 1rem; justify-content: space-between; margin: 1rem 0; padding: 1rem; }
+.sync-panel p { margin: .25rem 0 0; }
 
 button, select { color: var(--text); background: var(--surface); border: 1px solid var(--control-border); border-radius: 4px; }
 a:focus-visible, button:focus-visible, select:focus-visible { outline: 3px solid var(--focus); outline-offset: 3px; }

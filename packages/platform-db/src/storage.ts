@@ -36,7 +36,8 @@ export interface StorageIssue {
   keyHint?: string;
 }
 
-export interface StartCollectionRun extends CollectionScope { startedAt: string; exclusive?: boolean }
+export type CollectionTrigger = 'startup' | 'cli' | 'api';
+export interface StartCollectionRun extends CollectionScope { startedAt: string; exclusive?: boolean; trigger?: CollectionTrigger; requestId?: string }
 export interface FinishCollectionRun { runId: string; status: 'success' | 'partial' | 'failed'; finishedAt: string }
 
 export interface CommitStorageBatch {
@@ -81,7 +82,7 @@ const storageMessages: Record<StorageErrorCode, string> = {
 
 /** 드라이버 오류나 입력 원문을 보관하지 않는 공개 저장 오류. */
 export class StorageError extends Error {
-  constructor(readonly code: StorageErrorCode) {
+  constructor(readonly code: StorageErrorCode, readonly activeRunId?: string) {
     super(storageMessages[code]);
     this.name = 'StorageError';
   }
@@ -158,4 +159,7 @@ export function validateCommitBatch(input: CommitStorageBatch): void {
 export function validateStartRun(input: StartCollectionRun): void {
   validateScope(input);
   if (!validTimestamp(input.startedAt)) throw new StorageError('INVALID_INPUT');
+  if (input.trigger !== undefined && !['startup', 'cli', 'api'].includes(input.trigger)) throw new StorageError('INVALID_INPUT');
+  if (input.requestId !== undefined && !validText(input.requestId)) throw new StorageError('INVALID_INPUT');
+  if (input.requestId !== undefined && input.trigger !== 'api') throw new StorageError('INVALID_INPUT');
 }

@@ -64,5 +64,6 @@ export function createPostgresRecordQuery(connection: PostgresPlatformDbConnecti
   return {
     listRecords,
     async getRecord(id): Promise<QueryRecord | null> { validateRecordId(id); try { const result = await connection.withClient(client => client.query<RecordRow>(`SELECT id, plugin_id, source_id, data_type, external_key_type, external_key, source_values, first_seen_at, last_seen_at FROM platform_records WHERE id=$1`, [id])); return result.rows[0] ? record(result.rows[0]) : null; } catch (error) { throw failure(error); } },
+    async getLastSuccessAt(pluginId, sourceId) { try { const result = await connection.withClient(client => client.query<{ value: Date | string | null }>(`SELECT max(finished_at) AS value FROM collection_runs WHERE plugin_id=$1 AND source_id=$2 AND scope_type='full' AND status='success'`, [pluginId, sourceId])); const value = result.rows[0]?.value ?? null; return value === null ? null : timestamp(value); } catch (error) { throw failure(error); } },
   };
 }

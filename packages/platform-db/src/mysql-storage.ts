@@ -74,12 +74,12 @@ export function createMysqlRecordStorage(connection: MysqlPlatformDbConnection):
           try {
             const [active] = await client.query<RunRow[]>(`SELECT id FROM collection_runs WHERE scope_hash=?
               AND status='running' AND coordinated=1 AND heartbeat_at > UTC_TIMESTAMP(3) - INTERVAL 2 MINUTE LIMIT 1`, [hash]);
-            if (input.exclusive && active[0]) throw new StorageError('RUN_ALREADY_ACTIVE');
+            if (input.exclusive && active[0]) throw new StorageError('RUN_ALREADY_ACTIVE', active[0].id);
             await client.execute(`UPDATE collection_runs SET status='failed', finished_at=UTC_TIMESTAMP(3)
               WHERE scope_hash=? AND status='running' AND coordinated=1 AND ?=1`, [hash, input.exclusive ? 1 : 0]);
             await client.execute(`INSERT INTO collection_runs
-              (id, scope_hash, plugin_id, source_id, scope_type, scope_key, config_revision, started_at, heartbeat_at, coordinated)
-              VALUES (?,?,?,?,?,?,?,?,UTC_TIMESTAMP(3),?)`, [id, hash, ...scopeValues(input), new Date(input.startedAt), input.exclusive ? 1 : 0]);
+              (id, scope_hash, plugin_id, source_id, scope_type, scope_key, config_revision, started_at, heartbeat_at, coordinated, \`trigger\`, request_id)
+              VALUES (?,?,?,?,?,?,?,?,UTC_TIMESTAMP(3),?,?,?)`, [id, hash, ...scopeValues(input), new Date(input.startedAt), input.exclusive ? 1 : 0, input.trigger ?? 'cli', input.requestId ?? null]);
           } finally { await client.query('SELECT RELEASE_LOCK(?)', [lockName]).catch(() => undefined); }
         });
         return id;

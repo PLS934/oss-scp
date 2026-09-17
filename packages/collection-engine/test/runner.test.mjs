@@ -36,6 +36,13 @@ function batch(startCheckpoint, nextCheckpoint, records, collectedAt = '2026-09-
 }
 
 describe('runCollection', () => {
+  test('trigger와 API 요청 식별자를 저장 시작에만 전달한다', async () => {
+    const storage = createStorage();
+    await runCollection({ plugin, scope, storage, transform, trigger: 'api', requestId: 'request-1', collector: async () => {} });
+    expect(storage.calls.find(([name]) => name === 'startRun')[1]).toMatchObject({ trigger: 'api', requestId: 'request-1', exclusive: true });
+    expect(JSON.stringify(storage.calls.filter(([name]) => name !== 'startRun'))).not.toContain('request-1');
+  });
+
   test('저장된 opaque checkpoint부터 범용 collector를 실행하고 성공을 기록한다', async () => {
     const storage = createStorage({ cursor: 'saved' });
     const contexts = [];

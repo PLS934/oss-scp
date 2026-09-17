@@ -76,6 +76,12 @@ describe('실행 조립과 결과', () => {
     expect(await executeManualCollection({ args: ['sample-plugin'], root: '/repo', env: {}, signal: new AbortController().signal, dependencies: partial })).toMatchObject({ exitCode: 2, status: 'partial' });
   });
 
+  it('호출 경로의 trigger와 API 요청 식별자를 runner에 전달한다', async () => {
+    const deps = dependencies();
+    await executeManualCollection({ args: ['sample-plugin'], root: '/repo', env: {}, signal: new AbortController().signal, dependencies: deps, trigger: 'api', requestId: 'request-1' });
+    expect(deps.run).toHaveBeenCalledWith(expect.objectContaining({ trigger: 'api', requestId: 'request-1' }));
+  });
+
   it('설정 실패 전에 DB와 runner를 호출하지 않는다', async () => {
     const deps = dependencies({ validate: vi.fn(() => ({ ok: false, errors: [] })) });
     const outcome = await executeManualCollection({ args: ['sample-plugin'], root: '/repo', env: {}, signal: new AbortController().signal, dependencies: deps });

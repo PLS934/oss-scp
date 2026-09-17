@@ -13,6 +13,7 @@ try {
     root: configRoot(process.env),
     env: process.env,
     signal: controller.signal,
+    trigger: process.env.OSS_SCP_COLLECTION_TRIGGER === 'startup' ? 'startup' : 'cli',
   });
 } catch {
   outcome = { exitCode: 1, status: 'failed', errorCode: 'repository_config' };

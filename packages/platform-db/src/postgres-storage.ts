@@ -63,12 +63,12 @@ export function createPostgresRecordStorage(connection: PostgresPlatformDbConnec
             const active = await client.query(`SELECT id FROM collection_runs WHERE plugin_id=$1 AND source_id=$2
               AND scope_type=$3 AND scope_key=$4 AND status='running'
               AND coordinated AND heartbeat_at > now() - interval '2 minutes' LIMIT 1`, scopeValues(input).slice(0, 4));
-            if (input.exclusive && active.rows[0]) throw new StorageError('RUN_ALREADY_ACTIVE');
+            if (input.exclusive && active.rows[0]) throw new StorageError('RUN_ALREADY_ACTIVE', active.rows[0].id);
             await client.query(`UPDATE collection_runs SET status='failed', finished_at=now()
               WHERE plugin_id=$1 AND source_id=$2 AND scope_type=$3 AND scope_key=$4 AND status='running' AND coordinated AND $5::boolean`, [...scopeValues(input).slice(0, 4), input.exclusive === true]);
             const result = await client.query<{ id: string }>(`INSERT INTO collection_runs
-              (plugin_id, source_id, scope_type, scope_key, config_revision, started_at, heartbeat_at, coordinated)
-              VALUES ($1,$2,$3,$4,$5,$6,now(),$7) RETURNING id`, [...scopeValues(input), input.startedAt, input.exclusive === true]);
+              (plugin_id, source_id, scope_type, scope_key, config_revision, started_at, heartbeat_at, coordinated, trigger, request_id)
+              VALUES ($1,$2,$3,$4,$5,$6,now(),$7,$8,$9) RETURNING id`, [...scopeValues(input), input.startedAt, input.exclusive === true, input.trigger ?? 'cli', input.requestId ?? null]);
             await client.query('COMMIT');
             if (!result.rows[0]) throw new StorageError('PERSIST_FAILED');
             return result.rows[0].id;

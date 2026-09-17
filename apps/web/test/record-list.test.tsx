@@ -51,6 +51,14 @@ test('기본 컬럼 순서와 표시명만 렌더링한다', () => {
   expect(html).not.toContain('secret'); expect(html).not.toContain('not-visible'); expect(html).not.toContain('details');
 });
 
+test('플러그인 전체 동기화 범위와 실행 상태를 표시한다', () => {
+  const capability = { pluginId: menu.pluginId, available: true, canExecute: true, reason: null, currentRun: null, lastSuccessAt: '2026-09-11T01:02:00.000Z' } as const;
+  const html = render({ syncCapability: capability, syncBusy: false, onSync: vi.fn() });
+  expect(html).toContain('지금 동기화'); expect(html).toContain('활성화된 수집 대상 전체'); expect(html).toContain('마지막 성공');
+  const busy = render({ syncCapability: { ...capability, canExecute: false }, syncBusy: true });
+  expect(busy).toMatch(/<button[^>]*disabled=""[^>]*>동기화 중<\/button>/);
+});
+
 test('필터가 선언된 컬럼명만 필터 버튼으로 렌더링한다', () => {
   const filteredMenu: MenuItem = { ...menu, list: { ...menu.list, query: { searchEnabled: true, filters: [{ key: 'score', label: '점수', type: 'number', kind: 'numberRange' }] } } };
   const searchState: RecordSearchState = { query: filteredMenu.list.query!, q: '', appliedQ: '', draft: {}, error: null, setQ: vi.fn(), update: vi.fn(), clearFilter: vi.fn(), submitSearch: vi.fn(), clearSearch: vi.fn(), reset: vi.fn() };
@@ -117,10 +125,10 @@ test('로딩·빈 결과·조회 실패는 위치와 행을 보존하며 이동�
   const loading = render({ page: 2, loading: true });
   expect(loading).toContain('aria-label="2페이지" aria-current="page"');
   expect(loading).toContain('server-1');
-  expect(loading.match(/disabled=""/g)?.length).toBe(8);
+  expect(loading.match(/disabled=""/g)?.length).toBe(9);
   const empty = render({ result: result('success', false) });
   expect(empty).toContain('전체 0건');
-  expect(empty.match(/disabled=""/g)?.length).toBe(4);
+  expect(empty.match(/disabled=""/g)?.length).toBe(5);
   const failed = render({ page: 2, error: { kind: 'API_ERROR', message: '조회 실패' } });
   expect(failed).toContain('aria-label="2페이지" aria-current="page"');
   expect(failed).toContain('server-1');

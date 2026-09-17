@@ -25,7 +25,7 @@ async function bootstrap() {
   const connection = await selectPlatformDbAdapter(dbConfig.type, adapters).connect(dbConfig);
   const { query } = createPlatformRecordAdapters(dbConfig.type, connection);
   const startup = new StartupCollectionManager(configRoot);
-  const app = await NestFactory.create(AppModule.register(connection, query, registry, startup), { abortOnError: false });
+  const app = await NestFactory.create(AppModule.register(connection, query, registry, startup, undefined, { configRoot }), { abortOnError: false });
   app.enableShutdownHooks();
   try {
     await app.listen(port, host);
