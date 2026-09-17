@@ -20,7 +20,7 @@ CLI는 `OSS_SCP_CONFIG_ROOT`에 있는 `plugins/registry.json`과 `connections/r
 | `PLATFORM_DB_TLS_MODE` | `verify-full` 또는 `disable` |
 | `PLATFORM_DB_TLS_CA_FILE` | `verify-full`에서 사용할 CA 파일 |
 
-비밀번호·token·connection string은 Git의 plugin·Connection 파일이나 CLI 인자에 넣지 않는다. 현재 HTTP Connection 계약에는 인증 secret이 없으며, 인증 connector가 추가될 때 선언된 `secretRef` resolver를 별도 계약으로 연결한다. Kubernetes Secret이나 Compose secret은 `PLATFORM_DB_PASSWORD_FILE`이 가리키는 읽기 제한 파일로 마운트할 수 있다.
+비밀번호·token·connection string은 Git의 plugin·Connection 파일이나 CLI 인자에 넣지 않는다. HTTP Connection의 `config.auth`에는 실제 값 대신 환경변수 참조를 선언하며, CLI 프로세스가 수집 요청 직전에 값을 읽는다. Kubernetes Secret이나 Compose secret은 `PLATFORM_DB_PASSWORD_FILE`이 가리키는 읽기 제한 파일로 마운트할 수 있다.
 
 플랫폼 DB migration을 먼저 적용하고 플러그인 transform을 빌드한다.
 
@@ -34,6 +34,14 @@ OSS_SCP_CONFIG_ROOT="$PWD" pnpm collect -- sample1-offset-api
 
 ```sh
 OSS_SCP_CONFIG_ROOT="$PWD" pnpm collect -- vulnerabilities-http-csv
+```
+
+인증 HTTP Connection을 로컬에서 수집할 때는 Connection에 선언한 이름으로 환경변수를 전달합니다.
+
+```sh
+PARTNER_API_TOKEN='issued-token' \
+  OSS_SCP_CONFIG_ROOT="$PWD" \
+  pnpm collect -- partner-plugin
 ```
 
 실제 PostgreSQL과 mock API를 연결한 전체 프로세스 검증은 Docker가 실행 중인 개발 환경에서 다음 명령으로 수행한다. 이 검사는 sample1의 72건 offset 수집과 HTTP CSV의 53건·3묶음 수집, 동일 원천 재실행, 저장 실패 후 checkpoint 재개, 가공 오류 격리와 원천 종료 후 저장 데이터 조회를 확인한다. MySQL에서는 `pnpm test:integration:sample1:mysql`로 같은 저장·재개 계약을 검증한다.
@@ -51,6 +59,22 @@ HTTP CSV checkpoint는 저장이 완료된 행 수다. 재개할 때 원천 CSV�
 ```sh
 docker compose run --rm api node node_modules/@oss-scp/collector-cli/dist/process.js sample1-offset-api
 ```
+
+Compose의 API 및 일회성 CLI에 같은 인증값을 전달하려면 운영용 override에서 명시적으로 매핑합니다. `${...:?}`를 사용하면 호스트 변수가 없을 때 Compose가 실행 전에 실패합니다.
+
+```yaml
+services:
+  api:
+    environment:
+      PARTNER_API_TOKEN: ${PARTNER_API_TOKEN:?PARTNER_API_TOKEN must be set}
+```
+
+```sh
+PARTNER_API_TOKEN='issued-token' docker compose run --rm api \
+  node node_modules/@oss-scp/collector-cli/dist/process.js partner-plugin
+```
+
+`docker compose run -e PARTNER_API_TOKEN ...` 형태로 일회성 실행에만 전달할 수도 있습니다. 값은 Compose 파일에 직접 적거나 이미지에 포함하지 않습니다.
 
 API 이미지의 기본 `CMD`는 계속 NestJS 서버를 실행한다. 수동 CLI는 별도 명령을 지정했을 때만 실행된다.
 

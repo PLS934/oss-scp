@@ -29,6 +29,7 @@ import type {
 export type * from './types';
 export { isLivePostgresDefinition, validateReadQuery } from './source-loaders/db';
 export { resolveSecret } from './secrets';
+export { HttpAuthenticationError, resolveHttpAuthenticationHeaders } from './http-auth';
 
 interface Registry {
   plugins?: string[];
@@ -594,6 +595,7 @@ function loadPlugins(
       connection: {
         id: connection.value.id,
         baseUrl: connection.value.config.baseUrl,
+        ...(connection.value.config.auth ? { auth: connection.value.config.auth } : {}),
       },
       request: {
         method: sourceValue.method,

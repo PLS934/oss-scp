@@ -175,6 +175,44 @@ export const customPluginViews: CustomPluginViewRegistry = {
 
 ## 설정과 가공 모듈 검증
 
+### HTTP Connection 인증
+
+HTTP JSON과 HTTP CSV Connection은 선택적인 `config.auth`로 인증값의 **환경변수 이름만** 선언할 수 있습니다. 실제 API key, token, 사용자명, 비밀번호를 Connection JSON이나 plugin 파일에 저장하지 않습니다. 지원 방식은 사용자 지정 API key 헤더, 이미 발급된 Bearer token, Basic 인증입니다.
+
+```json
+{
+  "apiVersion": "oss-scp/connection-v1",
+  "id": "partner-api",
+  "connector": "http",
+  "config": {
+    "baseUrl": "https://api.example.com",
+    "auth": {
+      "type": "apiKey",
+      "header": "X-API-Key",
+      "valueRef": { "env": "PARTNER_API_KEY" }
+    }
+  }
+}
+```
+
+Bearer와 Basic 인증은 각각 다음 형태입니다.
+
+```json
+{ "type": "bearer", "tokenRef": { "env": "PARTNER_API_TOKEN" } }
+```
+
+```json
+{
+  "type": "basic",
+  "usernameRef": { "env": "PARTNER_API_USER" },
+  "passwordRef": { "env": "PARTNER_API_PASSWORD" }
+}
+```
+
+환경변수 이름은 대문자·숫자·밑줄 형식이어야 합니다. 값은 실제 수집 프로세스가 요청을 시작할 때 읽습니다. 필수 변수가 없거나 빈 값이면 외부 요청 전에 실패하고 변수명만 오류에 포함됩니다. 인증 설정과 해석된 헤더는 브라우저의 플러그인·메뉴 API에 공개되지 않습니다. `auth`가 없는 기존 Connection은 인증 헤더 없이 이전과 동일하게 동작합니다.
+
+이 계약은 미리 발급된 고정 credential만 사용합니다. 로그인 API를 호출한 token 발급, OAuth token 갱신, 요청별 서명은 지원하지 않습니다.
+
 ```bash
 pnpm build:plugin-transforms
 pnpm --filter @oss-scp/plugin-config build

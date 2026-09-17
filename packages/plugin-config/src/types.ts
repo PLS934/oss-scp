@@ -122,8 +122,14 @@ export interface HttpConnectionConfig {
   apiVersion: 'oss-scp/connection-v1';
   id: string;
   connector: 'http';
-  config: { baseUrl: string };
+  config: { baseUrl: string; auth?: HttpAuthentication };
 }
+
+export type EnvironmentReference = { env: string };
+export type HttpAuthentication =
+  | { type: 'apiKey'; header: string; valueRef: EnvironmentReference }
+  | { type: 'bearer'; tokenRef: EnvironmentReference }
+  | { type: 'basic'; usernameRef: EnvironmentReference; passwordRef: EnvironmentReference };
 
 export type SecretReference = { env: string } | { file: string };
 export interface PostgresConnectionConfig {
@@ -136,7 +142,7 @@ export type ConnectionConfig = HttpConnectionConfig | PostgresConnectionConfig;
 
 export interface CollectionDefinitionBase {
   plugin: PluginRuntimeDefinition;
-  connection: { id: string; baseUrl: string };
+  connection: { id: string; baseUrl: string; auth?: HttpAuthentication };
   request: { method: 'GET'; path: string; format: 'json' };
 }
 
@@ -167,7 +173,7 @@ export interface LocalCsvCollectionDefinition {
 
 export interface HttpCsvCollectionDefinition {
   plugin: PluginRuntimeDefinition;
-  connection: { id: string; baseUrl: string };
+  connection: { id: string; baseUrl: string; auth?: HttpAuthentication };
   request: { transport: 'http'; method: 'GET'; path: string; format: 'csv' };
   batching: { size: number };
   limits: HttpCsvSourceConfig['limits'];
