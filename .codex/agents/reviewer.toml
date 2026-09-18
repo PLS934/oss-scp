@@ -20,4 +20,3 @@ Return exactly one verdict:
 
 Approval means ready for remote CI, not permission to merge.
 """
-

@@ -21,4 +21,3 @@ cleanup. If the issue is ambiguous, already has an active PR, depends on
 unfinished work, or requires a high-impact product/security decision, return
 BLOCKED with concrete evidence.
 """
-

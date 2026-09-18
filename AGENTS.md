@@ -29,4 +29,3 @@ additional issues.
 - Do not run remote integration CI until the required reviewers approve.
 - After OpenSpec sync and archive, run remote integration CI again against the
   new exact PR head SHA. Merge only that verified SHA.
-
