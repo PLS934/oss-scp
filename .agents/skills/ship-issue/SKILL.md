@@ -87,6 +87,11 @@ or substitute the newest unmatched run. After success, fetch the PR again and
 require its current head SHA to equal the captured SHA; otherwise discard the
 result and restart review at the new SHA.
 
+Also fetch the latest commit status with context `agent-gated/integration-ci`
+for the captured SHA. Require state `success` and require its target URL to
+reference the exact watched run. A successful run without the matching commit
+status is not a passed gate.
+
 On failure, read the failing job logs. Delegate an in-scope failure caused by
 the PR to `implementer`, run focused local checks, commit and push, and restart
 at the review loop. If fixing it would exceed scope or the failure is external,
@@ -130,6 +135,8 @@ read:
 - the associated OpenSpec change is archived, or the locked scope recorded
   that no change existed;
 - final manually dispatched CI concluded `success` for that exact SHA.
+- commit status `agent-gated/integration-ci` is `success` for that exact SHA and
+  links to the final watched run.
 
 If any condition is false or unknown, do not merge. Otherwise merge using the
 repository's configured merge method, confirm the PR is merged, and report the

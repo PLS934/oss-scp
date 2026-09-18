@@ -18,7 +18,6 @@ on:
         type: string
 permissions:
   contents: read
-  pull-requests: read
 concurrency:
   group: integration-ci-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
@@ -26,6 +25,9 @@ jobs:
   dispatch-guard:
     name: 수동 실행 대상 검증
     runs-on: ubuntu-24.04
+    permissions:
+      pull-requests: read
+      statuses: write
     steps:
       - name: PR head SHA 확인
         if: github.event_name == 'workflow_dispatch'
@@ -58,6 +60,20 @@ jobs:
             echo "PR head가 요청한 SHA와 다릅니다: expected=$EXPECTED_SHA actual=$actual_sha" >&2
             exit 1
           fi
+      - name: PR에 CI 실행 중 상태 기록
+        if: github.event_name == 'workflow_dispatch'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          EXPECTED_SHA: ${{ inputs.expected_sha }}
+          RUN_URL: https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          gh api \
+            --method POST \
+            "repos/${GITHUB_REPOSITORY}/statuses/${EXPECTED_SHA}" \
+            -f state=pending \
+            -f context='agent-gated/integration-ci' \
+            -f description='에이전트 리뷰 완료 · 수동 CI 실행 중' \
+            -f target_url="$RUN_URL"
   mysql:
     name: MySQL 8.4.6 연결 및 migration
     needs: dispatch-guard
@@ -174,3 +190,49 @@ jobs:
       - run: pnpm test:docker:external-db
       - run: pnpm test:docker:mysql
       - run: pnpm test:docker:mock
+  report-status:
+    name: PR CI 상태 기록
+    needs:
+      - dispatch-guard
+      - mysql
+      - postgres
+      - local
+      - docker
+    if: ${{ always() && github.event_name == 'workflow_dispatch' && needs.dispatch-guard.result == 'success' }}
+    runs-on: ubuntu-24.04
+    permissions:
+      statuses: write
+    steps:
+      - name: PR에 최종 CI 상태 기록
+        env:
+          GH_TOKEN: ${{ github.token }}
+          EXPECTED_SHA: ${{ inputs.expected_sha }}
+          RUN_URL: https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          MYSQL_RESULT: ${{ needs.mysql.result }}
+          POSTGRES_RESULT: ${{ needs.postgres.result }}
+          LOCAL_RESULT: ${{ needs.local.result }}
+          DOCKER_RESULT: ${{ needs.docker.result }}
+        run: |
+          state=success
+          description='에이전트 승인 SHA의 수동 CI 성공'
+
+          for result in \
+            "$MYSQL_RESULT" \
+            "$POSTGRES_RESULT" \
+            "$LOCAL_RESULT" \
+            "$DOCKER_RESULT"
+          do
+            if [[ "$result" != "success" ]]; then
+              state=failure
+              description='수동 CI 실패 · 실행 결과 확인 필요'
+              break
+            fi
+          done
+
+          gh api \
+            --method POST \
+            "repos/${GITHUB_REPOSITORY}/statuses/${EXPECTED_SHA}" \
+            -f state="$state" \
+            -f context='agent-gated/integration-ci' \
+            -f description="$description" \
+            -f target_url="$RUN_URL"

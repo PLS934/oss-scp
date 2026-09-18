@@ -10,6 +10,10 @@ test('통합 CI는 리뷰 후 수동 실행과 재사용 진입점 및 네 job�
   assert.match(workflow, /pr_number:[\s\S]*expected_sha:/);
   assert.match(workflow, /actual_sha[\s\S]*EXPECTED_SHA/);
   assert.match(workflow, /ref: \$\{\{ github\.event_name == 'workflow_dispatch' && inputs\.expected_sha \|\| github\.sha \}\}/);
+  assert.match(workflow, /context='agent-gated\/integration-ci'/);
+  assert.match(workflow, /state=pending/);
+  assert.match(workflow, /report-status:[\s\S]*statuses: write/);
+  assert.match(workflow, /needs\.docker\.result/);
   assert.match(workflow, /pnpm test:docker:release/);
 });
 
