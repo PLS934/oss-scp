@@ -1,10 +1,4 @@
-# server-plugin-deployment Specification
-
-## Purpose
-
-플랫폼 이미지와 운영자 서버 플러그인 revision을 분리하면서도 검증된 조합만 기동·수집·화면 구성에 사용하도록 안전한 배포 계약을 제공한다.
-
-## Requirements
+## MODIFIED Requirements
 
 ### Requirement: 외부 서버 플러그인 설정 루트
 플랫폼은 plugin·Connection registry, 선언 파일, 사전 빌드된 JavaScript 모듈과 선택적 사전 빌드 UI 산출물을 포함하는 외부 설정 루트를 SHALL 입력받아야 한다. 배포 환경에서 설정 루트는 플랫폼 이미지 밖의 운영자 관리 디렉터리여야 하며(MUST), 읽기 전용으로 주입되어야 한다(MUST).
@@ -59,22 +53,20 @@
 - **WHEN** API가 정상 기동한 뒤 운영자가 외부 설정 또는 UI 파일을 수정하거나 교체한다
 - **THEN** 현재 프로세스의 수집 정의·메뉴 산출물·UI descriptor는 바뀌지 않고 재기동 후 새 revision의 전체 검증이 성공해야 변경이 반영된다
 
-### Requirement: 운영 시 코드 생성과 동적 설치 금지
-플랫폼은 운영 시점에 TypeScript를 transpile하거나 플러그인별 의존성을 설치하거나 원격 코드를 다운로드해서는 안 된다(MUST NOT). 운영 중 웹 UI를 통한 플러그인 설치·수정·교체도 제공하지 않아야 한다(MUST NOT).
+## REMOVED Requirements
 
-#### Scenario: TypeScript 모듈 등록
-- **WHEN** 운영 플러그인이 TypeScript 파일을 실행 모듈로 참조한다
-- **THEN** 플랫폼은 이를 변환하거나 실행하지 않고 사전 빌드된 JavaScript가 필요하다는 설정 오류로 거부한다
+### Requirement: 사용자 정의 React 화면의 빌드 결합 유지
+**Reason**: 지원 계약으로 사전 빌드하고 기동 전에 검증한 UI는 플랫폼 웹 이미지와 독립적으로 배포할 수 있게 하므로 외부 UI의 전면 금지를 제거한다.
 
-#### Scenario: 선언되지 않은 런타임 의존성
-- **WHEN** 사전 빌드 모듈이 플랫폼 이미지에 없는 패키지를 import한다
-- **THEN** 플랫폼은 패키지를 설치하지 않고 기동 전 모듈 검증을 실패한다
+**Migration**: 선언형 화면만 사용하는 플러그인은 변경하지 않는다. 기존 정적 사용자 정의 화면은 공통 빌드 산출물과 UI manifest로 이전해 서버 설정·transform과 같은 플러그인 revision에 포함한다.
+
+## ADDED Requirements
 
 ### Requirement: 사용자 정의 React 화면을 선택적으로 독립 배포한다
 외부 서버 플러그인은 선언형 메뉴·목록·상세만 제공하거나, 같은 플러그인 revision에 지원 계약으로 사전 빌드한 사용자 정의 React UI를 선택적으로 포함할 수 있어야 한다(SHALL). 플랫폼은 검증 완료된 UI만 브라우저에 제공해야 하며(MUST), React 원본이나 임의 프론트엔드 번들을 런타임에 변환·전달·실행해서는 안 된다(MUST NOT).
 
 #### Scenario: 선언형 화면 사용
-- **WHEN** 외부 플러그인이 유효한 메뉴와 기본 목록·상세 정의를 제공한다
+- **WHEN** 외부 플러그인이 유효한 메뉴와 기본 목록·상세 정의만 제공한다
 - **THEN** 플랫폼은 별도 UI 빌드를 요구하지 않고 공통 클라이언트 renderer에서 해당 정의를 사용한다
 
 #### Scenario: 사전 빌드 사용자 정의 화면 사용
