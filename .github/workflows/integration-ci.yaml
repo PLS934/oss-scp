@@ -1,6 +1,6 @@
 # 검증 환경: Ubuntu 24.04 (linux/amd64). 실행 결과는 Actions와 PR에서 확인합니다.
 name: 서버·클라이언트 통합 검증
-run-name: ${{ github.event_name == 'workflow_dispatch' && format('PR #{0} · {1}', inputs.pr_number, inputs.expected_sha) || github.workflow }}
+run-name: "${{ github.event_name == 'workflow_dispatch' && format('PR #{0} · {1}', inputs.pr_number, inputs.expected_sha) || github.workflow }}"
 on:
   workflow_call:
   push:
