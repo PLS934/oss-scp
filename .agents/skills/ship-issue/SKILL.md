@@ -67,7 +67,9 @@ dispatch remote CI while an actionable review finding remains.
 ## 4. Dispatch and verify remote CI
 
 Capture the PR number, head branch, and exact 40-character head SHA. Confirm the
-working tree is clean and the remote PR head equals the local head. Dispatch:
+working tree is clean and the remote PR head equals the local head. Before
+dispatch, list and retain the IDs of all existing runs for this workflow. Then
+dispatch:
 
 ```bash
 gh workflow run integration-ci.yaml \
@@ -76,12 +78,14 @@ gh workflow run integration-ci.yaml \
   -f expected_sha="<head-sha>"
 ```
 
-Find the workflow-dispatch run whose display title contains both the PR number
-and exact SHA. Watch that exact run ID to completion and require its reported
-`headSha` to remain equal to the captured SHA. Never substitute the newest
-unmatched run. After success, fetch the PR again and require its current head
-SHA to equal the captured SHA; otherwise discard the result and restart review
-at the new SHA.
+Poll for workflow-dispatch runs whose display title contains both the PR number
+and exact SHA, whose `headSha` equals the captured SHA, and whose ID was not in
+the pre-dispatch snapshot. Require exactly one new match; stop rather than guess
+if multiple runs match. Watch that exact run ID to completion and require its
+reported `headSha` to remain equal to the captured SHA. Never reuse an older run
+or substitute the newest unmatched run. After success, fetch the PR again and
+require its current head SHA to equal the captured SHA; otherwise discard the
+result and restart review at the new SHA.
 
 On failure, read the failing job logs. Delegate an in-scope failure caused by
 the PR to `implementer`, run focused local checks, commit and push, and restart
@@ -102,12 +106,13 @@ and archive results, and push without force.
 
 ## 6. Final review and final CI
 
-Capture the post-archive PR head SHA and delegate the complete new diff to
-`reviewer` again. The reviewer must confirm that the new commit contains only
-the expected spec sync/archive result and return APPROVED for this exact SHA.
-If it finds any product-code change or another actionable finding, return to the
-review loop. After approval, dispatch the workflow again using step 4. Require
-the exact run to succeed and re-check that the PR head has not changed.
+Capture the post-archive PR head SHA and re-run every reviewer that was required
+in step 3 against the complete new diff. Each reviewer must confirm that the new
+commit contains only the expected spec sync/archive result and return APPROVED
+for this exact SHA. If any reviewer finds a product-code change or another
+actionable finding, return to the review loop. After all required reviewers
+approve, dispatch the workflow again using step 4. Require the exact run to
+succeed and re-check that the PR head has not changed.
 
 Refresh unresolved review threads and review state. If a new actionable comment
 exists, triage it, return to the review loop when a fix is needed, and repeat
