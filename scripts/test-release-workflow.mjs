@@ -3,9 +3,13 @@ import { readFileSync } from 'node:fs';
 import test from 'node:test';
 import { releaseNotes } from './release-notes.mjs';
 
-test('통합 CI는 기존 trigger와 재사용 진입점 및 네 job을 유지한다', () => {
+test('통합 CI는 리뷰 후 수동 실행과 재사용 진입점 및 네 job을 유지한다', () => {
   const workflow = readFileSync('.github/workflows/integration-ci.yaml', 'utf8');
-  for (const text of ['workflow_call:', 'push:', 'pull_request:', 'workflow_dispatch:', 'mysql:', 'postgres:', 'local:', 'docker:']) assert.match(workflow, new RegExp(`\\b${text.replace(':', '')}:`));
+  for (const text of ['workflow_call:', 'push:', 'workflow_dispatch:', 'dispatch-guard:', 'mysql:', 'postgres:', 'local:', 'docker:']) assert.match(workflow, new RegExp(`\\b${text.replace(':', '')}:`));
+  assert.doesNotMatch(workflow, /\bpull_request:/);
+  assert.match(workflow, /pr_number:[\s\S]*expected_sha:/);
+  assert.match(workflow, /actual_sha[\s\S]*EXPECTED_SHA/);
+  assert.match(workflow, /ref: \$\{\{ github\.event_name == 'workflow_dispatch' && inputs\.expected_sha \|\| github\.sha \}\}/);
   assert.match(workflow, /pnpm test:docker:release/);
 });
 
