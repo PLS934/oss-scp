@@ -67,20 +67,21 @@ dispatch remote CI while an actionable review finding remains.
 ## 4. Dispatch and verify remote CI
 
 Capture the PR number, head branch, and exact 40-character head SHA. Confirm the
-working tree is clean and the remote PR head equals the local head. Record the
-UTC dispatch start time, then dispatch:
+working tree is clean and the remote PR head equals the local head. Dispatch:
 
 ```bash
-gh workflow run integration-ci.yaml --ref "<head-branch>"
+gh workflow run integration-ci.yaml \
+  --ref "<head-branch>" \
+  -f pr_number="<pr-number>" \
+  -f expected_sha="<head-sha>"
 ```
 
-Find runs created after the recorded start time with event `workflow_dispatch`,
-the exact head branch, and `headSha` equal to the captured SHA. Require exactly
-one match; stop rather than guessing if matching is ambiguous. Watch that run ID
-to completion and require its reported `headSha` to remain equal to the captured
-SHA. Never substitute the newest unmatched run. After success, fetch the PR
-again and require its current head SHA to equal the captured SHA; otherwise
-discard the result and restart review at the new SHA.
+Find the workflow-dispatch run whose display title contains both the PR number
+and exact SHA. Watch that exact run ID to completion and require its reported
+`headSha` to remain equal to the captured SHA. Never substitute the newest
+unmatched run. After success, fetch the PR again and require its current head
+SHA to equal the captured SHA; otherwise discard the result and restart review
+at the new SHA.
 
 On failure, read the failing job logs. Delegate an in-scope failure caused by
 the PR to `implementer`, run focused local checks, commit and push, and restart
@@ -91,8 +92,9 @@ report the evidence and stop.
 
 Only after first CI succeeds for the current SHA, run the existing
 `openspec-sync-specs` workflow for the locked change and verify the resulting
-main specs. Then run `openspec-archive-change` for the same change. Do both
-synchronously.
+main specs. Then invoke `openspec-archive-change` for the same change with the
+preauthorized choice `Archive now`; the explicit `ship-issue` invocation is the
+user authorization for that choice. Do both synchronously.
 
 If no OpenSpec change was associated at scope lock, skip this stage and state
 that explicitly. Do not select a different active change. Commit only the sync
@@ -100,10 +102,12 @@ and archive results, and push without force.
 
 ## 6. Final review and final CI
 
-Confirm that the post-archive commit contains no product-code change. If it
-does, return to the review loop. Capture the new exact PR head SHA and dispatch
-the workflow again using step 4. Require the exact run to succeed and re-check
-that the PR head has not changed.
+Capture the post-archive PR head SHA and delegate the complete new diff to
+`reviewer` again. The reviewer must confirm that the new commit contains only
+the expected spec sync/archive result and return APPROVED for this exact SHA.
+If it finds any product-code change or another actionable finding, return to the
+review loop. After approval, dispatch the workflow again using step 4. Require
+the exact run to succeed and re-check that the PR head has not changed.
 
 Refresh unresolved review threads and review state. If a new actionable comment
 exists, triage it, return to the review loop when a fix is needed, and repeat

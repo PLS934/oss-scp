@@ -16,7 +16,7 @@ Archive a completed change in the experimental workflow.
 
 `<capability-path>` is the spec directory relative to `specs/` (for example, `user-auth` or `identity/user-auth`). Preserve the full path from each delta spec when resolving its main spec.
 
-**Input**: Optionally specify a change name. If omitted, check if it can be inferred from conversation context. If vague or ambiguous you MUST prompt for available changes.
+**Input**: Optionally specify a change name. If omitted, check if it can be inferred from conversation context. If vague or ambiguous you MUST prompt for available changes. A caller may also pass one exact preauthorized step 4 choice when the user explicitly approved a larger workflow that includes archiving. Record that choice and use it only for the named change; it does not bypass any completion, comparison, validation, or conflict check.
 
 **Steps**
 
@@ -101,6 +101,11 @@ Archive a completed change in the experimental workflow.
    **Prompt options:**
    - If changes needed: "Sync now (recommended)", "Archive without syncing"
    - If already synced: "Archive now", "Sync anyway", "Cancel"
+
+   If the caller supplied a preauthorized choice and that exact option is valid
+   for the comparison result, show the combined summary, state that the caller's
+   preauthorized choice will be used, and continue without another prompt. If it
+   is not valid for the current result, ignore it and prompt normally.
 
    Route on the answer:
    - "Cancel" — stop, do not archive

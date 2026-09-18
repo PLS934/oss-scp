@@ -1,24 +1,72 @@
 # 검증 환경: Ubuntu 24.04 (linux/amd64). 실행 결과는 Actions와 PR에서 확인합니다.
 name: 서버·클라이언트 통합 검증
+run-name: ${{ github.event_name == 'workflow_dispatch' && format('PR #{0} · {1}', inputs.pr_number, inputs.expected_sha) || github.workflow }}
 on:
   workflow_call:
   push:
     branches:
       - main
-  pull_request:
   workflow_dispatch:
+    inputs:
+      pr_number:
+        description: 검증할 PR 번호
+        required: true
+        type: number
+      expected_sha:
+        description: 검증할 PR head commit SHA
+        required: true
+        type: string
 permissions:
   contents: read
+  pull-requests: read
 concurrency:
   group: integration-ci-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 jobs:
+  dispatch-guard:
+    name: 수동 실행 대상 검증
+    runs-on: ubuntu-24.04
+    steps:
+      - name: PR head SHA 확인
+        if: github.event_name == 'workflow_dispatch'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ inputs.pr_number }}
+          EXPECTED_SHA: ${{ inputs.expected_sha }}
+        run: |
+          if [[ ! "$EXPECTED_SHA" =~ ^[0-9a-f]{40}$ ]]; then
+            echo "expected_sha는 40자리 소문자 commit SHA여야 합니다." >&2
+            exit 1
+          fi
+
+          pr_json="$(gh api "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}")"
+          actual_sha="$(jq -r '.head.sha' <<<"$pr_json")"
+          base_ref="$(jq -r '.base.ref' <<<"$pr_json")"
+          head_repo="$(jq -r '.head.repo.full_name' <<<"$pr_json")"
+          state="$(jq -r '.state' <<<"$pr_json")"
+          draft="$(jq -r '.draft' <<<"$pr_json")"
+
+          if [[ "$state" != "open" || "$draft" == "true" ]]; then
+            echo "열린 non-draft PR만 검증할 수 있습니다." >&2
+            exit 1
+          fi
+          if [[ "$base_ref" != "main" || "$head_repo" != "$GITHUB_REPOSITORY" ]]; then
+            echo "이 저장소의 main을 대상으로 하는 내부 브랜치 PR만 검증할 수 있습니다." >&2
+            exit 1
+          fi
+          if [[ "$actual_sha" != "$EXPECTED_SHA" ]]; then
+            echo "PR head가 요청한 SHA와 다릅니다: expected=$EXPECTED_SHA actual=$actual_sha" >&2
+            exit 1
+          fi
   mysql:
     name: MySQL 8.4.6 연결 및 migration
+    needs: dispatch-guard
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v7.0.1
+        with:
+          ref: ${{ github.event_name == 'workflow_dispatch' && inputs.expected_sha || github.sha }}
       - uses: pnpm/action-setup@v6.1.0
       - uses: actions/setup-node@v7.0.0
         with:
@@ -39,10 +87,13 @@ jobs:
           path: test-results/record-search-mysql.json
   postgres:
     name: PostgreSQL 17.6 연결 및 migration
+    needs: dispatch-guard
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v7.0.1
+        with:
+          ref: ${{ github.event_name == 'workflow_dispatch' && inputs.expected_sha || github.sha }}
       - uses: pnpm/action-setup@v6.1.0
       - uses: actions/setup-node@v7.0.0
         with:
@@ -66,10 +117,13 @@ jobs:
           path: test-results/record-search-postgres.json
   local:
     name: 로컬 개발 및 배포 빌드
+    needs: dispatch-guard
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v7.0.1
+        with:
+          ref: ${{ github.event_name == 'workflow_dispatch' && inputs.expected_sha || github.sha }}
       - uses: pnpm/action-setup@v6.1.0
       - uses: actions/setup-node@v7.0.0
         with:
@@ -95,10 +149,13 @@ jobs:
       - run: pnpm test:browser
   docker:
     name: Docker 빌드 및 실행
+    needs: dispatch-guard
     runs-on: ubuntu-24.04
     timeout-minutes: 40
     steps:
       - uses: actions/checkout@v7.0.1
+        with:
+          ref: ${{ github.event_name == 'workflow_dispatch' && inputs.expected_sha || github.sha }}
       - uses: pnpm/action-setup@v6.1.0
       - uses: actions/setup-node@v7.0.0
         with:
