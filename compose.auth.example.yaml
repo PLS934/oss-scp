@@ -1,0 +1,17 @@
+# 인증 활성화 예시 overlay:
+# docker compose -f compose.yaml -f compose.auth.example.yaml up -d
+services:
+  api:
+    environment:
+      AUTH_ENABLED: "true"
+      LDAP_URL: ${LDAP_URL:?LDAP_URL must be set}
+      LDAP_BIND_DN: ${LDAP_BIND_DN:?LDAP_BIND_DN must be set}
+      LDAP_BIND_PASSWORD_FILE: /run/secrets/ldap-bind-password
+      LDAP_USER_SEARCH_BASE_DN: ${LDAP_USER_SEARCH_BASE_DN:?LDAP_USER_SEARCH_BASE_DN must be set}
+      LDAP_USER_SEARCH_FILTER: ${LDAP_USER_SEARCH_FILTER:?LDAP_USER_SEARCH_FILTER must be set}
+      LDAP_USER_ID_ATTRIBUTE: ${LDAP_USER_ID_ATTRIBUTE:?LDAP_USER_ID_ATTRIBUTE must be set}
+      AUTH_SESSION_SECRET_FILE: /run/secrets/auth-session-secret
+      AUTH_SESSION_TTL_SECONDS: ${AUTH_SESSION_TTL_SECONDS:-28800}
+    volumes:
+      - ${LDAP_BIND_PASSWORD_PATH:?LDAP_BIND_PASSWORD_PATH must be set}:/run/secrets/ldap-bind-password:ro
+      - ${AUTH_SESSION_SECRET_PATH:?AUTH_SESSION_SECRET_PATH must be set}:/run/secrets/auth-session-secret:ro

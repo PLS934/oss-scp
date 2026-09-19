@@ -5,11 +5,16 @@ import { loadEnvFile } from 'node:process';
 import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module';
 import { readConfig } from './config';
-import { createPlatformRecordAdapters, mysqlAdapter, postgresAdapter, readPlatformDbConfig, selectPlatformDbAdapter } from '@oss-scp/platform-db';
+import { createMysqlAuthSessionRepository, createPlatformRecordAdapters, createPostgresAuthSessionRepository, mysqlAdapter, postgresAdapter, readPlatformDbConfig, selectPlatformDbAdapter } from '@oss-scp/platform-db';
+import type { MysqlPlatformDbConnection, PostgresPlatformDbConnection } from '@oss-scp/platform-db';
 import { preflightConfiguration } from '@oss-scp/plugin-config';
 import { formatConfigurationIssues } from './configuration-errors';
 import { createPluginRuntimeRegistry } from './plugin-runtime-registry';
 import { StartupCollectionManager } from './startup-collection';
+import { readAuthConfig } from './auth-config';
+import { AuthSessionManager } from './auth-session';
+import { LdapAuthenticator } from './ldap-authenticator';
+import { LoginRateLimiter } from './login-rate-limit';
 
 async function bootstrap() {
   const envFile = resolve(__dirname, '../../../.env');
@@ -24,8 +29,20 @@ async function bootstrap() {
   const dbConfig = readPlatformDbConfig(process.env, adapters);
   const connection = await selectPlatformDbAdapter(dbConfig.type, adapters).connect(dbConfig);
   const { query } = createPlatformRecordAdapters(dbConfig.type, connection);
+  const authConfig = readAuthConfig();
+  const auth = authConfig.enabled ? (() => {
+    const sessions = dbConfig.type === 'postgres'
+      ? createPostgresAuthSessionRepository(connection as PostgresPlatformDbConnection)
+      : createMysqlAuthSessionRepository(connection as MysqlPlatformDbConnection);
+    return {
+      config: authConfig,
+      authenticator: new LdapAuthenticator(authConfig.ldap),
+      sessions: new AuthSessionManager(sessions, authConfig.session.secret, authConfig.session.ttlSeconds),
+      rateLimiter: new LoginRateLimiter(authConfig.session.secret),
+    };
+  })() : { config: authConfig };
   const startup = new StartupCollectionManager(configRoot);
-  const app = await NestFactory.create(AppModule.register(connection, query, registry, startup, undefined, { configRoot }), { abortOnError: false });
+  const app = await NestFactory.create(AppModule.register(connection, query, registry, startup, undefined, { configRoot }, auth), { abortOnError: false });
   app.enableShutdownHooks();
   try {
     await app.listen(port, host);

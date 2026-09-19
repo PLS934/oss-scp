@@ -24,7 +24,7 @@ function aborted(error: unknown, signal?: AbortSignal) { return signal?.aborted 
 async function json<T>(url: string, validate: (value: unknown) => value is T, options: ManualSyncOptions, init?: RequestInit): Promise<ManualSyncResult<T>> {
   if (options.signal?.aborted) return { ok: false, error: { kind: 'ABORTED', message: messages.ABORTED } };
   try {
-    const response = await (options.request ?? fetch)(url, { ...init, signal: options.signal });
+    const response = await (options.request ?? authenticatedFetch)(url, { ...init, signal: options.signal });
     let body: unknown; try { body = await response.json(); } catch { body = undefined; }
     if (!response.ok) {
       const kind: ManualSyncErrorKind = response.status === 403 ? 'FORBIDDEN' : response.status === 409 ? 'CONFLICT' : response.status === 404 ? 'NOT_FOUND' : 'API_ERROR';
@@ -43,3 +43,4 @@ export function scheduleManualSyncPoll(requestId: string, delayMs: number, onRes
   const timer = setTimeout(() => { void request(requestId, { signal: controller.signal }).then(result => { if (!controller.signal.aborted) onResult(result); }); }, delayMs);
   return () => { clearTimeout(timer); controller.abort(); };
 }
+import { authenticatedFetch } from './auth-client';

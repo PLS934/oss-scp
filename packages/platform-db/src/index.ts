@@ -24,5 +24,7 @@ export { createPostgresRecordQuery } from './postgres-query';
 export { createMysqlRecordQuery } from './mysql-query';
 export { createPlatformRecordAdapters } from './records';
 export type { PlatformRecordAdapters } from './records';
+export { createPostgresAuthSessionRepository, createMysqlAuthSessionRepository } from './sessions';
+export type { AuthSession, AuthSessionRepository } from './sessions';
 
 export * from "./conditions";

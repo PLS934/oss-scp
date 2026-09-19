@@ -33,7 +33,7 @@ LDAPS만 지원하는 대안은 단순하지만 389/StartTLS를 표준으로 쓰
 
 ### 검색 후 사용자 DN Bind를 사용한다
 
-서비스 Bind 연결에서 RFC 4515 escaping한 로그인 값을 설정 filter의 `{{login}}`에 대입하고 search base 아래를 검색한다. 결과가 정확히 하나여야 하며 설정한 ID 속성을 문자열 또는 binary에서 정규화한다. 별도 연결에서 검색 결과 DN과 사용자 비밀번호로 Bind한다. 실패 여부와 관계없이 연결을 닫는다.
+서비스 Bind 연결에서 RFC 4515 escaping한 로그인 값을 설정 filter의 `{{login}}`에 대입하고 search base 아래를 검색한다. 결과가 정확히 하나여야 하며 설정한 ID 속성을 문자열 또는 binary에서 정규화한다. 동일한 TLS 보호 연결에서 검색 결과 DN과 사용자 비밀번호로 다시 Bind한다. 실패 여부와 관계없이 연결을 닫는다.
 
 로그인 ID로 DN을 직접 조합하는 대안은 search Bind 계정을 줄일 수 있지만 DN escaping과 조직별 OU 구조에 강하게 결합되므로 선택하지 않는다.
 

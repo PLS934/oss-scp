@@ -1,4 +1,5 @@
 import { DynamicModule, Module, OnApplicationShutdown } from '@nestjs/common';
+import { APP_GUARD } from '@nestjs/core';
 import type { PlatformDbConnection, RecordQuery } from '@oss-scp/platform-db';
 import { HealthController } from './health.controller';
 import { HealthService, PLATFORM_DB_CONNECTION } from './health.service';
@@ -12,6 +13,9 @@ import { CollectionStatusService } from './collection-status.service';
 import type { StartupCollectionManager } from './startup-collection';
 import { LIVE_QUERY, LiveQueryManager } from './live-query';
 import { AccountManagementDisabledAuthorizer, MANUAL_SYNC_AUTHORIZER, MANUAL_SYNC_EXECUTOR, ManualSyncController, ManualSyncManager, ManualSyncService, manualSyncExecutor, type ManualSyncAuthorizer, type ManualSyncExecutor } from './manual-sync';
+import { AUTH_RUNTIME, AuthService, type AuthRuntime } from './auth.service';
+import { AuthController } from './auth.controller';
+import { AuthGuard } from './auth.guard';
 
 class PlatformDbLifecycle implements OnApplicationShutdown {
   constructor(private readonly connection: PlatformDbConnection, private readonly live: LiveQueryManager, private readonly startup?: StartupCollectionManager) {}
@@ -27,6 +31,7 @@ export class AppModule {
     startup?: StartupCollectionManager,
     live: LiveQueryManager = new LiveQueryManager(registry),
     manualSync?: { executor?: ManualSyncExecutor; authorizer?: ManualSyncAuthorizer; configRoot?: string },
+    auth: AuthRuntime = { config: { enabled: false } },
   ): DynamicModule {
     const unavailable: RecordQuery = {
       listRecords: async () => { throw new Error('record query adapter unavailable'); },
@@ -34,7 +39,7 @@ export class AppModule {
     };
     return {
       module: AppModule,
-      controllers: [HealthController, RecordQueryController, LiveRecordQueryController, PluginMenuController, PluginController, CollectionStatusController, ManualSyncController],
+      controllers: [HealthController, RecordQueryController, LiveRecordQueryController, PluginMenuController, PluginController, CollectionStatusController, ManualSyncController, AuthController],
       providers: [
         { provide: PLATFORM_DB_CONNECTION, useValue: connection },
         { provide: RECORD_QUERY, useValue: query ?? unavailable },
@@ -47,6 +52,10 @@ export class AppModule {
         { provide: MANUAL_SYNC_EXECUTOR, useValue: manualSync?.executor ?? manualSyncExecutor(manualSync?.configRoot ?? process.env.OSS_SCP_CONFIG_ROOT ?? process.cwd()) },
         ManualSyncManager,
         ManualSyncService,
+        { provide: AUTH_RUNTIME, useValue: auth },
+        AuthService,
+        AuthGuard,
+        { provide: APP_GUARD, useExisting: AuthGuard },
         { provide: PlatformDbLifecycle, useFactory: (live: LiveQueryManager) => new PlatformDbLifecycle(connection, live, startup), inject: [LIVE_QUERY] },
       ],
       exports: [PLUGIN_RUNTIME_REGISTRY],

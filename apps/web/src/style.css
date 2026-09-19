@@ -229,3 +229,9 @@ main .config-section { margin-top: 16px; padding: 22px; }
 .column-filter-popover small { color: var(--muted); }
 .column-filter-popover input:focus-visible, .column-filter-popover select:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
 @media (max-width: 640px) { .column-filter-popover fieldset { flex-wrap: wrap; width: min(19rem, calc(100vw - 3rem)); } .column-filter-popover fieldset label { flex: 1 1 7rem; } .column-filter-popover fieldset input { width: 100%; } }
+.auth-page { min-height: 100vh; display: grid; place-items: center; padding: 2rem; background: var(--page-bg, #f4f6f8); }
+.login-card { width: min(100%, 24rem); padding: 2rem; border: 1px solid var(--border, #d7dce2); border-radius: 0.75rem; background: var(--surface, #fff); box-shadow: 0 1rem 2.5rem rgb(0 0 0 / 8%); }
+.login-card form { display: grid; gap: 0.75rem; }
+.login-card input { box-sizing: border-box; width: 100%; padding: 0.7rem 0.8rem; border: 1px solid var(--border, #b8c0ca); border-radius: 0.4rem; font: inherit; }
+.login-card button { margin-top: 0.5rem; padding: 0.7rem 1rem; }
+.auth-user { font-weight: 600; }
