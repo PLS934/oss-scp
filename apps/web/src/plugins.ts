@@ -31,7 +31,7 @@ function isPlugin(value: unknown): value is PluginSummary {
 }
 
 export async function loadPlugins(options: { request?: typeof fetch; signal?: AbortSignal } = {}): Promise<PluginSummary[]> {
-  const response = await (options.request ?? fetch)('/api/v1/plugins', { signal: options.signal });
+  const response = await (options.request ?? authenticatedFetch)('/api/v1/plugins', { signal: options.signal });
   if (!response.ok) throw new Error('plugin_request_failed');
   const value: unknown = await response.json();
   if (!Array.isArray(value) || !value.every(isPlugin) || new Set(value.map(item => item.id)).size !== value.length) {
@@ -39,3 +39,4 @@ export async function loadPlugins(options: { request?: typeof fetch; signal?: Ab
   }
   return value;
 }
+import { authenticatedFetch } from './auth-client';

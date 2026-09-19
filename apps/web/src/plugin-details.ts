@@ -57,10 +57,11 @@ function isPluginDetail(value: unknown): value is PluginDetail {
 }
 
 export async function loadPluginDetail(pluginId: string, options: { request?: typeof fetch; signal?: AbortSignal } = {}): Promise<PluginDetail> {
-  const response = await (options.request ?? fetch)(`/api/v1/plugins/${encodeURIComponent(pluginId)}`, { signal: options.signal });
+  const response = await (options.request ?? authenticatedFetch)(`/api/v1/plugins/${encodeURIComponent(pluginId)}`, { signal: options.signal });
   if (response.status === 404) throw new PluginDetailNotFoundError('plugin_not_found');
   if (!response.ok) throw new Error('plugin_detail_request_failed');
   const value: unknown = await response.json();
   if (!isPluginDetail(value)) throw new Error('plugin_detail_invalid_response');
   return value;
 }
+import { authenticatedFetch } from './auth-client';

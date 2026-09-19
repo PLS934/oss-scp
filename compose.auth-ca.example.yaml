@@ -1,0 +1,7 @@
+# 사내 CA가 OS 신뢰 저장소에 없을 때 compose.auth.example.yaml과 함께 적용한다.
+services:
+  api:
+    environment:
+      LDAP_TLS_CA_FILE: /run/secrets/ldap-ca.pem
+    volumes:
+      - ${LDAP_TLS_CA_PATH:?LDAP_TLS_CA_PATH must be set}:/run/secrets/ldap-ca.pem:ro

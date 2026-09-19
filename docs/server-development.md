@@ -70,6 +70,60 @@ curl http://127.0.0.1:3100/api/v1/health
 
 플랫폼 DB 입력, 내장·외부 PostgreSQL/MySQL과 migration은 [플랫폼 DB 접속과 설치](platform-db.md)를 참고하세요.
 
+## LDAP/Active Directory 로그인
+
+계정관리는 기본적으로 비활성화되어 기존처럼 로그인 없이 실행된다. `AUTH_ENABLED=true`이면 health와 ready 및 인증 API를 제외한 웹/API 접근에 유효한 서버 세션이 필요하다. LDAP 장애나 설정 오류가 발생해도 플랫폼이 무인증 모드로 자동 전환하지 않는다.
+
+LDAP 전송은 다음 두 방식만 지원한다.
+
+- `ldaps://host:636`: 연결 시작부터 TLS를 사용한다.
+- `ldap://host:389`: TCP 연결 직후 StartTLS를 완료한 다음에만 서비스 Bind, 검색과 사용자 Bind를 수행한다.
+
+두 방식 모두 서버 인증서와 호스트 이름을 검증한다. 평문 Bind나 인증서 검증 비활성화 옵션은 없다. 서버 인증서가 OS 신뢰 저장소에 없는 사내 CA로 서명되었다면 `LDAP_TLS_CA_FILE`로 PEM CA를 read-only 주입한다.
+
+```sh
+export AUTH_ENABLED=true
+export LDAP_URL='ldaps://ldap.example.com:636'
+export LDAP_BIND_DN='cn=service,ou=system,dc=example,dc=com'
+export LDAP_BIND_PASSWORD_FILE='/run/secrets/ldap-bind-password'
+export LDAP_USER_SEARCH_BASE_DN='ou=users,dc=example,dc=com'
+export LDAP_USER_SEARCH_FILTER='(uid={{login}})'
+export LDAP_USER_ID_ATTRIBUTE='entryUUID'
+export AUTH_SESSION_SECRET_FILE='/run/secrets/auth-session-secret'
+export AUTH_SESSION_TTL_SECONDS=28800
+```
+
+`LDAP_USER_SEARCH_FILTER`에는 `{{login}}`이 정확히 한 번 있어야 하며 입력은 서버가 LDAP filter escaping한다. 일반 LDAP은 `entryUUID`, Active Directory는 `objectGUID`처럼 디렉터리에서 안정적으로 유지되는 고유 속성을 `LDAP_USER_ID_ATTRIBUTE`로 지정한다. Bind 비밀번호와 session secret은 로컬 테스트에서 직접 환경변수 `LDAP_BIND_PASSWORD`, `AUTH_SESSION_SECRET`로도 제공할 수 있지만 `_FILE`과 동시에 설정할 수 없다. session secret은 32바이트 이상이어야 한다.
+
+인증용 DB 테이블도 다른 schema와 마찬가지로 API 기동 전에 적용한다.
+
+```sh
+pnpm build
+pnpm db:migrate
+```
+
+Compose에서는 secret 파일을 준비한 뒤 기본 파일에 인증 overlay를 추가한다. CA가 OS 신뢰 저장소에 없을 때만 두 번째 overlay를 더한다.
+
+```sh
+docker compose -f compose.yaml -f compose.auth.example.yaml config
+docker compose -f compose.yaml -f compose.auth.example.yaml up -d --wait
+
+docker compose -f compose.yaml -f compose.auth.example.yaml -f compose.auth-ca.example.yaml config
+```
+
+운영 `NODE_ENV=production`에서는 session 쿠키가 항상 `Secure`이므로 사용자가 접속하는 웹 출처는 HTTPS여야 한다. TLS를 종료하는 reverse proxy는 웹과 `/api`를 같은 origin으로 제공하고 원래 Host를 보존해야 한다. API 포트를 직접 인터넷에 공개하지 않는다.
+
+API는 기본적으로 `X-Forwarded-For`를 신뢰하지 않는다. `AUTH_TRUST_PROXY_HOPS`에는 API에 직접 연결되는 신뢰 reverse proxy의 정확한 홉 수(0~10)를 지정한다. 기본 Compose 인증 overlay는 web nginx 한 홉에 맞춰 `1`을 설정한다. 신뢰하지 않는 프록시나 인터넷 클라이언트가 API에 직접 연결할 수 있는 구성에서는 값을 늘리지 않는다.
+
+로그인 실패는 사용자 없음과 잘못된 비밀번호를 구분하지 않으며, 비밀번호·Bind secret·원본 session ID는 DB와 로그에 저장하지 않는다. 세션은 설정한 절대 TTL 뒤 만료되고 API 재시작 뒤에도 플랫폼 DB에서 복구된다. 로그아웃하면 기존 쿠키를 다시 사용할 수 없다. LDAP 그룹·역할 매핑, 복수 디렉터리, SAML/OIDC와 플랫폼 자체 비밀번호는 현재 범위가 아니다.
+
+실제 TLS LDAP 통합 검증은 Docker와 OpenSSL이 있는 환경에서 다음 명령으로 재현한다.
+
+```sh
+pnpm --filter @oss-scp/api build
+pnpm --filter @oss-scp/api exec vitest run test/ldap-integration.test.mjs
+```
+
 ## 빌드와 검증
 
 ```sh

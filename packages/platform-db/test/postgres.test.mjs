@@ -8,10 +8,12 @@ import { spawnSync } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
 import {
   createPostgresRecordQuery, createPostgresRecordStorage, defaultMigrationsDirectory,
+  createPostgresAuthSessionRepository,
   discoverMigrations, MigrationError,
   postgresAdapter, postgresPoolConfig, runMigrations,
 } from '../dist/index.js';
 import { verifyRecordContract, verifyNumberedSnapshot } from './record-contract.mjs';
+import { verifyAuthSessionRepository } from './session-contract.mjs';
 
 const password = 'integration-password';
 let container;
@@ -400,5 +402,15 @@ describe('PostgreSQL 공통 레코드 저장 계약', () => {
     await expect(commit(first, scope)).rejects.toMatchObject({ code: 'RUN_NOT_ACTIVE' });
     await storage.renewRun(second);
     await commit(second, scope);
+  });
+});
+
+describe('PostgreSQL 인증 세션 계약', () => {
+  it('생성·유효 조회·만료·삭제·제한 정리를 지원한다', async () => {
+    const connection = await postgresAdapter.connect(config());
+    try {
+      await runMigrations(connection, discoverMigrations(defaultMigrationsDirectory('postgres')), 5000);
+      await verifyAuthSessionRepository(createPostgresAuthSessionRepository(connection), 'd');
+    } finally { await connection.close(); }
   });
 });

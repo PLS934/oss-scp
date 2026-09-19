@@ -301,8 +301,9 @@ try {
   assert.match(collision.output(), /already in use/);
   await stop(api);
   await page.reload();
-  await expect(page.locator('.app-header').getByRole('status')).toHaveText('서버 연결 실패');
-  await expect(page.getByRole('heading', { name: 'OSS-SCP HMR 확인', exact: true })).toBeVisible();
+  await expect(page.getByRole('alert')).toHaveText('서버 인증 상태를 확인할 수 없습니다.');
+  await expect(page.getByRole('button', { name: '다시 시도', exact: true })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'OSS-SCP', exact: true })).toBeVisible();
   console.log('브라우저: 공통 목록·사용자 정의 저장소 카드·사용자 정의 저장소 상세·직접 URL·새로고침·복귀·상세 오류·번호 직접 이동·페이지 크기·조회 실패 재시도·빈 결과·서버 페이지 보정·요청 경합·원천 미호출·not-found·health·API 404·포트 충돌·HMR 통과');
 } catch (error) {
   console.error(api.output(), web?.output());

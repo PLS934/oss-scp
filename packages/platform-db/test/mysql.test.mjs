@@ -7,11 +7,12 @@ import { tmpdir } from 'node:os';
 import { randomUUID } from 'node:crypto';
 import { GenericContainer, Wait } from 'testcontainers';
 import {
-  createMysqlRecordQuery, createMysqlRecordStorage, defaultMigrationsDirectory, discoverMigrations, mysqlAdapter, mysqlPoolConfig,
+  createMysqlAuthSessionRepository, createMysqlRecordQuery, createMysqlRecordStorage, defaultMigrationsDirectory, discoverMigrations, mysqlAdapter, mysqlPoolConfig,
   recordIdentity, recordQueryScopeIdentity,
   runMysqlMigrations,
 } from '../dist/index.js';
 import { verifyRecordContract, verifyNumberedSnapshot } from './record-contract.mjs';
+import { verifyAuthSessionRepository } from './session-contract.mjs';
 
 const image = 'mysql:8.4.6';
 const password = 'integration-password';
@@ -82,7 +83,7 @@ describe('MySQL 어댑터', () => {
 describe('MySQL migration', () => {
   it('제품별 기본 디렉터리만 선택한다', () => {
     expect(defaultMigrationsDirectory('mysql')).toMatch(/migrations\/mysql$/);
-    expect(discoverMigrations(defaultMigrationsDirectory('mysql')).map(item => item.version)).toEqual([1, 2, 3, 4, 5, 6, 7, 8]);
+    expect(discoverMigrations(defaultMigrationsDirectory('mysql')).map(item => item.version)).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9]);
   });
   it('최초 적용·재실행·checksum과 실패 버전 미기록을 검증한다', async () => {
     const connection = await mysqlAdapter.connect(config());
@@ -252,5 +253,15 @@ describe('MySQL 공통 레코드 저장·조회 계약', () => {
     await expect(commit(first, scope)).rejects.toMatchObject({ code: 'RUN_NOT_ACTIVE' });
     await storage.renewRun(second);
     await commit(second, scope);
+  });
+});
+
+describe('MySQL 인증 세션 계약', () => {
+  it('생성·유효 조회·만료·삭제·제한 정리를 지원한다', async () => {
+    const connection = await mysqlAdapter.connect(config());
+    try {
+      await runMysqlMigrations(connection, discoverMigrations(defaultMigrationsDirectory('mysql')), 5000);
+      await verifyAuthSessionRepository(createMysqlAuthSessionRepository(connection), 'e');
+    } finally { await connection.close(); }
   });
 });
