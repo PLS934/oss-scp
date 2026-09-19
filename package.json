@@ -40,7 +40,9 @@
     "test:docker:release": "bash scripts/test-release-docker.sh",
     "test:integration:sample1": "pnpm build:plugin-transforms && pnpm --filter @oss-scp/mock-api build && pnpm --filter @oss-scp/collector-cli build && pnpm --filter @oss-scp/api build && node scripts/test-sample1-postgres.mjs",
     "test:integration:sample1:mysql": "pnpm build:plugin-transforms && pnpm --filter @oss-scp/mock-api build && pnpm --filter @oss-scp/collector-cli build && pnpm --filter @oss-scp/api build && SAMPLE1_DB_TYPE=mysql node scripts/test-sample1-postgres.mjs",
-    "collect": "pnpm --filter @oss-scp/collector-cli start"
+    "collect": "pnpm --filter @oss-scp/collector-cli start",
+    "test:plugin-init": "pnpm --filter @oss-scp/plugin-config build && pnpm --filter @oss-scp/collection-engine build && node --test scripts/test-plugin-init.mjs",
+    "test:plugin-init:docker": "node scripts/test-plugin-init-docker.mjs"
   },
   "devDependencies": {
     "@eslint/js": "10.0.1",
