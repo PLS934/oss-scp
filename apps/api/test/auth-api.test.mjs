@@ -113,10 +113,32 @@ describe('인증 API와 전역 경계', () => {
     const thirdAttempt = await login('wrong'); expect(thirdAttempt.status).toBe(429); expect(thirdAttempt.headers.get('retry-after')).toBeTruthy();
   });
 
+  it('동시 자격증명 실패도 LDAP 진입 전에 원자적으로 제한한다', async () => {
+    let authenticateCalls = 0;
+    const authenticator = {
+      authenticate: async () => {
+        authenticateCalls += 1;
+        await new Promise(resolve => setTimeout(resolve, 25));
+        throw new AuthenticationError('INVALID_CREDENTIALS');
+      },
+    };
+    const url = await start(runtime({ authenticator, rateLimiter: new LoginRateLimiter(secret, 2, 60_000) }));
+    const attempt = () => fetch(`${url}/api/v1/auth/login`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', origin: url },
+      body: JSON.stringify({ loginId: 'missing', password: 'wrong' }),
+    });
+
+    const responses = await Promise.all(Array.from({ length: 6 }, attempt));
+    expect(authenticateCalls).toBe(2);
+    expect(responses.map(response => response.status).sort()).toEqual([401, 401, 429, 429, 429, 429]);
+  });
+
   it('명시한 proxy 홉에서만 전달된 client IP를 rate limit에 사용한다', async () => {
     const seen = [];
     const rateLimiter = {
-      check: ip => { seen.push(ip); return null; }, failure: () => null, success: () => undefined,
+      reserve: ip => { seen.push(ip); return { kind: 'reserved', commit: () => undefined, release: () => undefined }; },
+      success: () => undefined,
     };
     const directUrl = await start(runtime({ rateLimiter }), 0);
     const trustedUrl = await start(runtime({ rateLimiter }), 1);

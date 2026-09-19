@@ -30,8 +30,8 @@ export class AuthService {
 
   async login(ip: string, loginId: string, password: string) {
     if (!this.runtime.config.enabled || !this.runtime.authenticator || !this.runtime.sessions || !this.runtime.rateLimiter) throw new Error('authentication disabled');
-    const retryAfter = this.runtime.rateLimiter.check(ip, loginId);
-    if (retryAfter !== null) return { kind: 'limited' as const, retryAfter };
+    const reservation = this.runtime.rateLimiter.reserve(ip, loginId);
+    if (reservation.kind === 'limited') return { kind: 'limited' as const, retryAfter: reservation.retryAfter };
     let identity;
     try {
       identity = await this.runtime.authenticator.authenticate(loginId, password);
@@ -39,10 +39,13 @@ export class AuthService {
       const code = error instanceof AuthenticationError ? error.code
         : error && typeof error === 'object' && 'code' in error ? (error as { code?: unknown }).code : undefined;
       if (code === 'INVALID_CREDENTIALS') {
-        this.runtime.rateLimiter.failure(ip, loginId);
+        reservation.commit();
+      } else {
+        reservation.release();
       }
       throw error;
     }
+    reservation.release();
     this.runtime.rateLimiter.success(loginId);
     return { kind: 'success' as const, identity, ...(await this.runtime.sessions.create(identity)) };
   }

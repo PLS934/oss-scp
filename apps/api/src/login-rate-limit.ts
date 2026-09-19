@@ -1,6 +1,10 @@
 import { createHmac } from 'node:crypto';
 
-interface Bucket { count: number; resetAt: number }
+interface Bucket { count: number; pending: number; resetAt: number }
+
+export type LoginRateLimitReservation =
+  | { kind: 'limited'; retryAfter: number }
+  | { kind: 'reserved'; commit(): void; release(): void };
 
 export class LoginRateLimiter {
   private readonly buckets = new Map<string, Bucket>();
@@ -30,8 +34,20 @@ export class LoginRateLimiter {
     if (this.buckets.size >= this.maxBuckets) {
       return Math.max(1, Math.ceil(this.windowMs / 1000));
     }
-    this.buckets.set(key, { count: 1, resetAt: now + this.windowMs });
+    this.buckets.set(key, { count: 1, pending: 0, resetAt: now + this.windowMs });
     return null;
+  }
+
+  private reserveBucket(key: string, now: number): number {
+    const current = this.buckets.get(key);
+    if (current && current.resetAt > now) {
+      current.count += 1;
+      current.pending += 1;
+      return current.resetAt;
+    }
+    const resetAt = now + this.windowMs;
+    this.buckets.set(key, { count: 1, pending: 1, resetAt });
+    return resetAt;
   }
 
   check(ip: string, loginId: string, now = Date.now()): number | null {
@@ -51,7 +67,53 @@ export class LoginRateLimiter {
     if (ipRetry !== null) return ipRetry;
     return this.consume(this.loginKey(loginId), now);
   }
-  success(loginId: string) { this.buckets.delete(this.loginKey(loginId)); }
+  reserve(ip: string, loginId: string, now = Date.now()): LoginRateLimitReservation {
+    this.prune(now);
+    const ipKey = `ip:${ip}`;
+    const loginKey = this.loginKey(loginId);
+    const ipRetry = this.retryAfter(ipKey, now);
+    if (ipRetry !== null) return { kind: 'limited', retryAfter: ipRetry };
+    const loginRetry = this.retryAfter(loginKey, now);
+    if (loginRetry !== null) return { kind: 'limited', retryAfter: loginRetry };
+
+    const requiredBuckets = Number(!this.buckets.has(ipKey)) + Number(!this.buckets.has(loginKey));
+    if (this.buckets.size + requiredBuckets > this.maxBuckets) {
+      return { kind: 'limited', retryAfter: Math.max(1, Math.ceil(this.windowMs / 1000)) };
+    }
+
+    const ipResetAt = this.reserveBucket(ipKey, now);
+    const loginResetAt = this.reserveBucket(loginKey, now);
+    let settled = false;
+    return {
+      kind: 'reserved',
+      commit: () => {
+        if (settled) return;
+        settled = true;
+        this.settle(ipKey, ipResetAt, true);
+        this.settle(loginKey, loginResetAt, true);
+      },
+      release: () => {
+        if (settled) return;
+        settled = true;
+        this.settle(ipKey, ipResetAt, false);
+        this.settle(loginKey, loginResetAt, false);
+      },
+    };
+  }
+  success(loginId: string) {
+    const loginKey = this.loginKey(loginId);
+    const current = this.buckets.get(loginKey);
+    if (!current) return;
+    current.count = current.pending;
+    if (current.count === 0) this.buckets.delete(loginKey);
+  }
+  private settle(key: string, resetAt: number, keep: boolean) {
+    const current = this.buckets.get(key);
+    if (!current || current.resetAt !== resetAt) return;
+    current.pending -= 1;
+    if (!keep) current.count -= 1;
+    if (current.count === 0) this.buckets.delete(key);
+  }
   private prune(now: number) {
     for (const [key, bucket] of this.buckets) if (bucket.resetAt <= now) this.buckets.delete(key);
   }

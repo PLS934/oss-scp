@@ -54,4 +54,37 @@ describe('로그인 rate limit', () => {
     expect(limiter.failure('1.2.3.4', 'first', 4)).toBeNull();
     expect(limiter.check('203.0.113.10', 'new-user', 60_002)).toBeNull();
   });
+  it('예약을 정확히 해제하고 IP 차단 시 login bucket을 추가하지 않는다', () => {
+    const limiter = new LoginRateLimiter('s'.repeat(32), 1, 60_000, 3);
+    const released = limiter.reserve('1.2.3.4', 'alice', 0);
+    expect(released.kind).toBe('reserved');
+    released.release();
+    expect(limiter.keys()).toEqual([]);
+
+    const committed = limiter.reserve('1.2.3.4', 'alice', 1);
+    expect(committed.kind).toBe('reserved');
+    committed.commit();
+    const existingBuckets = limiter.keys();
+    expect(limiter.reserve('1.2.3.4', 'never-stored', 2)).toMatchObject({ kind: 'limited' });
+    expect(limiter.keys()).toEqual(existingBuckets);
+
+    expect(limiter.reserve('5.6.7.8', 'bob', 2)).toMatchObject({ kind: 'limited' });
+    expect(limiter.keys()).toHaveLength(2);
+  });
+  it('동시 성공이 다른 요청의 실패 예약을 지우지 않는다', () => {
+    const limiter = new LoginRateLimiter('s'.repeat(32), 2, 60_000);
+    const successful = limiter.reserve('1.1.1.1', 'alice', 0);
+    const invalid = limiter.reserve('2.2.2.2', 'alice', 0);
+    expect(successful.kind).toBe('reserved');
+    expect(invalid.kind).toBe('reserved');
+
+    successful.release();
+    limiter.success('alice');
+    invalid.commit();
+
+    const secondInvalid = limiter.reserve('3.3.3.3', 'alice', 1);
+    expect(secondInvalid.kind).toBe('reserved');
+    secondInvalid.commit();
+    expect(limiter.reserve('4.4.4.4', 'alice', 2)).toMatchObject({ kind: 'limited' });
+  });
 });
