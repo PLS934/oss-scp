@@ -18,6 +18,12 @@ describe('인증 설정', () => {
     expect(readAuthConfig(base)).toMatchObject({ enabled: true, trustedProxyHops: 0, ldap: { url: base.LDAP_URL }, session: { secure: false, ttlSeconds: 28800 } });
     expect(readAuthConfig({ ...base, LDAP_URL: 'ldap://ad.example.com:389', NODE_ENV: 'production', AUTH_TRUST_PROXY_HOPS: '1' })).toMatchObject({ trustedProxyHops: 1, ldap: { url: 'ldap://ad.example.com:389' }, session: { secure: true } });
   });
+  it.each([
+    ['LDAP://AD.EXAMPLE.COM:389', 'ldap://ad.example.com:389'],
+    ['LdApS://AD.EXAMPLE.COM:636', 'ldaps://ad.example.com:636'],
+  ])('%s URL을 canonical form으로 저장한다', (LDAP_URL, expected) => {
+    expect(readAuthConfig({ ...base, LDAP_URL })).toMatchObject({ ldap: { url: expected } });
+  });
   it.each(['http://ldap', 'ldaps://user:pw@ldap.example.com', 'ldaps://ldap.example.com/path'])('안전하지 않은 URL %s를 거부한다', LDAP_URL => expect(() => readAuthConfig({ ...base, LDAP_URL })).toThrow('LDAP_URL'));
   it.each(['', 'true ', '1'])('잘못된 활성화 값 %s를 거부한다', AUTH_ENABLED => expect(() => readAuthConfig({ ...base, AUTH_ENABLED })).toThrow('AUTH_ENABLED'));
   it('필수 설정과 filter placeholder를 검사한다', () => {

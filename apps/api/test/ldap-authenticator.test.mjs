@@ -44,6 +44,23 @@ describe('LDAP 인증 제공자', () => {
     expect(binds.every(([, index]) => index > tlsAt)).toBe(true);
     expect(fake.calls[tlsAt][2]).toEqual({ rejectUnauthorized: true, servername: 'ldap.example.com', ca: 'PEM' });
   });
+  it('대소문자가 섞인 LDAP URL에서도 StartTLS를 모든 bind보다 먼저 수행한다', async () => {
+    const fake = clients();
+    const auth = new LdapAuthenticator({ ...config, url: 'LdAp://LDAP.EXAMPLE.COM:389' }, fake.factory);
+    await auth.authenticate('alice', 'password');
+    const tlsAt = fake.calls.findIndex(call => call[0] === 'startTLS');
+    const bindIndexes = fake.calls.flatMap((call, index) => call[0] === 'bind' ? [index] : []);
+    expect(tlsAt).toBeGreaterThanOrEqual(0);
+    expect(bindIndexes).toHaveLength(2);
+    expect(bindIndexes.every(index => index > tlsAt)).toBe(true);
+  });
+  it('대소문자가 섞인 LDAPS URL에서는 StartTLS를 중복 수행하지 않는다', async () => {
+    const fake = clients();
+    const auth = new LdapAuthenticator({ ...config, url: 'LdApS://LDAP.EXAMPLE.COM:636' }, fake.factory);
+    await auth.authenticate('alice', 'password');
+    expect(fake.calls.filter(call => call[0] === 'startTLS')).toHaveLength(0);
+    expect(fake.calls.filter(call => call[0] === 'bind')).toHaveLength(2);
+  });
   it.each([[[]], [[{ dn: 'one', entryUUID: '1' }, { dn: 'two', entryUUID: '2' }]]])('검색 결과 %# 를 일반화된 실패로 처리한다', async entries => {
     const fake = clients(entries);
     await expect(new LdapAuthenticator(config, fake.factory).authenticate('alice', 'password')).rejects.toMatchObject({ code: 'INVALID_CREDENTIALS' });

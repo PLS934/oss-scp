@@ -82,6 +82,7 @@ export function readAuthConfig(env: NodeJS.ProcessEnv = process.env): AuthConfig
   if (!['ldap:', 'ldaps:'].includes(url.protocol) || !url.hostname || url.username || url.password || !['', '/'].includes(url.pathname) || url.search || url.hash) {
     throw new AuthConfigError('LDAP_URL');
   }
+  url.hostname = url.hostname.toLowerCase();
   const searchFilter = required(env, 'LDAP_USER_SEARCH_FILTER');
   if (searchFilter.split('{{login}}').length !== 2) throw new AuthConfigError('LDAP_USER_SEARCH_FILTER');
   const userIdAttribute = required(env, 'LDAP_USER_ID_ATTRIBUTE', 128);
@@ -101,7 +102,7 @@ export function readAuthConfig(env: NodeJS.ProcessEnv = process.env): AuthConfig
     enabled: true,
     trustedProxyHops,
     ldap: {
-      url: rawUrl,
+      url: url.href,
       bindDn: required(env, 'LDAP_BIND_DN'),
       bindPassword: secret(env, 'LDAP_BIND_PASSWORD', 'LDAP_BIND_PASSWORD_FILE'),
       searchBaseDn: required(env, 'LDAP_USER_SEARCH_BASE_DN'),

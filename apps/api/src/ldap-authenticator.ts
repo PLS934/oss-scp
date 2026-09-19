@@ -28,7 +28,7 @@ const startTlsConnection = ((options: ConnectionOptions) => {
 }) as typeof tlsConnect;
 
 export const ldapClientFactory: LdapClientFactory = options => {
-  if (!options.url.startsWith('ldap://')) return new Client(options);
+  if (new URL(options.url).protocol !== 'ldap:') return new Client(options);
   return new Client({
     url: options.url,
     timeout: options.timeout,
@@ -95,7 +95,7 @@ export class LdapAuthenticator {
   }
 
   private async secure(client: LdapClient): Promise<void> {
-    if (this.config.url.startsWith('ldap://')) {
+    if (new URL(this.config.url).protocol === 'ldap:') {
       const options = { rejectUnauthorized: true as const, servername: new URL(this.config.url).hostname, ...(this.config.ca === undefined ? {} : { ca: this.config.ca }) };
       await client.startTLS(options);
     }
