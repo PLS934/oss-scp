@@ -51,13 +51,19 @@ export function escapeLdapFilterValue(value: string): string {
   return escaped;
 }
 
+const MAX_USER_ID_LENGTH = 512;
+
+function validNormalizedId(value: string): string | undefined {
+  return value && [...value].length <= MAX_USER_ID_LENGTH && !hasControlCharacter(value) ? value : undefined;
+}
+
 function normalizedId(value: Entry[string] | undefined): string | undefined {
-  if (Buffer.isBuffer(value)) return value.length > 0 ? value.toString('base64url') : undefined;
-  if (typeof value === 'string') return value && !hasControlCharacter(value) ? value : undefined;
+  if (Buffer.isBuffer(value)) return validNormalizedId(value.toString('base64url'));
+  if (typeof value === 'string') return validNormalizedId(value);
   if (Array.isArray(value) && value.length === 1) {
     const first: Buffer | string = value[0];
-    if (Buffer.isBuffer(first)) return first.length > 0 ? first.toString('base64url') : undefined;
-    return first && !hasControlCharacter(first) ? first : undefined;
+    if (Buffer.isBuffer(first)) return validNormalizedId(first.toString('base64url'));
+    return validNormalizedId(first);
   }
   return undefined;
 }

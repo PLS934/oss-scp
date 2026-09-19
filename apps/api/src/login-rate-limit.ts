@@ -4,7 +4,6 @@ interface Bucket { count: number; resetAt: number }
 
 export class LoginRateLimiter {
   private readonly buckets = new Map<string, Bucket>();
-  private saturatedUntil = 0;
   constructor(
     private readonly secret: string,
     private readonly limit = 10,
@@ -29,7 +28,6 @@ export class LoginRateLimiter {
       return null;
     }
     if (this.buckets.size >= this.maxBuckets) {
-      this.saturatedUntil = Math.max(this.saturatedUntil, now + this.windowMs);
       return Math.max(1, Math.ceil(this.windowMs / 1000));
     }
     this.buckets.set(key, { count: 1, resetAt: now + this.windowMs });
@@ -38,14 +36,17 @@ export class LoginRateLimiter {
 
   check(ip: string, loginId: string, now = Date.now()): number | null {
     this.prune(now);
-    if (this.saturatedUntil > now) return Math.max(1, Math.ceil((this.saturatedUntil - now) / 1000));
-    const ipRetry = this.retryAfter(`ip:${ip}`, now);
+    const ipKey = `ip:${ip}`;
+    const loginKey = this.loginKey(loginId);
+    const ipRetry = this.retryAfter(ipKey, now);
     if (ipRetry !== null) return ipRetry;
-    return this.retryAfter(this.loginKey(loginId), now);
+    const loginRetry = this.retryAfter(loginKey, now);
+    if (loginRetry !== null) return loginRetry;
+    const requiredBuckets = Number(!this.buckets.has(ipKey)) + Number(!this.buckets.has(loginKey));
+    return this.buckets.size + requiredBuckets > this.maxBuckets ? Math.max(1, Math.ceil(this.windowMs / 1000)) : null;
   }
   failure(ip: string, loginId: string, now = Date.now()): number | null {
     this.prune(now);
-    if (this.saturatedUntil > now) return Math.max(1, Math.ceil((this.saturatedUntil - now) / 1000));
     const ipRetry = this.consume(`ip:${ip}`, now);
     if (ipRetry !== null) return ipRetry;
     return this.consume(this.loginKey(loginId), now);
@@ -53,7 +54,6 @@ export class LoginRateLimiter {
   success(loginId: string) { this.buckets.delete(this.loginKey(loginId)); }
   private prune(now: number) {
     for (const [key, bucket] of this.buckets) if (bucket.resetAt <= now) this.buckets.delete(key);
-    if (this.saturatedUntil <= now) this.saturatedUntil = 0;
   }
   /** 테스트·진단에서 원문 식별자를 보관하지 않는지 확인하기 위한 크기 전용 snapshot. */
   keys(): readonly string[] { return [...this.buckets.keys()]; }

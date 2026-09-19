@@ -41,15 +41,17 @@ describe('로그인 rate limit', () => {
     expect(limiter.check('1.2.3.4', 'other', 1003)).toBeNull();
   });
   it('IP 차단 시 새 login bucket을 만들지 않고 전체 bucket 수를 제한한다', () => {
-    const limiter = new LoginRateLimiter('s'.repeat(32), 1, 60_000, 4);
+    const limiter = new LoginRateLimiter('s'.repeat(32), 3, 60_000, 4);
     limiter.failure('1.2.3.4', 'first', 0);
-    const beforeBlockedProbe = limiter.keys();
-    expect(limiter.check('1.2.3.4', 'never-created', 1)).toBe(60);
-    expect(limiter.keys()).toEqual(beforeBlockedProbe);
+    limiter.failure('10.0.0.1', 'attacker', 1);
+    const existingBuckets = limiter.keys();
 
-    for (let index = 0; index < 20; index += 1) limiter.failure(`10.0.0.${index}`, `user-${index}`, 2);
+    for (let index = 0; index < 20; index += 1) limiter.failure(`10.0.1.${index}`, `user-${index}`, 2);
     expect(limiter.keys()).toHaveLength(4);
+    expect(limiter.keys()).toEqual(existingBuckets);
     expect(limiter.check('203.0.113.10', 'new-user', 3)).toBe(60);
+    expect(limiter.check('1.2.3.4', 'first', 3)).toBeNull();
+    expect(limiter.failure('1.2.3.4', 'first', 4)).toBeNull();
     expect(limiter.check('203.0.113.10', 'new-user', 60_002)).toBeNull();
   });
 });

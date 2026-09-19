@@ -52,7 +52,7 @@ describe('인증 API와 전역 경계', () => {
 
   it('로그인, 현재 세션, Origin 검사와 멱등 로그아웃을 처리한다', async () => {
     const url = await start(runtime());
-    const login = await fetch(`${url}/api/v1/auth/login`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ loginId: 'alice', password: 'correct' }) });
+    const login = await fetch(`${url}/api/v1/auth/login`, { method: 'POST', headers: { 'content-type': 'application/json', origin: url }, body: JSON.stringify({ loginId: 'alice', password: 'correct' }) });
     expect(login.status).toBe(201);
     const setCookie = login.headers.get('set-cookie');
     expect(setCookie).toContain('HttpOnly'); expect(setCookie).toContain('SameSite=Lax'); expect(setCookie).toContain('Secure');
@@ -67,9 +67,25 @@ describe('인증 API와 전역 경계', () => {
     expect((await fetch(`${url}/api/v1/auth/logout`, { method: 'POST' })).status).toBe(201);
   });
 
+  it('로그인은 동일 출처 JSON 요청만 허용하고 공개 상태 확인은 유지한다', async () => {
+    const url = await start(runtime());
+    const body = JSON.stringify({ loginId: 'alice', password: 'correct' });
+    for (const headers of [
+      { 'content-type': 'application/json', origin: 'https://evil.invalid' },
+      { 'content-type': 'application/json' },
+      { 'content-type': 'application/x-www-form-urlencoded', origin: url },
+    ]) {
+      const response = await fetch(`${url}/api/v1/auth/login`, { method: 'POST', headers, body });
+      expect(response.status).toBe(403);
+      expect(await response.json()).toMatchObject({ code: 'ORIGIN_REJECTED' });
+    }
+    expect((await fetch(`${url}/api/v1/health`)).status).toBe(200);
+    expect((await fetch(`${url}/api/v1/ready`)).status).toBe(200);
+  });
+
   it('자격증명 실패, LDAP 장애와 rate limit을 일반화한다', async () => {
     const url = await start(runtime({ rateLimiter: new LoginRateLimiter(secret, 2, 60_000) }));
-    const login = password => fetch(`${url}/api/v1/auth/login`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ loginId: 'missing', password }) });
+    const login = password => fetch(`${url}/api/v1/auth/login`, { method: 'POST', headers: { 'content-type': 'application/json', origin: url }, body: JSON.stringify({ loginId: 'missing', password }) });
     const invalid = await login('wrong'); expect(invalid.status).toBe(401); expect(await invalid.json()).toMatchObject({ code: 'INVALID_CREDENTIALS' });
     const unavailable = await login('unavailable'); expect(unavailable.status).toBe(503); expect(JSON.stringify(await unavailable.json())).not.toContain('LDAP');
     const secondInvalid = await login('wrong'); expect(secondInvalid.status).toBe(401);
@@ -83,9 +99,9 @@ describe('인증 API와 전역 경계', () => {
     };
     const directUrl = await start(runtime({ rateLimiter }), 0);
     const trustedUrl = await start(runtime({ rateLimiter }), 1);
-    const options = { method: 'POST', headers: { 'content-type': 'application/json', 'x-forwarded-for': '198.51.100.42' }, body: JSON.stringify({ loginId: 'alice', password: 'correct' }) };
-    expect((await fetch(`${directUrl}/api/v1/auth/login`, options)).status).toBe(201);
-    expect((await fetch(`${trustedUrl}/api/v1/auth/login`, options)).status).toBe(201);
+    const options = url => ({ method: 'POST', headers: { 'content-type': 'application/json', 'x-forwarded-for': '198.51.100.42', origin: url }, body: JSON.stringify({ loginId: 'alice', password: 'correct' }) });
+    expect((await fetch(`${directUrl}/api/v1/auth/login`, options(directUrl))).status).toBe(201);
+    expect((await fetch(`${trustedUrl}/api/v1/auth/login`, options(trustedUrl))).status).toBe(201);
     expect(seen[0]).toBe('127.0.0.1');
     expect(seen[1]).toBe('198.51.100.42');
   });

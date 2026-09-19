@@ -69,4 +69,12 @@ describe('LDAP 인증 제공자', () => {
     }
     await expect(new LdapAuthenticator(config, fake.factory).authenticate('alice', 'password')).rejects.toMatchObject({ code: 'INVALID_CREDENTIALS' });
   });
+  it.each([
+    ['문자열', 'x'.repeat(513)],
+    ['binary', Buffer.alloc(385)],
+  ])('DB 계약보다 긴 %s 사용자 ID를 일반화된 실패로 처리한다', async (_kind, userId) => {
+    const fake = clients([{ dn: 'uid=alice', entryUUID: userId }]);
+    await expect(new LdapAuthenticator(config, fake.factory).authenticate('alice', 'password')).rejects.toMatchObject({ code: 'INVALID_CREDENTIALS' });
+    expect(fake.calls.filter(call => call[0] === 'bind')).toEqual([['bind', 0, config.bindDn, config.bindPassword]]);
+  });
 });

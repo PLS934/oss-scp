@@ -41,7 +41,7 @@ async function verifyRestart(kind) {
     const firstConnection = await adapter.connect(config);
     await run(firstConnection, discoverMigrations(defaultMigrationsDirectory(kind)), 5000);
     first = await start(firstConnection, createRepository(firstConnection));
-    const login = await fetch(`${first.url}/api/v1/auth/login`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ loginId: 'alice', password: 'correct' }) });
+    const login = await fetch(`${first.url}/api/v1/auth/login`, { method: 'POST', headers: { 'content-type': 'application/json', origin: first.url }, body: JSON.stringify({ loginId: 'alice', password: 'correct' }) });
     const cookie = login.headers.get('set-cookie').split(';')[0];
     await first.app.close(); first = undefined;
 
