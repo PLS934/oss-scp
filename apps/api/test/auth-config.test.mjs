@@ -15,8 +15,8 @@ const base = {
 describe('인증 설정', () => {
   it('기본값은 비활성화이며 LDAP 설정을 요구하지 않는다', () => expect(readAuthConfig({})).toEqual({ enabled: false }));
   it('LDAPS와 StartTLS URL을 받고 운영 쿠키를 구분한다', () => {
-    expect(readAuthConfig(base)).toMatchObject({ enabled: true, ldap: { url: base.LDAP_URL }, session: { secure: false, ttlSeconds: 28800 } });
-    expect(readAuthConfig({ ...base, LDAP_URL: 'ldap://ad.example.com:389', NODE_ENV: 'production' })).toMatchObject({ ldap: { url: 'ldap://ad.example.com:389' }, session: { secure: true } });
+    expect(readAuthConfig(base)).toMatchObject({ enabled: true, trustedProxyHops: 0, ldap: { url: base.LDAP_URL }, session: { secure: false, ttlSeconds: 28800 } });
+    expect(readAuthConfig({ ...base, LDAP_URL: 'ldap://ad.example.com:389', NODE_ENV: 'production', AUTH_TRUST_PROXY_HOPS: '1' })).toMatchObject({ trustedProxyHops: 1, ldap: { url: 'ldap://ad.example.com:389' }, session: { secure: true } });
   });
   it.each(['http://ldap', 'ldaps://user:pw@ldap.example.com', 'ldaps://ldap.example.com/path'])('안전하지 않은 URL %s를 거부한다', LDAP_URL => expect(() => readAuthConfig({ ...base, LDAP_URL })).toThrow('LDAP_URL'));
   it.each(['', 'true ', '1'])('잘못된 활성화 값 %s를 거부한다', AUTH_ENABLED => expect(() => readAuthConfig({ ...base, AUTH_ENABLED })).toThrow('AUTH_ENABLED'));
@@ -33,4 +33,5 @@ describe('인증 설정', () => {
     try { readAuthConfig({ ...base, AUTH_SESSION_SECRET: marker }); } catch (error) { expect(String(error)).not.toContain(marker); }
   });
   it.each(['299', '604801', '1.5', 'abc'])('잘못된 TTL %s를 거부한다', AUTH_SESSION_TTL_SECONDS => expect(() => readAuthConfig({ ...base, AUTH_SESSION_TTL_SECONDS })).toThrow('AUTH_SESSION_TTL_SECONDS'));
+  it.each(['-1', '1.5', '11', 'true'])('잘못된 trusted proxy 홉 %s를 거부한다', AUTH_TRUST_PROXY_HOPS => expect(() => readAuthConfig({ ...base, AUTH_TRUST_PROXY_HOPS })).toThrow('AUTH_TRUST_PROXY_HOPS'));
 });

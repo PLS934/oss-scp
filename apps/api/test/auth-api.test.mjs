@@ -30,10 +30,12 @@ function runtime(patch = {}) {
 }
 
 const apps = [];
-async function start(auth) {
+async function start(auth, trustedProxyHops = 0) {
   const connection = { checkReady: async () => true, close: async () => undefined };
   const module = await Test.createTestingModule({ imports: [AppModule.register(connection, undefined, undefined, undefined, undefined, undefined, auth)] }).compile();
-  const app = module.createNestApplication(); await app.listen(0, '127.0.0.1'); apps.push(app);
+  const app = module.createNestApplication();
+  app.getHttpAdapter().getInstance().set('trust proxy', trustedProxyHops);
+  await app.listen(0, '127.0.0.1'); apps.push(app);
   return await app.getUrl();
 }
 afterEach(async () => { await Promise.all(apps.splice(0).map(app => app.close())); });
@@ -70,6 +72,21 @@ describe('인증 API와 전역 경계', () => {
     const login = password => fetch(`${url}/api/v1/auth/login`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ loginId: 'missing', password }) });
     const invalid = await login('wrong'); expect(invalid.status).toBe(401); expect(await invalid.json()).toMatchObject({ code: 'INVALID_CREDENTIALS' });
     const unavailable = await login('unavailable'); expect(unavailable.status).toBe(503); expect(JSON.stringify(await unavailable.json())).not.toContain('LDAP');
-    const limited = await login('wrong'); expect(limited.status).toBe(429); expect(limited.headers.get('retry-after')).toBeTruthy();
+    const secondInvalid = await login('wrong'); expect(secondInvalid.status).toBe(401);
+    const thirdAttempt = await login('wrong'); expect(thirdAttempt.status).toBe(429); expect(thirdAttempt.headers.get('retry-after')).toBeTruthy();
+  });
+
+  it('명시한 proxy 홉에서만 전달된 client IP를 rate limit에 사용한다', async () => {
+    const seen = [];
+    const rateLimiter = {
+      check: ip => { seen.push(ip); return null; }, failure: () => null, success: () => undefined,
+    };
+    const directUrl = await start(runtime({ rateLimiter }), 0);
+    const trustedUrl = await start(runtime({ rateLimiter }), 1);
+    const options = { method: 'POST', headers: { 'content-type': 'application/json', 'x-forwarded-for': '198.51.100.42' }, body: JSON.stringify({ loginId: 'alice', password: 'correct' }) };
+    expect((await fetch(`${directUrl}/api/v1/auth/login`, options)).status).toBe(201);
+    expect((await fetch(`${trustedUrl}/api/v1/auth/login`, options)).status).toBe(201);
+    expect(seen[0]).toBe('127.0.0.1');
+    expect(seen[1]).toBe('198.51.100.42');
   });
 });

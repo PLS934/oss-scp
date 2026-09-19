@@ -4,6 +4,8 @@ services:
   api:
     environment:
       AUTH_ENABLED: "true"
+      # API 앞의 기본 Compose nginx 한 홉만 전달 헤더의 client IP로 신뢰한다.
+      AUTH_TRUST_PROXY_HOPS: "1"
       LDAP_URL: ${LDAP_URL:?LDAP_URL must be set}
       LDAP_BIND_DN: ${LDAP_BIND_DN:?LDAP_BIND_DN must be set}
       LDAP_BIND_PASSWORD_FILE: /run/secrets/ldap-bind-password

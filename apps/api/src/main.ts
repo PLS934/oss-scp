@@ -43,6 +43,7 @@ async function bootstrap() {
   })() : { config: authConfig };
   const startup = new StartupCollectionManager(configRoot);
   const app = await NestFactory.create(AppModule.register(connection, query, registry, startup, undefined, { configRoot }, auth), { abortOnError: false });
+  if (authConfig.enabled) app.getHttpAdapter().getInstance().set('trust proxy', authConfig.trustedProxyHops);
   app.enableShutdownHooks();
   try {
     await app.listen(port, host);

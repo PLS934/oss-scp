@@ -2,6 +2,7 @@ import { Inject, Injectable } from '@nestjs/common';
 import type { AuthConfig } from './auth-config';
 import { AuthSessionManager } from './auth-session';
 import type { LdapAuthenticator } from './ldap-authenticator';
+import { AuthenticationError } from './ldap-authenticator';
 import { LoginRateLimiter } from './login-rate-limit';
 
 export interface AuthRuntime {
@@ -24,7 +25,17 @@ export class AuthService {
     if (!this.runtime.config.enabled || !this.runtime.authenticator || !this.runtime.sessions || !this.runtime.rateLimiter) throw new Error('authentication disabled');
     const retryAfter = this.runtime.rateLimiter.check(ip, loginId);
     if (retryAfter !== null) return { kind: 'limited' as const, retryAfter };
-    const identity = await this.runtime.authenticator.authenticate(loginId, password);
+    let identity;
+    try {
+      identity = await this.runtime.authenticator.authenticate(loginId, password);
+    } catch (error) {
+      const code = error instanceof AuthenticationError ? error.code
+        : error && typeof error === 'object' && 'code' in error ? (error as { code?: unknown }).code : undefined;
+      if (code === 'INVALID_CREDENTIALS') {
+        this.runtime.rateLimiter.failure(ip, loginId);
+      }
+      throw error;
+    }
     this.runtime.rateLimiter.success(loginId);
     return { kind: 'success' as const, identity, ...(await this.runtime.sessions.create(identity)) };
   }

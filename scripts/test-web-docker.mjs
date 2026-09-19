@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { chmod, cp, readFile, writeFile, rm } from 'node:fs/promises';
 import path from 'node:path';
 import { networkInterfaces } from 'node:os';
+import { request as httpRequest } from 'node:http';
 import { chromium, expect } from '@playwright/test';
 import { fixture, port, run, waitFor, healthy } from './web-test-helpers.mjs';
 import { checkWorkspaceVolumes, assertDependencyMounts, assertCleanDependencyPaths } from './docker-workspace-checks.mjs';
@@ -15,6 +16,8 @@ for (const plugin of ['sample1-offset-api', 'sample2-single-api', 'vulnerabiliti
 const project = `oss-scp-web-check-${process.pid}`;
 const standalone = `${project}-standalone`;
 const alternate = `${project}-alternate`;
+const authBackend = `${project}-auth-backend`;
+const authProxy = `${project}-auth-proxy`;
 const webPort = await port();
 const apiPort = await port();
 const env = { ...process.env, WEB_PORT: String(webPort), API_PORT: String(apiPort), PLATFORM_DB_PASSWORD: 'web-docker-test-password', OSS_SCP_CONFIG_PATH: dir };
@@ -58,6 +61,32 @@ try {
   // 별도 네트워크 클라이언트가 호스트 공개 포트에 접근한다.
   const probe = ['run', '--rm', 'oss-scp-api:local', 'node', '-e'];
   await docker([...probe, `fetch('http://${hostAddress}:${webPort}/api/v1/health', {signal: AbortSignal.timeout(5000)}).then(async r => {if(r.status !== 200 || (await r.json()).status !== 'ok') process.exit(1)}).catch(() => process.exit(1))`]);
+
+  // 실제 배포 nginx가 상태 변경 요청에서도 외부 Host를 보존하고 client IP chain을 전달한다.
+  const authBackendSource = `require('node:http').createServer((request, response) => {
+    const originHost = request.headers.origin && new URL(request.headers.origin).host;
+    response.writeHead(request.method === 'POST' && originHost === request.headers.host ? 201 : 403, {'content-type': 'application/json'});
+    response.end(JSON.stringify({host: request.headers.host, forwardedFor: request.headers['x-forwarded-for']}));
+  }).listen(3000, '0.0.0.0')`;
+  await docker(['run', '-d', '--name', authBackend, '--network', `${project}_default`, '--entrypoint', 'node', 'oss-scp-api:local', '-e', authBackendSource]);
+  await docker(['run', '-d', '--name', authProxy, '--network', `${project}_default`, '-e', `API_UPSTREAM=${authBackend}:3000`, '-p', '127.0.0.1::8080', 'oss-scp-web:local']);
+  const authProxyAddress = (await docker(['port', authProxy, '8080/tcp'])).trim();
+  await waitFor(async () => {
+    const [hostname, rawPort] = authProxyAddress.split(':');
+    const response = await new Promise((resolve, reject) => {
+      const request = httpRequest({ hostname, port: Number(rawPort), path: '/api/auth-check', method: 'POST', headers: { Host: 'console.example.test', Origin: 'http://console.example.test' } }, incoming => {
+        const chunks = [];
+        incoming.on('data', chunk => chunks.push(chunk));
+        incoming.on('end', () => resolve({ status: incoming.statusCode, body: Buffer.concat(chunks).toString('utf8') }));
+      });
+      request.on('error', reject);
+      request.end();
+    }).catch(() => null);
+    if (response?.status !== 201) return false;
+    const forwarded = JSON.parse(response.body);
+    return forwarded.host === 'console.example.test' && typeof forwarded.forwardedFor === 'string' && forwarded.forwardedFor.length > 0;
+  }, '배포 nginx 인증 헤더 전달');
+  await docker(['rm', '-f', authProxy, authBackend]);
 
   await compose(['stop', 'api']);
   await page.reload();
@@ -128,7 +157,7 @@ try {
   throw error;
 } finally {
   await browser?.close();
-  await docker(['rm', '-f', standalone, alternate]).catch(() => {});
+  await docker(['rm', '-f', standalone, alternate, authProxy, authBackend]).catch(() => {});
   await compose(['down', '-v', '--remove-orphans'], true);
   for (const resource of [['ps', '-aq'], ['volume', 'ls', '-q']]) {
     assert.equal((await docker([...resource, '--filter', `label=com.docker.compose.project=${project}`])).trim(), '');

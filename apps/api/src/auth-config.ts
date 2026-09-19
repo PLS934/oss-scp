@@ -4,6 +4,7 @@ import { X509Certificate } from 'node:crypto';
 export interface DisabledAuthConfig { enabled: false }
 export interface EnabledAuthConfig {
   enabled: true;
+  trustedProxyHops: number;
   ldap: {
     url: string;
     bindDn: string;
@@ -91,9 +92,14 @@ export function readAuthConfig(env: NodeJS.ProcessEnv = process.env): AuthConfig
   if (!/^\d+$/u.test(rawTtl)) throw new AuthConfigError('AUTH_SESSION_TTL_SECONDS');
   const ttlSeconds = Number(rawTtl);
   if (!Number.isSafeInteger(ttlSeconds) || ttlSeconds < 300 || ttlSeconds > 604_800) throw new AuthConfigError('AUTH_SESSION_TTL_SECONDS');
+  const rawTrustedProxyHops = env.AUTH_TRUST_PROXY_HOPS ?? '0';
+  if (!/^\d+$/u.test(rawTrustedProxyHops)) throw new AuthConfigError('AUTH_TRUST_PROXY_HOPS');
+  const trustedProxyHops = Number(rawTrustedProxyHops);
+  if (!Number.isSafeInteger(trustedProxyHops) || trustedProxyHops > 10) throw new AuthConfigError('AUTH_TRUST_PROXY_HOPS');
 
   return {
     enabled: true,
+    trustedProxyHops,
     ldap: {
       url: rawUrl,
       bindDn: required(env, 'LDAP_BIND_DN'),
