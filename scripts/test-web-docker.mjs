@@ -89,9 +89,14 @@ try {
   await docker(['rm', '-f', authProxy, authBackend]);
 
   await compose(['stop', 'api']);
+  await page.route('**/api/v1/auth/session', route => route.fulfill({ json: { enabled: false } }));
   await page.reload();
   await expect(page.getByRole('banner').getByRole('status')).toHaveText('서버 연결 실패', { timeout: 10000 });
   await expect(page.getByRole('heading', { name: 'OSS-SCP', exact: true })).toBeVisible();
+  await page.unroute('**/api/v1/auth/session');
+  await page.reload();
+  await expect(page.getByRole('alert')).toHaveText('서버 인증 상태를 확인할 수 없습니다.');
+  await expect(page.getByRole('button', { name: '다시 시도', exact: true })).toBeVisible();
   await compose(['up', '-d', '--force-recreate', 'api']);
   await waitFor(() => healthy(url), 'API 재생성 후 DNS 복구');
   await page.reload();
@@ -101,7 +106,8 @@ try {
   const standaloneAddress = (await docker(['port', standalone, '8080/tcp'])).trim();
   await waitFor(async () => (await fetch(`http://${standaloneAddress}`)).ok, 'API 없는 이미지');
   await page.goto(`http://${standaloneAddress}`);
-  await expect(page.getByRole('banner').getByRole('status')).toHaveText('서버 연결 실패', { timeout: 10000 });
+  await expect(page.getByRole('alert')).toHaveText('서버 인증 상태를 확인할 수 없습니다.', { timeout: 10000 });
+  await expect(page.getByRole('button', { name: '다시 시도', exact: true })).toBeVisible();
   const inspection = JSON.parse(await docker(['inspect', standalone]))[0];
   assert.equal(inspection.Mounts.length, 0);
   await docker(['exec', standalone, 'sh', '-c', 'test "$(id -u)" != 0 && test ! -e /usr/share/nginx/html/src && test ! -e /usr/share/nginx/html/.env && ! command -v node']);
