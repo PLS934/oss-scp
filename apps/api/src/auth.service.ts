@@ -14,6 +14,13 @@ export interface AuthRuntime {
 
 export const AUTH_RUNTIME = Symbol('AUTH_RUNTIME');
 
+export class SessionRevocationError extends Error {
+  constructor() {
+    super('session revocation failed');
+    this.name = 'SessionRevocationError';
+  }
+}
+
 @Injectable()
 export class AuthService {
   constructor(@Inject(AUTH_RUNTIME) readonly runtime: AuthRuntime) {}
@@ -46,6 +53,11 @@ export class AuthService {
   }
 
   async logout(sessionId: string | null) {
-    if (this.runtime.config.enabled && sessionId && this.runtime.sessions) await this.runtime.sessions.revoke(sessionId).catch(() => undefined);
+    if (!this.runtime.config.enabled || !sessionId || !this.runtime.sessions) return;
+    try {
+      await this.runtime.sessions.revoke(sessionId);
+    } catch {
+      throw new SessionRevocationError();
+    }
   }
 }

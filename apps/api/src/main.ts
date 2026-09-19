@@ -11,10 +11,10 @@ import { preflightConfiguration } from '@oss-scp/plugin-config';
 import { formatConfigurationIssues } from './configuration-errors';
 import { createPluginRuntimeRegistry } from './plugin-runtime-registry';
 import { StartupCollectionManager } from './startup-collection';
-import { readAuthConfig } from './auth-config';
 import { AuthSessionManager } from './auth-session';
 import { LdapAuthenticator } from './ldap-authenticator';
 import { LoginRateLimiter } from './login-rate-limit';
+import { connectAfterAuthValidation } from './startup-auth';
 
 async function bootstrap() {
   const envFile = resolve(__dirname, '../../../.env');
@@ -27,9 +27,10 @@ async function bootstrap() {
   const registry = createPluginRuntimeRegistry({ ...configuration, configRoot });
   const adapters = [postgresAdapter, mysqlAdapter] as const;
   const dbConfig = readPlatformDbConfig(process.env, adapters);
-  const connection = await selectPlatformDbAdapter(dbConfig.type, adapters).connect(dbConfig);
+  const { authConfig, connection } = await connectAfterAuthValidation(
+    () => selectPlatformDbAdapter(dbConfig.type, adapters).connect(dbConfig),
+  );
   const { query } = createPlatformRecordAdapters(dbConfig.type, connection);
-  const authConfig = readAuthConfig();
   const auth = authConfig.enabled ? (() => {
     const sessions = dbConfig.type === 'postgres'
       ? createPostgresAuthSessionRepository(connection as PostgresPlatformDbConnection)

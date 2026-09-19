@@ -1,5 +1,5 @@
 import { Body, Controller, Get, HttpException, Post, Req, Res } from '@nestjs/common';
-import { AuthService } from './auth.service';
+import { AuthService, SessionRevocationError } from './auth.service';
 import { expiredSessionCookie, parseSessionCookie, sessionCookie } from './auth-session';
 import { AuthenticationError } from './ldap-authenticator';
 
@@ -49,7 +49,14 @@ export class AuthController {
 
   @Post('/logout')
   async logout(@Req() request: HttpRequest, @Res({ passthrough: true }) response: HttpResponse) {
-    await this.auth.logout(parseSessionCookie(request.headers.cookie));
+    try {
+      await this.auth.logout(parseSessionCookie(request.headers.cookie));
+    } catch (caught) {
+      if (caught instanceof SessionRevocationError) {
+        error(503, 'AUTH_SERVICE_UNAVAILABLE', '인증 서비스를 사용할 수 없습니다.');
+      }
+      throw caught;
+    }
     response.setHeader('Set-Cookie', expiredSessionCookie(this.auth.secureCookie));
     return { ok: true };
   }

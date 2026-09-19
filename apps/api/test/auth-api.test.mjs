@@ -67,6 +67,27 @@ describe('인증 API와 전역 경계', () => {
     expect((await fetch(`${url}/api/v1/auth/logout`, { method: 'POST' })).status).toBe(201);
   });
 
+  it('세션 삭제 실패 시 로그아웃 성공이나 만료 쿠키를 반환하지 않는다', async () => {
+    const rows = new Map();
+    const repository = memoryRepository(rows);
+    repository.delete = async () => { throw new Error('sensitive database detail'); };
+    const url = await start(runtime({ repository }));
+    const login = await fetch(`${url}/api/v1/auth/login`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', origin: url },
+      body: JSON.stringify({ loginId: 'alice', password: 'correct' }),
+    });
+    const cookie = login.headers.get('set-cookie').split(';')[0];
+
+    const logout = await fetch(`${url}/api/v1/auth/logout`, { method: 'POST', headers: { cookie, origin: url } });
+
+    expect(logout.status).toBe(503);
+    expect(logout.headers.get('set-cookie')).toBeNull();
+    expect(await logout.json()).toMatchObject({ code: 'AUTH_SERVICE_UNAVAILABLE' });
+    expect(await (await fetch(`${url}/api/v1/auth/session`, { headers: { cookie } })).json())
+      .toMatchObject({ authenticated: true });
+  });
+
   it('로그인은 동일 출처 JSON 요청만 허용하고 공개 상태 확인은 유지한다', async () => {
     const url = await start(runtime());
     const body = JSON.stringify({ loginId: 'alice', password: 'correct' });
