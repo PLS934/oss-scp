@@ -99,12 +99,6 @@ for (const source of supportedSources) {
       values: { id: 'item-1', name: '예제 항목' },
     }]);
 
-    const validated = runNode(join(installedSkill, 'scripts/validate.mjs'), [
-      '--root', root,
-      '--platform-root', repositoryRoot,
-    ]);
-    assert.equal(validated.status, 0, validated.stderr);
-    assert.match(validated.stdout, /실제 원천 호출·수집·저장·조회는 별도로 확인/);
   });
 }
 
@@ -166,40 +160,77 @@ test('생성 중 실패하면 임시 sibling만 정리하고 출력 밖 데이�
   assert.equal(readdirSync(temporary).some((name) => name.startsWith('.config with spaces.tmp-')), false);
 });
 
-test('잘못된 필드 참조와 transform export를 실제 로컬 검증기가 거부한다', (t) => {
+test('잘못된 필드 참조와 transform export를 실제 플랫폼 preflight가 거부한다', async (t) => {
   const { installedSkill, root } = workspace(t);
   assert.equal(create(installedSkill, root).status, 0);
-  const validateArgs = ['--root', root, '--platform-root', repositoryRoot];
   const pluginPath = join(root, 'plugins/company-assets/plugin.json');
   const plugin = readJson(pluginPath);
   plugin.data.types.item.views.list.columns = ['missing'];
   writeFileSync(pluginPath, `${JSON.stringify(plugin, null, 2)}\n`);
-  const invalidField = runNode(join(installedSkill, 'scripts/validate.mjs'), validateArgs);
-  assert.notEqual(invalidField.status, 0);
-  assert.match(invalidField.stderr, /columns/);
+  const invalidField = await preflightConfiguration(root);
+  assert.equal(invalidField.ok, false);
+  assert.match(JSON.stringify(invalidField.errors), /columns/);
 
   plugin.data.types.item.views.list.columns = ['id'];
   writeFileSync(pluginPath, `${JSON.stringify(plugin, null, 2)}\n`);
   writeFileSync(join(root, 'plugins/company-assets/transform.js'), 'export const wrong = 1;\n');
-  const invalidExport = runNode(join(installedSkill, 'scripts/validate.mjs'), validateArgs);
-  assert.notEqual(invalidExport.status, 0);
-  assert.match(invalidExport.stderr, /transform/);
+  const invalidExport = await preflightConfiguration(root);
+  assert.equal(invalidExport.ok, false);
+  assert.match(JSON.stringify(invalidExport.errors), /transform/);
 });
 
-test('검증 환경 누락·중복, 미빌드 checkout과 고정되지 않은 이미지를 거부한다', async (t) => {
-  const { temporary, installedSkill, root } = workspace(t);
+test('이미지 누락과 고정되지 않은 이미지를 거부한다', async (t) => {
+  const { installedSkill, root } = workspace(t);
   assert.equal(create(installedSkill, root).status, 0);
   const { validationCommand } = await import(`../skills/oss-scp-plugin-init/scripts/validate.mjs?test=${Date.now()}`);
   const invalid = [
     { root },
-    { root, image: 'oss-scp-api:1.2.3', 'platform-root': repositoryRoot },
-    { root, 'platform-root': temporary },
     { root, image: 'oss-scp-api:latest' },
     { root, image: 'oss-scp-api' },
     { root, image: '-malicious:1.2.3' },
     { root, image: 'oss-scp-api:branch' },
   ];
   for (const options of invalid) assert.throws(() => validationCommand(options));
+});
+
+test('platform-root 호스트 실행과 pathname 교체는 opt-in처럼 보이는 인자가 있어도 거부한다', (t) => {
+  const { temporary, installedSkill, root } = workspace(t);
+  assert.equal(create(installedSkill, root).status, 0);
+  const platformRoot = join(temporary, 'hostile-platform');
+  const cliDirectory = join(platformRoot, 'packages/plugin-config/dist');
+  const sentinel = join(temporary, 'host-code-ran');
+  const malicious = `import { writeFileSync } from 'node:fs'; writeFileSync(${JSON.stringify(sentinel)}, '실행됨');\n`;
+  mkdirSync(cliDirectory, { recursive: true });
+  writeFileSync(join(cliDirectory, 'cli.js'), malicious);
+
+  const validator = join(installedSkill, 'scripts/validate.mjs');
+  const rejected = runNode(validator, ['--root', root, '--platform-root', platformRoot]);
+  assert.notEqual(rejected.status, 0);
+  assert.match(rejected.stderr, /Unknown option '--platform-root'/);
+  assert.equal(existsSync(sentinel), false);
+
+  const replacement = join(temporary, 'replacement.js');
+  writeFileSync(replacement, malicious);
+  rmSync(join(cliDirectory, 'cli.js'));
+  symlinkSync(replacement, join(cliDirectory, 'cli.js'));
+  const symlinkRejected = runNode(validator, [
+    '--root', root,
+    '--allow-unsafe-local-execution',
+    '--platform-root', platformRoot,
+  ]);
+  assert.notEqual(symlinkRejected.status, 0);
+  assert.match(symlinkRejected.stderr, /Unknown option '--allow-unsafe-local-execution'/);
+  assert.equal(existsSync(sentinel), false);
+
+  rmSync(join(platformRoot, 'packages'), { recursive: true, force: true });
+  const replacementPackages = join(temporary, 'replacement-packages');
+  mkdirSync(join(replacementPackages, 'plugin-config/dist'), { recursive: true });
+  writeFileSync(join(replacementPackages, 'plugin-config/dist/cli.js'), malicious);
+  symlinkSync(replacementPackages, join(platformRoot, 'packages'));
+  const componentRejected = runNode(validator, ['--root', root, '--platform-root', platformRoot]);
+  assert.notEqual(componentRejected.status, 0);
+  assert.match(componentRejected.stderr, /Unknown option '--platform-root'/);
+  assert.equal(existsSync(sentinel), false);
 });
 
 test('Docker 검증 명령은 로컬 이미지를 먼저 확인하고 격리 옵션과 읽기 전용 mount를 사용한다', async (t) => {

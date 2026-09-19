@@ -6,7 +6,7 @@ OSS-SCP 도입 사용자가 별도 폴더에 첫 수집 플러그인을 만들�
 
 - 생성: Node.js 24 LTS. pnpm이나 외부 패키지는 필요 없다.
 - GitHub 설치: Git과 접근 가능한 네트워크. 폐쇄망이면 연결 가능한 환경에서 폴더를 준비해 옮긴다.
-- 검증: 대상 릴리스 번들에서 load한 API 이미지와 Docker, 또는 같은 revision에서 빌드한 플랫폼 checkout.
+- 검증: 대상 릴리스 번들에서 load한 API 이미지와 Docker.
 
 스킬이 포함된 릴리스 태그와 동일 버전의 플랫폼을 선택한다. 예제의 `v0.1.0`은 형식 예시이며 그 태그의 존재나 스킬 포함을 보장하지 않는다. 릴리스 전 개발 검증에는 스킬이 들어 있는 commit SHA와 그 commit으로 빌드한 플랫폼을 사용한다. 이동 가능한 branch인 `main`을 ref로 고정하거나 과거 릴리스 이미지와 섞지 않는다.
 
@@ -61,16 +61,7 @@ node "$OSS_SCP_SKILL/scripts/validate.mjs" \
 
 생성 경로는 존재하지 않아야 하고 부모 폴더는 미리 준비한다. `json-single`, `json-offset`, `csv-file`, `csv-http`를 지원한다. 로컬 CSV는 바로 읽을 예제를 포함하며 HTTP는 실제 서버 주소와 응답 경로를 수정해야 한다.
 
-개발 checkout으로 검증하려면 해당 checkout에서 의존성과 검증기를 준비한다.
-
-```sh
-pnpm install --frozen-lockfile
-pnpm --filter @oss-scp/plugin-config build
-node "$OSS_SCP_SKILL/scripts/validate.mjs" \
-  --root /absolute/path/my-plugins --platform-root "$PWD"
-```
-
-검증 실패는 0이 아닌 종료 코드로 전달한다. 검증기를 빌드하지 않았거나 Docker 또는 로컬 이미지를 준비하지 않았다면 성공으로 처리하지 않는다.
+검증 대상 checkout은 임의 코드를 포함할 수 있으므로 호스트 권한으로 로컬 검증기를 실행하는 `--platform-root` 경로는 제공하지 않는다. 개발 중인 revision도 API 이미지를 먼저 빌드하고 버전 tag를 붙인 뒤 같은 Docker 격리 경로로 검증한다. 검증 실패는 0이 아닌 종료 코드로 전달하며 Docker 또는 로컬 이미지를 준비하지 않았다면 성공으로 처리하지 않는다.
 
 ## 첫 수집과 검증 한계
 

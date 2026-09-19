@@ -1,11 +1,10 @@
 #!/usr/bin/env node
-import { existsSync, realpathSync, statSync } from 'node:fs';
-import { resolve } from 'node:path';
+import { realpathSync, statSync } from 'node:fs';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { parseArgs } from 'node:util';
 
-const usage = 'node validate.mjs --root <설정 폴더> (--image <버전 고정 API 이미지> | --platform-root <빌드된 플랫폼 checkout>)';
+const usage = 'node validate.mjs --root <설정 폴더> --image <버전 고정 API 이미지>';
 
 function pinnedImage(image) {
   if (typeof image !== 'string' || image.startsWith('-') || /[\s,]/.test(image)) return false;
@@ -24,20 +23,10 @@ function validImageName(name) {
   return /^[a-z0-9][a-z0-9._-]*(?::[0-9]+)?(?:\/[a-z0-9][a-z0-9._-]*)*$/.test(name);
 }
 
-export function validationCommand({ root, image, 'platform-root': platformRoot }) {
-  if (!root || Boolean(image) === Boolean(platformRoot)) throw new Error(usage);
+export function validationCommand({ root, image }) {
+  if (!root || !image) throw new Error(usage);
   const configRoot = realpathSync(root);
   if (!statSync(configRoot).isDirectory()) throw new Error('설정 루트는 폴더여야 합니다.');
-
-  if (platformRoot) {
-    const platform = realpathSync(platformRoot);
-    if (!statSync(platform).isDirectory()) throw new Error('플랫폼 checkout은 폴더여야 합니다.');
-    const cli = resolve(platform, 'packages/plugin-config/dist/cli.js');
-    if (!existsSync(cli) || !statSync(cli).isFile()) {
-      throw new Error('플랫폼 검증기를 먼저 빌드하세요: pnpm --filter @oss-scp/plugin-config build');
-    }
-    return { mode: 'local', command: process.execPath, args: [cli, '--root', configRoot] };
-  }
 
   if (!pinnedImage(image)) {
     throw new Error('이미지에 명시적인 제품 버전 태그 또는 sha256 digest가 필요합니다. latest와 고정되지 않은 참조는 사용할 수 없습니다.');
@@ -89,7 +78,6 @@ if (process.argv[1] && realpathSync(process.argv[1]) === fileURLToPath(import.me
       options: {
         root: { type: 'string' },
         image: { type: 'string' },
-        'platform-root': { type: 'string' },
         help: { type: 'boolean' },
       },
     });

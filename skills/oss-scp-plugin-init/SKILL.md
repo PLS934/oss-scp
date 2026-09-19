@@ -25,12 +25,10 @@ node <설치된-스킬>/scripts/init.mjs --root <새-설정-폴더> --id <플러
 
 ## 검증
 
-설치 시 기록한 Git ref와 대상 플랫폼 버전이 같은지 확인한다. 대상 이미지 또는 로컬 checkout 중 정확히 하나를 사용한다.
+설치 시 기록한 Git ref와 대상 플랫폼 버전이 같은지 확인한다. 버전 또는 digest가 고정된 대상 이미지를 사용한다. 검증 대상 checkout의 코드를 호스트 권한으로 실행하는 `--platform-root` 경로는 제공하지 않는다.
 
 ```sh
 node <설치된-스킬>/scripts/validate.mjs --root <설정-폴더> --image <API-이미지:제품버전>
-# 개발 checkout이 있을 때
-node <설치된-스킬>/scripts/validate.mjs --root <설정-폴더> --platform-root <플랫폼-checkout>
 ```
 
 검증은 대상 플랫폼의 기존 preflight를 사용한다. 검증기가 없으면 준비 방법을 안내하고 미검증으로 보고한다. 오류를 피하려고 검증을 생략하거나 별도 스키마를 만들지 않는다.

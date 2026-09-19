@@ -6,7 +6,7 @@ OSS-SCP 도입 사용자는 현재 모노레포의 샘플과 빌드 구조를 �
 
 - `skills/oss-scp-plugin-init`에 Codex와 Claude Code가 함께 사용할 수 있는 `SKILL.md`, 생성·검증 CLI, 템플릿과 참조 문서를 제공한다.
 - JSON single, JSON offset, CSV file, CSV HTTP의 네 source 유형에 대해 독립 설정 루트의 plugin/source/transform, registry, 필요한 Connection과 로컬 샘플을 생성한다.
-- 생성된 JavaScript transform과 설정을 대상 플랫폼 이미지 또는 동일 revision의 로컬 `@oss-scp/plugin-config` 검증기로 확인한다.
+- 생성된 JavaScript transform과 설정을 대상 플랫폼 이미지의 `@oss-scp/plugin-config` 검증기로 확인한다.
 - 잘못된 입력과 설정, 기존 경로 및 symlink 덮어쓰기를 거부하고 기존 데이터를 보존하는 자동 테스트를 추가한다.
 - GitHub ref와 플랫폼 버전을 맞추는 설치법, 도구별 설치 위치, AI 없이 사용하는 CLI와 첫 수집 절차를 문서화하고 생성·검증 테스트를 CI에 연결한다.
 - 운영 배포, schema 변경, 새 source 계약, 사용자 정의 UI 빌드·배포, 실제 수집·저장·조회 성공 보장은 제외한다.
@@ -23,4 +23,4 @@ OSS-SCP 도입 사용자는 현재 모노레포의 샘플과 빌드 구조를 �
 
 ## Impact
 
-`skills/oss-scp-plugin-init`, 생성·검증 테스트, 루트 package script, `.github/workflows/integration-ci.yaml`, 사용자 문서가 추가 또는 변경된다. 생성 CLI는 Node.js 표준 라이브러리만 사용하며, 검증에는 사용자가 준비한 버전 고정 플랫폼 이미지 또는 빌드된 동일 revision checkout이 필요하다. 서버, 웹, DB, 공개 API와 기존 schema의 동작은 변경하지 않는다.
+`skills/oss-scp-plugin-init`, 생성·검증 테스트, 루트 package script, `.github/workflows/integration-ci.yaml`, 사용자 문서가 추가 또는 변경된다. 생성 CLI는 Node.js 표준 라이브러리만 사용하며, 검증에는 사용자가 준비한 버전 고정 플랫폼 이미지가 필요하다. 서버, 웹, DB, 공개 API와 기존 schema의 동작은 변경하지 않는다.

@@ -7,9 +7,10 @@
 
 ## 2. 대상 플랫폼 검증
 
-- [x] 2.1 빌드된 로컬 checkout의 기존 `plugin-config` CLI를 shell 없이 호출하는 검증 경로를 추가하고, 네 생성 유형의 성공 및 잘못된 필드 참조·transform export 실패 테스트로 확인한다.
+- [x] 2.1 같은 revision의 기존 `plugin-config` preflight를 직접 사용하는 개발 테스트 경로를 추가하고, 네 생성 유형의 성공 및 잘못된 필드 참조·transform export 실패 테스트로 확인한다.
 - [x] 2.2 버전 또는 digest 고정 이미지와 로컬 존재를 요구하고 `--pull=never`, `--network=none`, `--read-only`, 읽기 전용 bind mount로 기존 검증기를 실행하는 Docker 경로를 추가하며 명령 계약 테스트로 확인한다.
-- [x] 2.3 이미지와 checkout의 동시·미지정, 미빌드 checkout, `latest`·고정되지 않은 이미지, 로컬에 없는 이미지가 성공으로 보고되지 않는지 실패 테스트로 확인한다.
+- [x] 2.3 이미지 미지정, `latest`·고정되지 않은 이미지, 로컬에 없는 이미지가 성공으로 보고되지 않는지 실패 테스트로 확인한다.
+- [x] 2.4 `--platform-root` 호스트 실행을 제거해 고정 이미지 격리를 안전 기본값이자 유일한 검증 경로로 만들고, 악성 checkout과 파일·symlink·경로 구성요소 교체가 실행되지 않는 회귀 테스트로 TOCTOU 제거를 확인한다.
 
 ## 3. 문서와 CI 연결
 

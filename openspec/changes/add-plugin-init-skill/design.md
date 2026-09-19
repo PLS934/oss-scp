@@ -9,7 +9,7 @@
 - 스킬 폴더만 설치한 환경에서 Node.js로 네 가지 source의 독립 설정 루트를 생성한다.
 - 별도 검증 규칙을 복제하지 않고 선택한 플랫폼 버전의 기존 검증기로 생성물을 확인한다.
 - 경로 탈출, symlink 추적, 옵션·명령 주입, 기존 파일 손상, 임의 이미지 pull과 쓰기 가능한 Docker mount를 방지한다.
-- 로컬 검증과 실제 플랫폼 이미지 검증을 자동 회귀 테스트에 연결한다.
+- 같은 revision의 실제 플랫폼 preflight와 플랫폼 이미지 검증을 자동 회귀 테스트에 연결한다.
 
 **Non-Goals:**
 
@@ -31,9 +31,9 @@
 
 초기 transform은 `item`의 문자열 `id`·`name`을 반환하는 ESM JavaScript로 만들고 생성 루트의 `package.json`에 module 형식을 선언한다. TypeScript는 별도 SDK와 빌드 환경을 요구하므로 고급 개발 문서로 연결한다. 원천 필드와 형변환은 예제임을 명확히 하며 플랫폼의 담당자 데이터에는 관여하지 않는다.
 
-### 플랫폼의 기존 검증기만 호출한다
+### 격리된 플랫폼 이미지의 기존 검증기만 호출한다
 
-검증 CLI는 `--platform-root` 또는 `--image` 중 정확히 하나를 요구한다. 로컬 경로는 빌드된 `packages/plugin-config/dist/cli.js`를 인자 배열로 실행하며 shell 문자열을 만들지 않는다. Docker 경로는 명시적 버전 tag 또는 digest와 로컬 이미지 존재를 먼저 확인하고 `--pull=never`, `--network=none`, `--read-only`, 읽기 전용 bind mount로 동일 검증기를 실행한다. 독립 schema 복제는 계약 drift를 만들기 때문에 채택하지 않는다.
+검증 CLI는 `--image`를 요구하고 명시적 버전 tag 또는 digest와 로컬 이미지 존재를 먼저 확인한 뒤 `--pull=never`, `--network=none`, `--read-only`, 읽기 전용 bind mount로 기존 검증기를 실행한다. `--platform-root`는 checkout의 `packages/plugin-config/dist/cli.js`와 transform을 호스트 권한으로 실행하며 pathname 검사 후 실행 사이에 파일·symlink·상위 경로가 교체될 수도 있으므로 제거한다. pathname 사전검사와 재개방을 모두 없애 TOCTOU를 구조적으로 배제한다. 독립 schema 복제는 계약 drift를 만들기 때문에 채택하지 않는다.
 
 ### 생성 테스트와 실제 이미지 테스트를 분리한다
 
@@ -42,9 +42,9 @@
 ## Risks / Trade-offs
 
 - [스킬 ref와 플랫폼 이미지 버전 불일치] → 같은 release ref와 이미지 버전을 선택하도록 문서화하고 실제 대상 검증기를 반드시 실행한다. 자동 호환성 판정은 보장하지 않는다.
-- [템플릿과 플랫폼 계약 drift] → 네 생성 유형을 로컬 검증기와 현재 revision 이미지 양쪽에서 검증한다.
+- [템플릿과 플랫폼 계약 drift] → 네 생성 유형을 같은 revision에서 import한 실제 preflight와 현재 revision 이미지 양쪽에서 검증한다.
 - [구조 검증을 실제 수집 성공으로 오해] → 결과 문구와 문서에서 계약 검증과 원천 호출·수집·저장·조회 검증을 분리한다.
-- [Docker 미설치 환경] → 생성은 Docker 없이 동작하고, 개발자는 빌드된 동일 revision checkout을 검증 경로로 사용할 수 있다.
+- [Docker 미설치 환경] → 생성과 같은 revision의 개발 테스트는 Docker 없이 동작하지만, 외부 checkout의 CLI 검증은 호스트 코드 실행보다 안전을 우선해 지원하지 않는다.
 - [엄격한 새 경로 정책이 기존 프로젝트 도입을 제한] → 기존 운영 설정 자동 병합보다 데이터 보존을 우선하며 병합은 명시적으로 후속 범위로 둔다.
 
 ## Migration Plan
