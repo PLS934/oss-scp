@@ -33,7 +33,7 @@
 
 ### 격리된 플랫폼 이미지의 기존 검증기만 호출한다
 
-검증 CLI는 `--image`를 요구하고 명시적 버전 tag 또는 digest와 로컬 이미지 존재를 먼저 확인한 뒤 `--pull=never`, `--network=none`, `--read-only`, 읽기 전용 bind mount로 기존 검증기를 실행한다. `--platform-root`는 checkout의 `packages/plugin-config/dist/cli.js`와 transform을 호스트 권한으로 실행하며 pathname 검사 후 실행 사이에 파일·symlink·상위 경로가 교체될 수도 있으므로 제거한다. pathname 사전검사와 재개방을 모두 없애 TOCTOU를 구조적으로 배제한다. 독립 schema 복제는 계약 drift를 만들기 때문에 채택하지 않는다.
+검증 CLI는 `--image`를 요구하고 명시적 버전 tag 또는 digest와 로컬 이미지 존재를 먼저 확인한 뒤 `--pull=never`, `--network=none`, `--read-only`, 읽기 전용 bind mount로 기존 검증기를 실행한다. POSIX 비루트 호스트에서는 생성기가 보존한 `0700` 설정 루트를 권한 완화 없이 읽도록 컨테이너에 호스트 UID/GID를 지정한다. root 실행에서는 권한 상승을 명시하지 않고 이미지의 비루트 기본 사용자를 유지한다. `--platform-root`는 checkout의 `packages/plugin-config/dist/cli.js`와 transform을 호스트 권한으로 실행하며 pathname 검사 후 실행 사이에 파일·symlink·상위 경로가 교체될 수도 있으므로 제거한다. pathname 사전검사와 재개방을 모두 없애 TOCTOU를 구조적으로 배제한다. 독립 schema 복제는 계약 drift를 만들기 때문에 채택하지 않는다.
 
 ### 생성 테스트와 실제 이미지 테스트를 분리한다
 

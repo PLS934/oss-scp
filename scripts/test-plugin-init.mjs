@@ -240,10 +240,20 @@ test('Docker 검증 명령은 로컬 이미지를 먼저 확인하고 격리 옵
   const image = 'registry.example:5000/oss-scp/api:v1.2.3-rc.1';
   const plan = validationCommand({ root, image });
   assert.equal(plan.command, 'docker');
-  assert.deepEqual(plan.args.slice(0, 6), [
-    'run', '--rm', '--pull=never', '--network=none', '--read-only', '--mount',
+  assert.deepEqual(plan.args.slice(0, 5), [
+    'run', '--rm', '--pull=never', '--network=none', '--read-only',
   ]);
-  assert.match(plan.args[6], /^type=bind,src=.*config with spaces,dst=\/config,readonly$/);
+  const uid = process.getuid?.();
+  const gid = process.getgid?.();
+  const mountIndex = plan.args.indexOf('--mount');
+  if (Number.isSafeInteger(uid) && uid > 0 && Number.isSafeInteger(gid) && gid >= 0) {
+    assert.deepEqual(plan.args.slice(5, 7), ['--user', `${uid}:${gid}`]);
+    assert.equal(mountIndex, 7);
+  } else {
+    assert.equal(plan.args.includes('--user'), false);
+    assert.equal(mountIndex, 5);
+  }
+  assert.match(plan.args[mountIndex + 1], /^type=bind,src=.*config with spaces,dst=\/config,readonly$/);
   assert.deepEqual(plan.args.slice(-4), [
     image,
     '/app/node_modules/@oss-scp/plugin-config/dist/cli.js',
@@ -275,6 +285,11 @@ test('Docker 검증 명령은 로컬 이미지를 먼저 확인하고 격리 옵
   assert.equal(calls[1].args.includes('--pull=never'), true);
   assert.equal(calls[1].args.includes('--network=none'), true);
   assert.equal(calls[1].args.includes('--read-only'), true);
+  if (Number.isSafeInteger(uid) && uid > 0 && Number.isSafeInteger(gid) && gid >= 0) {
+    assert.deepEqual(calls[1].args.slice(5, 7), ['--user', `${uid}:${gid}`]);
+  } else {
+    assert.equal(calls[1].args.includes('--user'), false);
+  }
 });
 
 test('문서 링크와 package·workflow 실행 계약을 유지한다', () => {

@@ -23,6 +23,13 @@ function validImageName(name) {
   return /^[a-z0-9][a-z0-9._-]*(?::[0-9]+)?(?:\/[a-z0-9][a-z0-9._-]*)*$/.test(name);
 }
 
+function hostUserArguments() {
+  const uid = process.getuid?.();
+  const gid = process.getgid?.();
+  if (!Number.isSafeInteger(uid) || uid <= 0 || !Number.isSafeInteger(gid) || gid < 0) return [];
+  return ['--user', `${uid}:${gid}`];
+}
+
 export function validationCommand({ root, image }) {
   if (!root || !image) throw new Error(usage);
   const configRoot = realpathSync(root);
@@ -44,6 +51,7 @@ export function validationCommand({ root, image }) {
       '--pull=never',
       '--network=none',
       '--read-only',
+      ...hostUserArguments(),
       '--mount',
       `type=bind,src=${configRoot},dst=/config,readonly`,
       '--entrypoint',

@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { chmodSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { chmodSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { spawnSync } from 'node:child_process';
@@ -18,6 +18,7 @@ const validator = fileURLToPath(new URL('../skills/oss-scp-plugin-init/scripts/v
 try {
   for (const source of ['json-single', 'json-offset', 'csv-file', 'csv-http']) {
     const root = initialize({ root: join(temporary, source), id: 'smoke', source });
+    assert.equal(statSync(root).mode & 0o777, 0o700);
     const validate = () => spawnSync(process.execPath, [
       validator,
       '--root', root,
