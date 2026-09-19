@@ -40,7 +40,7 @@ gzip -dc "$first/oss-scp-web-${first_version}.tar.gz" | docker load
 export OSS_SCP_VERSION="$first_version"
 first_compose="$first/oss-scp-${first_version}-compose.yaml"
 docker compose -p "$project" -f "$first_compose" up -d --wait --wait-timeout 90 postgres
-docker compose -p "$project" -f "$first_compose" run --rm api node node_modules/@oss-scp/platform-db/dist/migrate-cli.js | grep -q '5개 적용'
+docker compose -p "$project" -f "$first_compose" run --rm api node node_modules/@oss-scp/platform-db/dist/migrate-cli.js | grep -q '6개 적용'
 docker compose -p "$project" -f "$first_compose" up -d --wait --wait-timeout 90 api web
 test "$(curl --fail --silent --show-error --max-time 5 "http://127.0.0.1:${API_PORT}/api/v1/health")" = '{"status":"ok"}'
 test "$(curl --fail --silent --show-error --max-time 5 "http://127.0.0.1:${API_PORT}/api/v1/ready")" = '{"status":"ready"}'
