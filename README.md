@@ -54,3 +54,7 @@ docker compose down
 sample1·sample2 mock API와 로컬·HTTP CSV의 입력 정보를 `plugin.json`, `source.json`, Connection으로 분리한 [샘플 플러그인 작성·검증 안내](docs/plugin-development.md)를 제공합니다. 샘플의 TypeScript 가공 코드는 동일한 공통 엔진에서 레코드 단위로 실행·검증됩니다. JSON HTTP source는 offset·single 실행을 지원하며 로컬·HTTP CSV source는 공통 파서의 제한된 행 묶음 실행을 지원합니다.
 
 공통 파서의 형식·오류 계약은 [로컬 CSV 읽기 가이드](docs/local-csv-reader.md), 파일 획득은 [로컬 CSV source 가이드](docs/local-csv-source.md), 다운로드 획득은 [HTTP CSV source 가이드](docs/http-csv-source.md)를 참고하세요.
+
+## 첫 플러그인 만들기
+
+[GitHub 설치형 플러그인 초기 설정 스킬](docs/plugin-init-skill.md)로 별도 작업 폴더에서 시작할 수 있습니다. Codex·Claude Code 설치 안내와 AI 없이 사용하는 생성·검증 CLI를 제공합니다.

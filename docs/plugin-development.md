@@ -1,5 +1,7 @@
 # 샘플 플러그인 설정과 검증
 
+처음 시작하는 플랫폼 사용자는 [플러그인 초기 설정 스킬](plugin-init-skill.md)로 독립 설정 폴더를 생성할 수 있습니다.
+
 `sample1-offset-api`와 `sample2-single-api`는 원천 mock API의 두 JSON 반환 방식을 설명합니다. `vulnerabilities-local-csv`와 `vulnerabilities-http-csv`는 같은 CSV를 각각 로컬 파일과 HTTP 다운로드로 획득해 공통 파서로 처리합니다. JSON 수집은 [HTTP JSON 수집 가이드](http-offset-collection.md), 다운로드 CSV는 [HTTP CSV source 가이드](http-csv-source.md)를 따릅니다.
 
 ## 파일 구성
