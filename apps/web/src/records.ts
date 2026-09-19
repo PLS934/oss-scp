@@ -162,7 +162,7 @@ function isAbort(error: unknown, signal?: AbortSignal): boolean {
 async function requestJson<T>(url: string, validate: (value: unknown) => value is T, options: RecordRequestOptions): Promise<ApiResult<T>> {
   if (options.signal?.aborted) return failure('ABORTED');
   try {
-    const response = await (options.request ?? fetch)(url, { signal: options.signal });
+    const response = await (options.request ?? authenticatedFetch)(url, { signal: options.signal });
     let body: unknown;
     try { body = await response.json(); } catch { body = undefined; }
     if (!response.ok) {
@@ -216,3 +216,4 @@ export async function getLiveRecord(input: { pluginId: string; sourceId: string;
 export function listNumberedRecords(input: NumberedListRecordsInput, options: RecordRequestOptions = {}): Promise<ApiResult<NumberedListRecordsResult>> {
   return listRecords(input, options);
 }
+import { authenticatedFetch } from './auth-client';

@@ -29,6 +29,8 @@ services:
       PLATFORM_DB_USER: ${PLATFORM_DB_USER:-oss_scp_app}
       PLATFORM_DB_PASSWORD: ${PLATFORM_DB_PASSWORD:?PLATFORM_DB_PASSWORD must be set}
       PLATFORM_DB_TLS_MODE: disable
+      # 계정관리는 기본 비활성화다. 활성화는 compose.auth.example.yaml overlay를 사용한다.
+      AUTH_ENABLED: "false"
     depends_on:
       postgres:
         condition: service_healthy

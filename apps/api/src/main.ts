@@ -5,11 +5,16 @@ import { loadEnvFile } from 'node:process';
 import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module';
 import { readConfig } from './config';
-import { createPlatformRecordAdapters, mysqlAdapter, postgresAdapter, readPlatformDbConfig, selectPlatformDbAdapter } from '@oss-scp/platform-db';
+import { createMysqlAuthSessionRepository, createPlatformRecordAdapters, createPostgresAuthSessionRepository, mysqlAdapter, postgresAdapter, readPlatformDbConfig, selectPlatformDbAdapter } from '@oss-scp/platform-db';
+import type { MysqlPlatformDbConnection, PostgresPlatformDbConnection } from '@oss-scp/platform-db';
 import { preflightConfiguration } from '@oss-scp/plugin-config';
 import { formatConfigurationIssues } from './configuration-errors';
 import { createPluginRuntimeRegistry } from './plugin-runtime-registry';
 import { StartupCollectionManager } from './startup-collection';
+import { AuthSessionManager } from './auth-session';
+import { LdapAuthenticator } from './ldap-authenticator';
+import { LoginRateLimiter } from './login-rate-limit';
+import { connectAfterAuthValidation } from './startup-auth';
 
 async function bootstrap() {
   const envFile = resolve(__dirname, '../../../.env');
@@ -22,10 +27,24 @@ async function bootstrap() {
   const registry = createPluginRuntimeRegistry({ ...configuration, configRoot });
   const adapters = [postgresAdapter, mysqlAdapter] as const;
   const dbConfig = readPlatformDbConfig(process.env, adapters);
-  const connection = await selectPlatformDbAdapter(dbConfig.type, adapters).connect(dbConfig);
+  const { authConfig, connection } = await connectAfterAuthValidation(
+    () => selectPlatformDbAdapter(dbConfig.type, adapters).connect(dbConfig),
+  );
   const { query } = createPlatformRecordAdapters(dbConfig.type, connection);
+  const auth = authConfig.enabled ? (() => {
+    const sessions = dbConfig.type === 'postgres'
+      ? createPostgresAuthSessionRepository(connection as PostgresPlatformDbConnection)
+      : createMysqlAuthSessionRepository(connection as MysqlPlatformDbConnection);
+    return {
+      config: authConfig,
+      authenticator: new LdapAuthenticator(authConfig.ldap),
+      sessions: new AuthSessionManager(sessions, authConfig.session.secret, authConfig.session.ttlSeconds),
+      rateLimiter: new LoginRateLimiter(authConfig.session.secret),
+    };
+  })() : { config: authConfig };
   const startup = new StartupCollectionManager(configRoot);
-  const app = await NestFactory.create(AppModule.register(connection, query, registry, startup, undefined, { configRoot }), { abortOnError: false });
+  const app = await NestFactory.create(AppModule.register(connection, query, registry, startup, undefined, { configRoot }, auth), { abortOnError: false });
+  if (authConfig.enabled) app.getHttpAdapter().getInstance().set('trust proxy', authConfig.trustedProxyHops);
   app.enableShutdownHooks();
   try {
     await app.listen(port, host);

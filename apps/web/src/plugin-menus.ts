@@ -1,4 +1,5 @@
 import type { MenuItem } from './menu';
+import { authenticatedFetch } from './auth-client';
 
 const icons = new Set(['server', 'shield', 'repository']);
 const scalarTypes = new Set(['string', 'number', 'boolean', 'datetime']);
@@ -78,7 +79,7 @@ function isMenu(value: unknown): value is MenuItem {
 }
 
 export async function loadPluginMenus(options: { request?: typeof fetch; signal?: AbortSignal } = {}): Promise<MenuItem[]> {
-  const response = await (options.request ?? fetch)('/api/v1/plugin-menus', { signal: options.signal });
+  const response = await (options.request ?? authenticatedFetch)('/api/v1/plugin-menus', { signal: options.signal });
   if (!response.ok) throw new Error('plugin_menu_request_failed');
   const value: unknown = await response.json();
   if (!Array.isArray(value) || !value.every(isMenu)) throw new Error('plugin_menu_invalid_response');
