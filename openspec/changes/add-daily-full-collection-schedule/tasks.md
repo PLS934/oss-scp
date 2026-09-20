@@ -76,3 +76,4 @@
 
 - [x] 12.1 schedule 비활성 preflight가 기존 Node module loader로 CommonJS·ESM transform을 검증하고 scheduled byte-snapshot sandbox는 활성 경로에만 적용되도록 복구한다.
 - [x] 12.2 plugin-init local·production Docker 검증과 focused·전체 검증을 통과시킨다.
+- [x] 12.3 schedule 비활성 API manager 준비가 실제 plugin-init ESM 설정에서 scheduled target·snapshot을 만들지 않는 bootstrap 회귀 테스트를 통과시킨다.

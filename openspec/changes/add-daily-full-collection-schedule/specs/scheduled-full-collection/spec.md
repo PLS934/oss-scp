@@ -82,7 +82,7 @@
 
 #### Scenario: 비-scheduled ESM transform 호환성
 - **WHEN** schedule이 비활성화된 plugin이 self-contained ESM transform을 제공한다
-- **THEN** 플랫폼은 scheduled CommonJS snapshot 실행기를 적용하지 않고 기존 Node module loading 계약으로 preflight한다
+- **THEN** 플랫폼은 기존 Node module loading 계약으로 preflight하고 API manager 준비에서 scheduled target·transform snapshot·sandbox를 만들지 않는다
 
 #### Scenario: scheduled 자식 환경 격리
 - **WHEN** API 부모 환경에 플랫폼 DB, 대상 수집 credential, 인증·LDAP와 무관한 비밀이 함께 있다

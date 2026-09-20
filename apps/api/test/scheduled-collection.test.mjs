@@ -5,6 +5,8 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { PassThrough } from 'node:stream';
 import { afterAll, afterEach, describe, expect, it, vi } from 'vitest';
+import { preflightConfiguration } from '@oss-scp/plugin-config';
+import { initialize } from '../../../skills/oss-scp-plugin-init/scripts/init.mjs';
 import { ScheduledCollectionManager, scheduledChildEnvironment } from '../dist/scheduled-collection.js';
 
 const temporary = mkdtempSync(join(tmpdir(), 'oss-scp-scheduled-test-'));
@@ -53,6 +55,22 @@ describe('일일 scheduled 전체 수집', () => {
     const spawn = vi.fn();
     const manager = new ScheduledCollectionManager('/config', { enabled: false, timezone: 'Asia/Seoul', time: '22:00' }, referenceStorage(), console, '/collector.js', spawn);
     manager.prepare([definition('one')]); manager.start(); await vi.advanceTimersByTimeAsync(48 * 60 * 60 * 1000);
+    expect(spawn).not.toHaveBeenCalled();
+    await manager.close();
+  });
+
+  it('plugin-init ESM 설정의 비활성 일정은 API manager 준비에서 scheduled snapshot을 만들지 않는다', async () => {
+    const root = initialize({ root: join(temporary, 'plugin-init-disabled'), id: 'company-assets', source: 'csv-file' });
+    const configuration = await preflightConfiguration(root);
+    expect(configuration.ok).toBe(true);
+    if (!configuration.ok) return;
+    expect(configuration.collection.schedule.enabled).toBe(false);
+    const spawn = vi.fn();
+    const manager = new ScheduledCollectionManager(root, configuration.collection.schedule, referenceStorage(), console, '/collector.js', spawn);
+
+    expect(() => manager.prepare(configuration.definitions)).not.toThrow();
+    manager.start();
+
     expect(spawn).not.toHaveBeenCalled();
     await manager.close();
   });

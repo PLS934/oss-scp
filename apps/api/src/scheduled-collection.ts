@@ -129,8 +129,12 @@ export class ScheduledCollectionManager {
 
   prepare(definitions: readonly CollectionDefinition[]): void {
     if (this.targets || this.started || this.closing) throw new Error('정기 수집 snapshot은 기동 전에 한 번만 준비할 수 있습니다.');
+    if (!this.schedule.enabled) {
+      this.targets = [];
+      return;
+    }
     this.targets = definitions.filter(definition => !isLivePostgresDefinition(definition)).map(definition => {
-      if (this.schedule.enabled) scheduledCredentialEnvironment(definition);
+      scheduledCredentialEnvironment(definition);
       const snapshot = captureScheduledCollectionSnapshot(definition);
       return { definition: snapshot.definition, expectedRevision: definitionRevision(snapshot.definition), snapshot };
     });
