@@ -31,11 +31,11 @@
 
 ### 4. scheduler는 대상별 기존 collector process 경계를 재사용한다
 
-기동 시 확정한 registry에서 `enabled`이고 저장형인 대상을 가져와 기존 process spawn helper로 각각 full 수집한다. 각 대상의 runtime definition, revision, transform digest와 정확한 transform 바이트를 기동 전에 불변 snapshot으로 고정한다. scheduled transform은 self-contained 순수 mapping이어야 한다. AST allowlist는 `const`, arrow function, 객체·배열·고정 property mapping, 산술·비교·논리 연산과 제한된 `String`·`Number`·`Boolean`·`Date` 변환 및 TypeScript CommonJS export scaffolding만 허용한다. `process`, `globalThis`, ambient `this`, `eval`, `Function`, `Reflect`, constructor/prototype chain, 동적 computed access와 모든 import/require/module loader는 기본 거부하며 module top-level 실행 전에 전체 AST를 검증한다. 이 제한은 schedule 활성 preflight와 자식 검증에만 적용해 비-scheduled transform 계약은 유지한다. 자식은 snapshot의 구조·revision·digest를 module top-level 실행 전에 검증하고, 검증한 바이트 자체를 파일 재조회 없이 실행한다. `scheduled`, 예정 UTC instant, timezone을 제한된 내부 인자로 전달한다. 자식 환경은 필수 runtime 값, `PLATFORM_DB_*`, 해당 대상 Connection이 참조하는 수집 credential만 allowlist하며 `AUTH_*`와 `LDAP_*`는 전달하지 않는다. `Promise.allSettled`에 준하는 격리로 한 spawn 실패가 다른 대상 실행을 막지 않게 한다. runner를 API 프로세스에 중복 구현하는 대안은 CLI/API 간 저장 의미가 갈라지므로 선택하지 않는다.
+기동 시 확정한 registry에서 `enabled`이고 저장형인 대상을 가져와 기존 process spawn helper로 각각 full 수집한다. 각 대상의 runtime definition, revision, transform digest와 정확한 transform 바이트를 기동 전에 불변 snapshot으로 고정한다. scheduled transform은 self-contained 순수 mapping이어야 한다. AST allowlist는 `const`, lexical scope의 arrow function, 안전한 `async` arrow/`await`, 객체·배열·고정 property mapping, 산술·비교·논리 연산과 제한된 `String`·`Number`·`Boolean`·`Date` 변환 및 TypeScript CommonJS export scaffolding만 허용한다. identifier는 실제 참조 위치의 현재 lexical scope chain에서만 해석하며 sibling·nested scope의 binding을 공유하지 않는다. `process`, `globalThis`, ambient `this`, `eval`, `Function`, `Reflect`, constructor/prototype chain, 동적 computed access와 모든 import/require/module loader는 기본 거부하며 module top-level 실행 전에 전체 AST를 검증한다. 이 제한은 schedule 활성 preflight와 자식 검증에만 적용해 비-scheduled transform 계약은 유지한다. 자식은 snapshot의 구조·revision·digest를 module top-level 실행 전에 검증하고, 검증한 바이트 자체를 파일 재조회 없이 실행한다. `scheduled`, 예정 UTC instant, timezone을 제한된 내부 인자로 전달한다. 자식 환경은 필수 runtime 값, platform DB loader가 지원하는 명시적 설정 key, 해당 대상 Connection이 참조하는 수집 credential만 allowlist하며 unknown `PLATFORM_DB_*`, `AUTH_*`, `LDAP_*`는 전달하지 않는다. `Promise.allSettled`에 준하는 격리로 한 spawn 실패가 다른 대상 실행을 막지 않게 한다. runner를 API 프로세스에 중복 구현하는 대안은 CLI/API 간 저장 의미가 갈라지므로 선택하지 않는다.
 
 ### 5. DB lease가 다중 인스턴스의 유일한 실행 권한이다
 
-각 API 인스턴스는 자체 timer를 가질 수 있지만 모든 scheduled 요청은 기존 대상·revision·full 범위 lease를 획득해야 한다. 별도 scheduler leader lease는 이중 조정 계층과 장애 복구 복잡도를 늘리므로 추가하지 않는다. lease loser는 실패 run을 새로 만들지 않고 현재 `activeRunId`와 예정 instant·timezone을 비민감 duplicate event로 반환한다. 부모 scheduler는 stdout을 16 KiB 상한과 exact event schema로 검증하며, 유효한 duplicate만 별도 `scheduled_collection_references` 이력에 기존 run FK로 멱등 저장한다. 오염·초과·metadata 또는 exit code 불일치는 저장하지 않고 일반화된 안전 오류로 처리한다. 실행 이력 schema는 trigger enum/check와 예정 instant·timezone nullable 필드를 확장하고, scheduled에서만 두 metadata를 요구하도록 storage 경계에서 검증한다. PostgreSQL `finishRun`은 MySQL과 같은 의미로 row lock을 건 transaction에서 running 상태와 유효 lease를 확인한 하나의 호출만 상태를 전이한다.
+각 API 인스턴스는 자체 timer를 가질 수 있지만 모든 scheduled 요청은 `pluginId`·`sourceId`·`scopeType`·`scopeKey`로 정한 공통 lease를 획득해야 한다. `configRevision`은 실행 이력·checkpoint identity에는 보존하지만 lease identity에서는 제외해 rolling restart 중 서로 다른 revision도 동시에 원천을 실행하거나 결과를 확정할 수 없게 한다. commit도 같은 revision 비포함 lease lock 아래에서 running run과 revision 일치를 확인하므로 이전 revision의 stale 결과는 최신 실행 뒤 확정되지 않는다. 별도 scheduler leader lease는 이중 조정 계층과 장애 복구 복잡도를 늘리므로 추가하지 않는다. lease loser는 실패 run을 새로 만들지 않고 현재 `activeRunId`와 예정 instant·timezone을 비민감 duplicate event로 반환한다. 부모 scheduler는 stdout을 16 KiB 상한과 exact event schema로 검증하며, 유효한 duplicate만 별도 `scheduled_collection_references` 이력에 기존 run FK로 멱등 저장한다. duplicate active validation도 같은 revision 비포함 lease identity와 running·유효 lease를 요구한다. 오염·초과·metadata 또는 exit code 불일치는 저장하지 않고 일반화된 안전 오류로 처리한다. 실행 이력 schema는 trigger enum/check와 예정 instant·timezone nullable 필드를 확장하고, scheduled에서만 두 metadata를 요구하도록 storage 경계에서 검증한다. PostgreSQL `finishRun`은 MySQL과 같은 의미로 row lock을 건 transaction에서 running 상태와 유효 lease를 확인한 하나의 호출만 상태를 전이한다.
 
 ### 6. 기존 저장 보존 계약을 변경하지 않는다
 
@@ -43,7 +43,7 @@ scheduled run도 공통 runner의 batch transaction과 checkpoint/lease fencing�
 
 ### 7. lifecycle은 timer와 자식 프로세스를 함께 관리한다
 
-API 종료 시 pending timer를 해제하고 실행 중인 scheduled 자식에 `SIGTERM`으로 종료를 요청한다. process exit 상태만으로 stdio drain을 완료했다고 간주하지 않고 실제 `close` event까지 grace 안에서 기다려 결과 handler를 등록한다. grace period 뒤에도 생존한 자식에는 `SIGKILL`을 보내고 close 대기도 유한 상한 뒤 끝낸다. 등록된 duplicate 영속화 작업은 가능한 만큼 drain하되 별도 고정 상한 뒤 DB 응답을 더 기다리지 않고 종료한다. 종료 뒤 callback이 새 작업을 만들지 않도록 세대/closed 상태를 검사한다. 설정·transform 변경은 hot reload하지 않고 재시작 때 새 snapshot과 timer를 만든다.
+API 종료 시 pending timer를 해제하고 실행 중인 scheduled 자식에 `SIGTERM`으로 종료를 요청한다. process exit 상태만으로 stdio drain을 완료했다고 간주하지 않고 실제 `close` event까지 grace 안에서 기다려 결과 handler를 등록한다. grace period 뒤에도 생존한 자식에는 `SIGKILL`을 보내고 close 대기도 유한 상한 뒤 끝낸다. 등록된 duplicate 영속화 작업은 가능한 만큼 drain하되 별도 고정 상한 뒤 DB 응답을 더 기다리지 않고 종료한다. close 대기 상한이 끝나면 manager를 terminal 상태로 만들고 결과 listener를 제거해 늦은 `close` callback이 새 storage 작업을 시작하지 못하게 한다. 설정·transform 변경은 hot reload하지 않고 재시작 때 새 snapshot과 timer를 만든다.
 
 ## Risks / Trade-offs
 
@@ -56,6 +56,7 @@ API 종료 시 pending timer를 해제하고 실행 중인 scheduled 자식에 `
 - [snapshot transform이 ambient Node capability나 helper/package를 통해 검증한 바이트 밖의 코드에 접근할 수 있음] → schedule 활성 경로는 좁은 순수 mapping AST allowlist만 허용하고 ambient global, 동적 property, constructor/prototype와 모든 module loader를 실행 전 거부한다.
 - [자식 stdout 오염이 잘못된 active run 참조나 메모리 사용을 만들 수 있음] → 작은 고정 상한, 단일 JSON exact schema, plugin·schedule metadata와 exit code 일치를 모두 확인한 뒤 FK 참조만 저장한다.
 - [exit 뒤 stdio close 또는 duplicate DB 저장이 끝나지 않아 API shutdown을 무기한 막을 수 있음] → 실제 close까지 bounded wait해 가능한 결과를 등록하고, SIGTERM grace·SIGKILL 뒤 close·결과 drain에 각각 상한을 둔다.
+- [rolling restart 중 서로 다른 config revision이 같은 대상을 동시에 실행하거나 이전 결과가 최신 데이터를 덮을 수 있음] → revision을 제외한 공통 lease identity로 start·commit·duplicate validation을 직렬화하고 revision은 실행 이력과 checkpoint에만 보존한다.
 
 ## Migration Plan
 

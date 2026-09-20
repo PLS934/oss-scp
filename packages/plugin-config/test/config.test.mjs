@@ -225,6 +225,21 @@ describe('validateRepository', () => {
       expect(() => assertSelfContainedTransform(readFileSync(join(repositoryRoot, 'plugins', directory, 'dist/transform.js')))).not.toThrow();
     }
   });
+
+  test.each([
+    ['sibling scope', 'const selected = ({ record }) => fetch(record.url); const sibling = () => { const fetch = value => value; return fetch("safe"); }; exports.transform = selected;'],
+    ['nested sibling scope', 'const selected = ({ record }) => { const unsafe = () => console.log(record); const sibling = () => { const console = { log: value => value }; return console.log(record); }; return unsafe(); }; exports.transform = selected;'],
+  ])('scheduled lexical allowlist가 %s의 binding을 ambient 참조에 평탄화하지 않는다', (_name, body) => {
+    const runtimeTrap = 'const executed = Number({ valueOf: () => ({ value: true }).missing() });';
+    expect(() => loadSelfContainedTransformSnapshot(Buffer.from(`${runtimeTrap}\n${body}\n`), '/snapshot/transform.js'))
+      .toThrowError(/^scheduled transform/);
+  });
+
+  test('scheduled 순수 mapping은 async arrow와 await를 지원한다', async () => {
+    const source = 'exports.transform = async ({ record }) => { const mapped = await record; return { ...mapped, async: true }; };\n';
+    const transform = loadSelfContainedTransformSnapshot(Buffer.from(source), '/snapshot/transform.js');
+    await expect(transform({ record: { id: 'one' } })).resolves.toEqual({ id: 'one', async: true });
+  });
   test('sample1과 sample2 설정을 내부 수집 정의로 해석한다', () => {
     const result = validateRepository(repositoryRoot);
 

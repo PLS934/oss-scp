@@ -97,13 +97,14 @@ describe('일일 scheduled 전체 수집', () => {
   it('필수 runtime·DB·대상 credential만 전달하고 AUTH·LDAP 및 무관 환경은 차단한다', () => {
     const target = definition('one', { connection: { id: 'source', baseUrl: 'https://example.test', auth: { type: 'bearer', tokenRef: { env: 'SOURCE_TOKEN' } } } });
     const environment = scheduledChildEnvironment({
-      PATH: '/bin', PLATFORM_DB_PASSWORD: 'db-secret', SOURCE_TOKEN: 'source-secret',
+      PATH: '/bin', PLATFORM_DB_PASSWORD: 'db-secret', PLATFORM_DB_UNKNOWN_SECRET: 'unknown-db-secret', SOURCE_TOKEN: 'source-secret',
       AUTH_SESSION_SECRET: 'auth-secret', LDAP_BIND_PASSWORD: 'ldap-secret', RANDOM_SECRET: 'other-secret',
     }, target, { configRoot: '/config', expectedRevision: 'a'.repeat(64), scheduledAt: '2026-09-19T13:00:00.000Z', timezone: 'Asia/Seoul' });
     expect(environment).toMatchObject({ PATH: '/bin', PLATFORM_DB_PASSWORD: 'db-secret', SOURCE_TOKEN: 'source-secret', OSS_SCP_COLLECTION_TRIGGER: 'scheduled' });
     expect(environment).not.toHaveProperty('AUTH_SESSION_SECRET');
     expect(environment).not.toHaveProperty('LDAP_BIND_PASSWORD');
     expect(environment).not.toHaveProperty('RANDOM_SECRET');
+    expect(environment).not.toHaveProperty('PLATFORM_DB_UNKNOWN_SECRET');
 
     const forbiddenReference = { ...target, connection: { ...target.connection, auth: { type: 'bearer', tokenRef: { env: 'AUTH_SOURCE_TOKEN' } } } };
     expect(scheduledChildEnvironment({ AUTH_SOURCE_TOKEN: 'secret' }, forbiddenReference, { configRoot: '/config', expectedRevision: 'a'.repeat(64), scheduledAt: '2026-09-19T13:00:00.000Z', timezone: 'UTC' })).not.toHaveProperty('AUTH_SOURCE_TOKEN');
@@ -200,6 +201,19 @@ describe('일일 scheduled 전체 수집', () => {
     await vi.advanceTimersByTimeAsync(1); await closing;
     expect(closed).toBe(true);
     expect(references.recordScheduledDuplicate).toHaveBeenCalledOnce();
+  });
+
+  it('종료 상한 뒤 도착한 late close는 결과 처리나 DB 저장을 시작하지 않는다', async () => {
+    vi.useFakeTimers(); vi.setSystemTime(new Date('2026-09-19T12:59:00.000Z'));
+    const late = child(true); const spawn = vi.fn(() => late); const references = referenceStorage();
+    const manager = new ScheduledCollectionManager('/config', { enabled: true, timezone: 'Asia/Seoul', time: '22:00' }, references, console, '/collector.js', spawn, () => new Date(), {}, 100, 50, 75);
+    manager.start([definition('one')]); await vi.advanceTimersByTimeAsync(60_000);
+    const closing = manager.close();
+    await vi.advanceTimersByTimeAsync(150); await closing;
+    late.stdout.end(`${JSON.stringify(resultEvent('one', 'duplicate'))}\n`);
+    late.exitCode = 0; late.emit('close', 0);
+    await Promise.resolve();
+    expect(references.recordScheduledDuplicate).not.toHaveBeenCalled();
   });
 
   it('종료 시 SIGTERM grace 뒤 SIGKILL하고 close 대기 상한을 보장한다', async () => {

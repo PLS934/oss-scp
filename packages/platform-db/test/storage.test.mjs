@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import { canonicalExternalKey, StorageError, validateCommitBatch, validateStartRun } from '../dist/index.js';
+import {
+  canonicalExternalKey, collectionLeaseIdentity, collectionScopeIdentity, StorageError, validateCommitBatch, validateStartRun,
+} from '../dist/index.js';
 
 const scope = { pluginId: 'sample', sourceId: 'source', scopeType: 'full', scopeKey: '', configRevision: 'rev-1' };
 const batch = patch => ({
@@ -9,6 +11,12 @@ const batch = patch => ({
 });
 
 describe('공통 저장 입력 계약', () => {
+  it('revision별 실행 이력 identity와 revision을 제외한 lease identity를 분리한다', () => {
+    const changed = { ...scope, configRevision: 'rev-2' };
+    expect(collectionScopeIdentity(scope)).not.toEqual(collectionScopeIdentity(changed));
+    expect(collectionLeaseIdentity(scope)).toEqual(collectionLeaseIdentity(changed));
+  });
+
   it('scheduled metadata를 trigger와 함께만 허용한다', () => {
     const base = { ...scope, startedAt: '2026-09-19T13:00:01.000Z' };
     expect(() => validateStartRun({ ...base, trigger: 'scheduled', scheduledAt: '2026-09-19T13:00:00.000Z', scheduleTimezone: 'Asia/Seoul' })).not.toThrow();

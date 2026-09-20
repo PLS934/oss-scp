@@ -1,7 +1,7 @@
 ## MODIFIED Requirements
 
 ### Requirement: 모든 trigger가 같은 대상 실행권을 공유한다
-기동, scheduled, 수동 CLI 및 수동 API trigger는 같은 plugin·source·설정 revision·full 범위에 대해 동일한 DB 실행권과 lease 계약에 SHALL 참여해야 한다. trigger 종류나 요청을 받은 API 인스턴스가 달라도 동시에 하나의 실행만 데이터를 확정해야 하며(MUST), 중복 요청은 현재 실행을 참조할 수 있어야 한다(MUST).
+기동, scheduled, 수동 CLI 및 수동 API trigger는 같은 plugin·source·scope type·scope key에 대해 설정 revision과 무관하게 동일한 DB 실행권과 lease 계약에 SHALL 참여해야 한다. trigger 종류, 설정 revision 또는 요청을 받은 API 인스턴스가 달라도 동시에 하나의 실행만 데이터를 확정해야 하며(MUST), 중복 요청은 현재 실행을 참조할 수 있어야 한다(MUST). 설정 revision은 실행 이력과 checkpoint identity에는 보존해야 한다(MUST).
 
 #### Scenario: 수동 API와 기동 수집 충돌
 - **WHEN** 기동 수집이 진행 중인 대상에 수동 API 동기화 요청이 도착한다
@@ -18,6 +18,10 @@
 #### Scenario: 여러 API 인스턴스의 scheduled 실행
 - **WHEN** 같은 설정 revision을 사용하는 API 인스턴스 둘 이상이 동일 대상의 예정 시각을 관측한다
 - **THEN** DB 실행권을 얻은 하나만 원천 수집과 running 상태 전이를 수행하고 나머지 요청은 실패 run을 만들지 않으며 현재 `activeRunId`, 예정 UTC instant와 timezone을 기존 run FK 기반 duplicate 참조 이력으로 멱등 저장한다
+
+#### Scenario: rolling restart의 서로 다른 revision 경합
+- **WHEN** 같은 plugin·source·scope를 가진 이전 revision과 새 revision 인스턴스가 동시에 실행권을 요청한다
+- **THEN** revision 비포함 lease를 얻은 하나만 running 상태가 되고 loser는 winner의 `activeRunId`를 참조하며, 이전 revision의 stale 결과는 새 실행 뒤 데이터를 확정하지 못하고 각 실행 이력에는 해당 revision이 보존된다
 
 #### Scenario: scheduled 자식 결과 검증
 - **WHEN** scheduled 자식 stdout이 상한을 넘거나 단일 JSON exact event schema, plugin·예정 metadata 또는 exit code와 일치하지 않는다

@@ -432,6 +432,54 @@ describe('PostgreSQL 공통 레코드 저장 계약', () => {
     await commit(second, scope);
   });
 
+  it('서로 다른 revision도 동일 lease를 공유하고 stale revision 저장을 fencing한다', async () => {
+    const oldScope = testScope('cross-revision-lease');
+    const newScope = { ...oldScope, configRevision: 'rev-2' };
+    const otherConnection = await postgresAdapter.connect(config());
+    try {
+      const otherStorage = createPostgresRecordStorage(otherConnection);
+      const oldRun = await storage.startRun({
+        ...oldScope, startedAt: '2026-09-20T13:00:01.000Z', exclusive: true, trigger: 'scheduled',
+        scheduledAt: '2026-09-20T13:00:00.000Z', scheduleTimezone: 'UTC',
+      });
+      await expect(otherStorage.startRun({
+        ...newScope, startedAt: '2026-09-20T13:00:02.000Z', exclusive: true, trigger: 'scheduled',
+        scheduledAt: '2026-09-20T13:00:00.000Z', scheduleTimezone: 'UTC',
+      })).rejects.toMatchObject({ code: 'RUN_ALREADY_ACTIVE', activeRunId: oldRun });
+      await otherStorage.recordScheduledDuplicate({
+        ...newScope, activeRunId: oldRun, scheduledAt: '2026-09-20T13:00:00.000Z',
+        scheduleTimezone: 'UTC', observedAt: '2026-09-20T13:00:03.000Z',
+      });
+
+      await connection.withClient(client => client.query("UPDATE collection_runs SET heartbeat_at=now() - interval '3 minutes' WHERE id=$1", [oldRun]));
+      const newRun = await otherStorage.startRun({ ...newScope, startedAt: '2026-09-20T13:04:00.000Z', exclusive: true });
+      await otherStorage.commitBatch({
+        runId: newRun, scope: newScope, observedAt: '2026-09-20T13:04:01.000Z', expectedCheckpoint: null,
+        nextCheckpoint: { offset: 2 }, processedCount: 1, acceptedCount: 1,
+        records: [{ type: 'asset', key: 'server-1', values: { hostname: 'new' } }], relations: [], issues: [],
+      });
+      await expect(commit(oldRun, oldScope)).rejects.toMatchObject({ code: 'RUN_NOT_ACTIVE' });
+      const evidence = await connection.withClient(client => client.query(`SELECT
+        (SELECT array_agg(config_revision ORDER BY config_revision) FROM collection_runs WHERE plugin_id=$1) AS revisions,
+        (SELECT source_values->>'hostname' FROM platform_records WHERE plugin_id=$1 AND source_id=$2 AND external_key='server-1') AS hostname,
+        (SELECT count(*)::int FROM scheduled_collection_references WHERE active_run_id=$3) AS references`,
+      [oldScope.pluginId, oldScope.sourceId, oldRun]));
+      expect(evidence.rows[0]).toMatchObject({ revisions: ['rev-1', 'rev-2'], hostname: 'new', references: 1 });
+      await otherStorage.finishRun({ runId: newRun, status: 'success', finishedAt: '2026-09-20T13:05:00.000Z' });
+
+      const raceOld = testScope('cross-revision-race');
+      const raceNew = { ...raceOld, configRevision: 'rev-2' };
+      const raced = await Promise.allSettled([
+        storage.startRun({ ...raceOld, startedAt: '2026-09-20T14:00:00.000Z', exclusive: true }),
+        otherStorage.startRun({ ...raceNew, startedAt: '2026-09-20T14:00:00.000Z', exclusive: true }),
+      ]);
+      expect(raced.filter(result => result.status === 'fulfilled')).toHaveLength(1);
+      const raceRun = raced.find(result => result.status === 'fulfilled').value;
+      expect(raced.find(result => result.status === 'rejected').reason).toMatchObject({ code: 'RUN_ALREADY_ACTIVE', activeRunId: raceRun });
+      await storage.finishRun({ runId: raceRun, status: 'failed', finishedAt: '2026-09-20T14:01:00.000Z' });
+    } finally { await otherConnection.close(); }
+  });
+
   it('동일 PostgreSQL run의 finishRun 경합은 하나만 상태를 전이한다', async () => {
     const scope = testScope('finish-race');
     const runId = await storage.startRun({ ...scope, startedAt: new Date().toISOString() });

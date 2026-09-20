@@ -31,7 +31,7 @@
 - **THEN** 플랫폼은 원천 수집, lease, 실행 이력을 만들지 않고 다음 일정을 계산한다
 
 #### Scenario: 다른 trigger와 동시 실행
-- **WHEN** scheduled 요청이 같은 설정 revision·대상·full 범위의 기동·CLI·API 실행과 겹친다
+- **WHEN** scheduled 요청이 같은 대상·full 범위의 기동·CLI·API 실행과 설정 revision에 관계없이 겹친다
 - **THEN** DB 실행권을 얻은 하나만 원천 수집과 결과 확정을 수행하고 중복 요청은 현재 실행을 참조한다
 
 ### Requirement: 현지 일자와 DST에 대해 하루 한 번 실행
@@ -50,7 +50,7 @@
 - **THEN** 플랫폼은 놓친 scheduled 실행을 보충하지 않고 재시작 이후의 다음 발생만 예약하며 독립적인 기동 수집은 기존 계약대로 요청한다
 
 ### Requirement: 설정 snapshot과 안전한 종료
-실행 중인 API는 기동 시 검증한 일정, runtime definition, revision과 정확한 transform 바이트 digest/source의 불변 snapshot을 계속 사용해야 하며(SHALL), 설정·transform 파일 변경은 성공적인 재기동 뒤에만 적용해야 한다(MUST). scheduled transform은 self-contained 순수 mapping AST allowlist를 충족해야 한다(SHALL). allowlist 밖의 구문·ambient identifier·동적 computed access·constructor/prototype chain 및 상대·절대·package import/require/module loader를 module top-level 실행 전에 기본 거부해야 한다(MUST). 이 제한은 schedule 활성 경로에 적용하고 비-scheduled transform 로딩 계약을 바꾸지 않아야 한다(MUST). scheduled 자식은 snapshot 구조·revision·정확한 바이트 digest를 transform module top-level 실행 전에 검증하고 검증한 바이트 자체를 파일 재조회 없이 실행해야 한다(SHALL). 자식 환경에는 필수 runtime 값, `PLATFORM_DB_*`와 해당 대상 Connection이 참조하는 수집 credential만 전달해야 하며(MUST), `AUTH_*`, `LDAP_*` 및 무관한 부모 환경은 전달해서는 안 된다(MUST NOT). 종료 시 pending timer를 취소하고 시작된 scheduled 자식 수집에 `SIGTERM`을 전달한 뒤 grace period 안에 종료하지 않으면 `SIGKILL`해야 한다(SHALL). process exit 상태와 별개로 실제 `close`까지 유한 상한 안에서 기다려 결과 handler를 등록하고, 등록된 결과 영속화도 별도 고정 상한 안에서 drain해야 한다(SHALL).
+실행 중인 API는 기동 시 검증한 일정, runtime definition, revision과 정확한 transform 바이트 digest/source의 불변 snapshot을 계속 사용해야 하며(SHALL), 설정·transform 파일 변경은 성공적인 재기동 뒤에만 적용해야 한다(MUST). scheduled transform은 self-contained 순수 mapping AST allowlist를 충족해야 한다(SHALL). identifier는 참조 위치의 lexical scope chain에서만 해석해야 하며(MUST), sibling·nested scope binding을 ambient 참조 허용에 사용해서는 안 된다(MUST NOT). 순수 mapping 계약 안의 `async` arrow와 `AwaitExpression`은 허용해야 한다(SHALL). allowlist 밖의 구문·ambient identifier·동적 computed access·constructor/prototype chain 및 상대·절대·package import/require/module loader를 module top-level 실행 전에 기본 거부해야 한다(MUST). 이 제한은 schedule 활성 경로에 적용하고 비-scheduled transform 로딩 계약을 바꾸지 않아야 한다(MUST). scheduled 자식은 snapshot 구조·revision·정확한 바이트 digest를 transform module top-level 실행 전에 검증하고 검증한 바이트 자체를 파일 재조회 없이 실행해야 한다(SHALL). 자식 환경에는 필수 runtime 값, platform DB loader가 명시적으로 지원하는 설정 key와 해당 대상 Connection이 참조하는 수집 credential만 전달해야 하며(MUST), unknown `PLATFORM_DB_*`, `AUTH_*`, `LDAP_*` 및 무관한 부모 환경은 전달해서는 안 된다(MUST NOT). 종료 시 pending timer를 취소하고 시작된 scheduled 자식 수집에 `SIGTERM`을 전달한 뒤 grace period 안에 종료하지 않으면 `SIGKILL`해야 한다(SHALL). process exit 상태와 별개로 실제 `close`까지 유한 상한 안에서 기다려 결과 handler를 등록하고, 등록된 결과 영속화도 별도 고정 상한 안에서 drain해야 한다(SHALL). close 상한 뒤 늦게 도착한 child callback은 새 storage 작업을 시작해서는 안 된다(MUST NOT).
 
 #### Scenario: 실행 중 설정 변경
 - **WHEN** API 기동 뒤 외부 설정의 일정, registry 또는 transform 파일이 변경된다
@@ -68,6 +68,14 @@
 - **WHEN** scheduled transform이 `process`, `globalThis`, ambient `this`, `eval`, `Function`, `Reflect`, computed/aliased module access 또는 constructor/prototype chain을 사용한다
 - **THEN** 플랫폼은 전체 AST allowlist 검증에서 해당 transform을 거부하고 앞선 module top-level 코드도 실행하지 않는다
 
+#### Scenario: sibling scope binding 우회
+- **WHEN** scheduled transform의 sibling 또는 nested scope가 `fetch`나 `console` 이름을 선언하고 다른 scope가 같은 이름의 ambient global을 참조한다
+- **THEN** 플랫폼은 실제 참조 위치의 lexical scope에서 해석되지 않는 ambient 참조를 module top-level 실행 전에 거부한다
+
+#### Scenario: 안전한 비동기 mapping
+- **WHEN** scheduled transform이 순수 mapping allowlist 안에서 `async` arrow와 `await`를 사용해 record를 반환한다
+- **THEN** 플랫폼은 Promise-returning transform 결과를 기존 수집 계약대로 기다려 처리한다
+
 #### Scenario: 비-scheduled transform 호환성
 - **WHEN** schedule이 비활성화된 기존 transform이 로컬 helper를 require한다
 - **THEN** 기존 preflight와 수동·기동 수집 module loading 계약은 유지된다
@@ -76,6 +84,10 @@
 - **WHEN** API 부모 환경에 플랫폼 DB, 대상 수집 credential, 인증·LDAP와 무관한 비밀이 함께 있다
 - **THEN** scheduled 자식에는 플랫폼 DB와 해당 대상 수집에 필요한 값만 전달되고 `AUTH_*`, `LDAP_*`와 무관한 비밀은 전달되지 않는다
 
+#### Scenario: 알 수 없는 platform DB 환경 변수
+- **WHEN** API 부모 환경에 platform DB loader가 지원하지 않는 `PLATFORM_DB_*` 변수가 있다
+- **THEN** scheduled 자식에는 명시적으로 지원하는 platform DB 설정 key만 전달되고 알 수 없는 변수는 전달되지 않는다
+
 #### Scenario: 종료 중 scheduled 수집
 - **WHEN** 예정 수집이 진행 중인 동안 API가 종료 신호를 받는다
 - **THEN** pending timer를 제거하고 진행 중 자식에 `SIGTERM`을 전달하며 grace 뒤 생존 자식은 `SIGKILL`하고, process exit 뒤 실제 stdio `close`까지 bounded wait해 가능한 결과를 drain하며 완료되지 않은 실행을 성공으로 기록하지 않는다
@@ -83,3 +95,7 @@
 #### Scenario: 종료 중 영속화 지연
 - **WHEN** 실제 child `close`에서 등록된 duplicate 참조 저장이 응답하지 않는다
 - **THEN** 플랫폼은 고정된 결과 drain 상한까지만 기다리고 DB close를 무기한 막지 않은 채 종료 lifecycle을 반환한다
+
+#### Scenario: 종료 상한 뒤 늦은 child close
+- **WHEN** child가 SIGKILL 뒤 close 대기 상한을 넘긴 후 `close` event를 보낸다
+- **THEN** 종료된 scheduler는 해당 callback에서 결과 처리나 duplicate storage 작업을 새로 시작하지 않는다

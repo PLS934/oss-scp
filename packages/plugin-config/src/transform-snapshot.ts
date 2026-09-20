@@ -20,7 +20,7 @@ function sourceText(source: Uint8Array): string {
 type AstNode = Record<string, unknown> & { type: string };
 
 const ALLOWED_NODE_TYPES = new Set([
-  'ArrayExpression', 'ArrayPattern', 'ArrowFunctionExpression', 'AssignmentExpression', 'AssignmentPattern',
+  'ArrayExpression', 'ArrayPattern', 'ArrowFunctionExpression', 'AssignmentExpression', 'AssignmentPattern', 'AwaitExpression',
   'BinaryExpression', 'BlockStatement', 'CallExpression', 'ChainExpression', 'ConditionalExpression',
   'EmptyStatement', 'ExpressionStatement', 'Identifier', 'Literal', 'LogicalExpression', 'MemberExpression',
   'NewExpression', 'ObjectExpression', 'ObjectPattern', 'Program', 'Property', 'RestElement', 'ReturnStatement',
@@ -62,17 +62,24 @@ function bindingNames(pattern: unknown, names: Set<string>): void {
   throw new Error('scheduled transform must use supported bindings');
 }
 
-function collectBindings(node: unknown, names = new Set<string>()): Set<string> {
-  if (!astNode(node)) return names;
-  if (node.type === 'VariableDeclarator') bindingNames(node.id, names);
-  if (node.type === 'ArrowFunctionExpression' && Array.isArray(node.params)) {
-    for (const parameter of node.params) bindingNames(parameter, names);
+interface LexicalScope { readonly parent?: LexicalScope; readonly bindings: ReadonlySet<string> }
+
+function lexicalScope(parent: LexicalScope | undefined, declarations: readonly unknown[]): LexicalScope {
+  const bindings = new Set<string>();
+  for (const declaration of declarations) {
+    if (!astNode(declaration) || declaration.type !== 'VariableDeclaration' || !Array.isArray(declaration.declarations)) continue;
+    for (const declarator of declaration.declarations) {
+      if (astNode(declarator) && declarator.type === 'VariableDeclarator') bindingNames(declarator.id, bindings);
+    }
   }
-  for (const value of Object.values(node)) {
-    if (astNode(value)) collectBindings(value, names);
-    else if (Array.isArray(value)) for (const nested of value) collectBindings(nested, names);
+  return { parent, bindings };
+}
+
+function resolvesBinding(scope: LexicalScope, name: string): boolean {
+  for (let current: LexicalScope | undefined = scope; current; current = current.parent) {
+    if (current.bindings.has(name)) return true;
   }
-  return names;
+  return false;
 }
 
 function memberProperty(node: AstNode): string | number {
@@ -106,12 +113,12 @@ function isTypeScriptExportMarker(node: AstNode): boolean {
     && astNode(descriptor) && descriptor.type === 'ObjectExpression';
 }
 
-function validateIdentifier(node: AstNode, parent: AstNode | undefined, key: string | undefined, bindings: ReadonlySet<string>): void {
+function validateIdentifier(node: AstNode, parent: AstNode | undefined, key: string | undefined, scope: LexicalScope): void {
   const name = node.name;
   if (typeof name !== 'string') throw new Error('scheduled transform identifier is not allowed');
   if (key === 'id' || key === 'params' || (parent?.type === 'Property' && key === 'key' && parent.computed === false)
     || (parent?.type === 'MemberExpression' && key === 'property' && parent.computed === false)) return;
-  if (bindings.has(name) || name === 'undefined') return;
+  if (resolvesBinding(scope, name) || name === 'undefined') return;
   if (name === 'exports' && ((parent?.type === 'MemberExpression' && key === 'object' && isExportsTransform(parent))
     || (parent?.type === 'CallExpression' && isTypeScriptExportMarker(parent)))) return;
   if (name === 'Object' && parent?.type === 'MemberExpression' && key === 'object'
@@ -121,12 +128,27 @@ function validateIdentifier(node: AstNode, parent: AstNode | undefined, key: str
   throw new Error('scheduled transform ambient access is not allowed');
 }
 
-function validateAst(node: unknown, bindings: ReadonlySet<string>, parent?: AstNode, key?: string): void {
+function validateAst(node: unknown, scope: LexicalScope, parent?: AstNode, key?: string, allowAwait = false): void {
   if (!astNode(node)) return;
   if (!ALLOWED_NODE_TYPES.has(node.type)) throw new Error(`scheduled transform syntax is not allowed: ${node.type}`);
-  if (node.type === 'Identifier') { validateIdentifier(node, parent, key, bindings); return; }
+  if (node.type === 'Identifier') { validateIdentifier(node, parent, key, scope); return; }
   if (node.type === 'VariableDeclaration' && node.kind !== 'const') throw new Error('scheduled transform mutable bindings are not allowed');
-  if (node.type === 'ArrowFunctionExpression' && node.async === true) throw new Error('scheduled transform async functions are not allowed');
+  if (node.type === 'AwaitExpression' && !allowAwait) throw new Error('scheduled transform await is not allowed');
+  if (node.type === 'BlockStatement') {
+    const body = Array.isArray(node.body) ? node.body : [];
+    const blockScope = lexicalScope(scope, body);
+    for (const statement of body) validateAst(statement, blockScope, node, 'body', allowAwait);
+    return;
+  }
+  if (node.type === 'ArrowFunctionExpression') {
+    if (!Array.isArray(node.params) || !astNode(node.body)) throw new Error('scheduled transform function is not allowed');
+    const parameters = new Set<string>();
+    for (const parameter of node.params) bindingNames(parameter, parameters);
+    const functionScope: LexicalScope = { parent: scope, bindings: parameters };
+    for (const parameter of node.params) validateAst(parameter, functionScope, node, 'params', node.async === true);
+    validateAst(node.body, functionScope, node, 'body', node.async === true);
+    return;
+  }
   if (node.type === 'MemberExpression') {
     const property = memberProperty(node);
     if (typeof property === 'string' && FORBIDDEN_PROPERTIES.has(property)) throw new Error('scheduled transform property access is not allowed');
@@ -137,7 +159,7 @@ function validateAst(node: unknown, bindings: ReadonlySet<string>, parent?: AstN
   if (node.type === 'CallExpression') {
     const callee = node.callee;
     const direct = astNode(callee) && callee.type === 'Identifier' && ['String', 'Number', 'Boolean'].includes(String(callee.name));
-    const local = astNode(callee) && callee.type === 'Identifier' && bindings.has(String(callee.name));
+    const local = astNode(callee) && callee.type === 'Identifier' && resolvesBinding(scope, String(callee.name));
     const member = astNode(callee) && callee.type === 'MemberExpression' && (!astNode(callee.object)
       || callee.object.type !== 'Identifier' || !['Date', 'Object', 'String', 'Number', 'Boolean', 'exports'].includes(String(callee.object.name)));
     if (!direct && !local && !member && !isTypeScriptExportMarker(node)) throw new Error('scheduled transform call is not allowed');
@@ -156,13 +178,14 @@ function validateAst(node: unknown, bindings: ReadonlySet<string>, parent?: AstN
     }
   }
   for (const [childKey, value] of Object.entries(node)) {
-    if (astNode(value)) validateAst(value, bindings, node, childKey);
-    else if (Array.isArray(value)) for (const nested of value) validateAst(nested, bindings, node, childKey);
+    if (astNode(value)) validateAst(value, scope, node, childKey, allowAwait);
+    else if (Array.isArray(value)) for (const nested of value) validateAst(nested, scope, node, childKey, allowAwait);
   }
 }
 
-function validateProgram(program: AstNode, bindings: ReadonlySet<string>): void {
+function validateProgram(program: AstNode): void {
   if (!Array.isArray(program.body)) throw new Error('scheduled transform program is not allowed');
+  const scope = lexicalScope(undefined, program.body);
   for (const statement of program.body) {
     if (!astNode(statement)) throw new Error('scheduled transform statement is not allowed');
     const strictDirective = statement.type === 'ExpressionStatement' && statement.directive === 'use strict';
@@ -172,15 +195,14 @@ function validateProgram(program: AstNode, bindings: ReadonlySet<string>): void 
     if (!strictDirective && !exportMarker && !exportAssignment && statement.type !== 'VariableDeclaration') {
       throw new Error('scheduled transform top-level statement is not allowed');
     }
-    validateAst(statement, bindings, program, 'body');
+    validateAst(statement, scope, program, 'body');
   }
 }
 
 /** scheduled transform을 순수 mapping AST allowlist로 module top-level 실행 전에 검증한다. */
 export function assertSelfContainedTransform(source: Uint8Array): void {
   const program = parse(sourceText(source), { ecmaVersion: 'latest', sourceType: 'script', allowHashBang: true }) as unknown as AstNode;
-  const bindings = collectBindings(program);
-  validateProgram(program, bindings);
+  validateProgram(program);
 }
 
 /** 검증한 정확한 CommonJS 바이트를 파일 재조회 없이 실행한다. */

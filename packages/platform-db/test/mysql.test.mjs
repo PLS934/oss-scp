@@ -280,6 +280,60 @@ describe('MySQL 공통 레코드 저장·조회 계약', () => {
     await commit(second, scope);
   });
 
+  it('서로 다른 revision도 동일 MySQL lease를 공유하고 stale revision 저장을 fencing한다', async () => {
+    const oldScope = scopeFor('cross-revision-lease');
+    const newScope = { ...oldScope, configRevision: 'rev-2' };
+    const otherConnection = await mysqlAdapter.connect(config());
+    try {
+      const otherStorage = createMysqlRecordStorage(otherConnection);
+      const oldRun = await storage.startRun({
+        ...oldScope, startedAt: '2026-09-20T13:00:01.000Z', exclusive: true, trigger: 'scheduled',
+        scheduledAt: '2026-09-20T13:00:00.000Z', scheduleTimezone: 'UTC',
+      });
+      await expect(otherStorage.startRun({
+        ...newScope, startedAt: '2026-09-20T13:00:02.000Z', exclusive: true, trigger: 'scheduled',
+        scheduledAt: '2026-09-20T13:00:00.000Z', scheduleTimezone: 'UTC',
+      })).rejects.toMatchObject({ code: 'RUN_ALREADY_ACTIVE', activeRunId: oldRun });
+      await otherStorage.recordScheduledDuplicate({
+        ...newScope, activeRunId: oldRun, scheduledAt: '2026-09-20T13:00:00.000Z',
+        scheduleTimezone: 'UTC', observedAt: '2026-09-20T13:00:03.000Z',
+      });
+
+      await connection.withClient(client => client.query("UPDATE collection_runs SET heartbeat_at=UTC_TIMESTAMP(3) - INTERVAL 3 MINUTE WHERE id=?", [oldRun]));
+      const newRun = await otherStorage.startRun({ ...newScope, startedAt: '2026-09-20T13:04:00.000Z', exclusive: true });
+      await otherStorage.commitBatch({
+        runId: newRun, scope: newScope, observedAt: '2026-09-20T13:04:01.000Z', expectedCheckpoint: null,
+        nextCheckpoint: { offset: 2 }, processedCount: 1, acceptedCount: 1,
+        records: [{ type: 'asset', key: 'server-1', values: { hostname: 'new' } }], relations: [], issues: [],
+      });
+      await expect(commit(oldRun, oldScope)).rejects.toMatchObject({ code: 'RUN_NOT_ACTIVE' });
+      const [revisions] = await connection.withClient(client => client.query(
+        'SELECT config_revision FROM collection_runs WHERE plugin_id=? ORDER BY config_revision', [oldScope.pluginId],
+      ));
+      const [records] = await connection.withClient(client => client.query(
+        'SELECT source_values FROM platform_records WHERE plugin_id=? AND source_id=? AND external_key=?', [oldScope.pluginId, oldScope.sourceId, 'server-1'],
+      ));
+      const [references] = await connection.withClient(client => client.query(
+        'SELECT count(*) AS count FROM scheduled_collection_references WHERE active_run_id=?', [oldRun],
+      ));
+      expect(revisions.map(row => row.config_revision)).toEqual(['rev-1', 'rev-2']);
+      expect(typeof records[0].source_values === 'string' ? JSON.parse(records[0].source_values) : records[0].source_values).toMatchObject({ hostname: 'new' });
+      expect(Number(references[0].count)).toBe(1);
+      await otherStorage.finishRun({ runId: newRun, status: 'success', finishedAt: '2026-09-20T13:05:00.000Z' });
+
+      const raceOld = scopeFor('cross-revision-race');
+      const raceNew = { ...raceOld, configRevision: 'rev-2' };
+      const raced = await Promise.allSettled([
+        storage.startRun({ ...raceOld, startedAt: '2026-09-20T14:00:00.000Z', exclusive: true }),
+        otherStorage.startRun({ ...raceNew, startedAt: '2026-09-20T14:00:00.000Z', exclusive: true }),
+      ]);
+      expect(raced.filter(result => result.status === 'fulfilled')).toHaveLength(1);
+      const raceRun = raced.find(result => result.status === 'fulfilled').value;
+      expect(raced.find(result => result.status === 'rejected').reason).toMatchObject({ code: 'RUN_ALREADY_ACTIVE', activeRunId: raceRun });
+      await storage.finishRun({ runId: raceRun, status: 'failed', finishedAt: '2026-09-20T14:01:00.000Z' });
+    } finally { await otherConnection.close(); }
+  });
+
   it('scheduled는 startup·CLI·API와 동일한 MySQL lease를 공유한다', async () => {
     for (const [trigger, extra] of [['startup', {}], ['cli', {}], ['api', { requestId: randomUUID() }]]) {
       const scope = scopeFor(`scheduled-conflict-${trigger}`);

@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs';
 import { spawn, type ChildProcess } from 'node:child_process';
 import { createRequire } from 'node:module';
 import { collectionScope, MAX_PUBLIC_EVENT_BYTES, parsePublicEvent, type PublicEvent, type SerializedScheduledCollectionSnapshot } from '@oss-scp/collector-cli';
-import type { CollectionScope, RecordStorage } from '@oss-scp/platform-db';
+import { PLATFORM_DB_ENVIRONMENT_KEYS, type CollectionScope, type RecordStorage } from '@oss-scp/platform-db';
 import { assertSelfContainedTransform, isLivePostgresDefinition, transformDigest, type CollectionDefinition, type CollectionSchedule } from '@oss-scp/plugin-config';
 import { nextScheduledInstant } from './collection-schedule';
 import { definitionRevision } from './plugin-runtime-registry';
@@ -41,11 +41,11 @@ export function scheduledChildEnvironment(
   definition: CollectionDefinition,
   metadata: Pick<ScheduledCollectionProcessRequest, 'configRoot' | 'expectedRevision' | 'scheduledAt' | 'timezone'>,
 ): NodeJS.ProcessEnv {
-  const allowed = new Set([...RUNTIME_ENVIRONMENT, ...credentialEnvironment(definition)]);
+  const allowed = new Set([...RUNTIME_ENVIRONMENT, ...PLATFORM_DB_ENVIRONMENT_KEYS, ...credentialEnvironment(definition)]);
   const environment: NodeJS.ProcessEnv = {};
   for (const [key, value] of Object.entries(parent)) {
     if (value === undefined || FORBIDDEN_ENVIRONMENT.test(key)) continue;
-    if (allowed.has(key) || /^PLATFORM_DB_[A-Z0-9_]+$/.test(key)) environment[key] = value;
+    if (allowed.has(key)) environment[key] = value;
   }
   return {
     ...environment,
@@ -112,11 +112,13 @@ function drainResults(results: readonly Promise<void>[], timeoutMs: number): Pro
 export class ScheduledCollectionManager {
   private readonly children = new Set<ChildProcess>();
   private readonly closedChildren = new WeakSet<ChildProcess>();
+  private readonly resultCloseListeners = new Map<ChildProcess, (code: number | null) => void>();
   private readonly pendingResults = new Set<Promise<void>>();
   private targets: readonly PreparedTarget[] | undefined;
   private timer: ReturnType<typeof setTimeout> | undefined;
   private dueAt: Date | undefined;
   private closing = false;
+  private finalized = false;
   private started = false;
 
   constructor(
@@ -203,14 +205,17 @@ export class ScheduledCollectionManager {
         spawnFailed = true;
         this.logger.error(`정기 수집 프로세스를 시작하지 못했습니다: ${target.definition.plugin.id}`);
       });
-      child.once('close', code => {
+      const resultOnClose = (code: number | null) => {
         this.closedChildren.add(child);
         this.children.delete(child);
-        if (spawnFailed) return;
+        this.resultCloseListeners.delete(child);
+        if (spawnFailed || this.finalized) return;
         const pending = this.handleResult(collectionScope(this.configRoot, target.definition), scheduledAt, code, stdoutInvalid, stdout);
         this.pendingResults.add(pending);
         void pending.finally(() => this.pendingResults.delete(pending));
-      });
+      };
+      this.resultCloseListeners.set(child, resultOnClose);
+      child.once('close', resultOnClose);
     }
   }
 
@@ -255,6 +260,10 @@ export class ScheduledCollectionManager {
       if (child.exitCode === null && child.signalCode === null) child.kill('SIGKILL');
       await waitForClose(child, this.killWaitMs, () => this.closedChildren.has(child));
     }));
+    this.finalized = true;
+    for (const [child, listener] of this.resultCloseListeners) child.removeListener('close', listener);
+    this.resultCloseListeners.clear();
+    this.children.clear();
     await drainResults([...this.pendingResults], this.resultDrainMs);
   }
 }

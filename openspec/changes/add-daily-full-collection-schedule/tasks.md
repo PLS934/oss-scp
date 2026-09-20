@@ -48,3 +48,11 @@
 - [x] 8.1 scheduled transform을 순수 mapping AST allowlist로 제한하고 ambient global·alias·computed property·`Reflect`·module loader·constructor chain 우회를 top-level 실행 전에 거부하는 회귀 테스트를 통과시킨다.
 - [x] 8.2 process exit와 실제 stdio `close`를 구분해 결과 handler 등록까지 bounded wait하고, duplicate 영속화에 고정 drain 상한을 적용하는 lifecycle 테스트를 통과시킨다.
 - [x] 8.3 focused·전체·process·Docker 검증과 strict OpenSpec 및 diff 검증을 통과시킨다.
+
+## 9. lexical scope·cross-revision lease 리뷰 보강
+
+- [x] 9.1 scheduled transform identifier를 실제 lexical scope chain으로 해석하고 sibling·nested shadow 우회를 거부하며 순수 `async` arrow와 `await` 호환 테스트를 통과시킨다.
+- [x] 9.2 shutdown terminal 상태와 listener 정리로 close 상한 뒤 late callback이 storage 작업을 시작하지 않는 lifecycle 테스트를 통과시킨다.
+- [x] 9.3 PostgreSQL/MySQL의 lease·commit·duplicate active identity를 revision 비포함 plugin·source·scope로 통일하고 다중 connection·revision 경합과 stale 결과 fencing 테스트를 통과시킨다.
+- [x] 9.4 platform DB 환경 전달을 실제 지원 key의 단일 명시적 allowlist로 제한하고 unknown `PLATFORM_DB_*` 차단 테스트를 통과시킨다.
+- [x] 9.5 focused·전체·process·PostgreSQL/MySQL·외부 DB Docker 검증과 strict OpenSpec 및 diff 검증을 통과시킨다.

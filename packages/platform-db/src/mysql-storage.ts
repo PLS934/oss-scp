@@ -2,7 +2,7 @@ import { randomUUID } from 'node:crypto';
 import type { PoolConnection, RowDataPacket } from 'mysql2/promise';
 import type { MysqlPlatformDbConnection } from './mysql';
 import {
-  collectionScopeIdentity, recordIdentity, recordQueryScopeIdentity, relationIdentity, relationScopeIdentity,
+  collectionLeaseIdentity, collectionScopeIdentity, recordIdentity, recordQueryScopeIdentity, relationIdentity, relationScopeIdentity,
 } from './storage-identity';
 import {
   canonicalExternalKey, StorageError, validateCommitBatch, validateScheduledDuplicate, validateScope, validateStartRun,
@@ -31,6 +31,14 @@ function scopeValues(scope: CollectionScope): readonly string[] {
 function sameScope(row: Pick<RunRow, 'plugin_id' | 'source_id' | 'scope_type' | 'scope_key' | 'config_revision'>, scope: CollectionScope): boolean {
   return row.plugin_id === scope.pluginId && row.source_id === scope.sourceId && row.scope_type === scope.scopeType
     && row.scope_key === scope.scopeKey && row.config_revision === scope.configRevision;
+}
+
+function sameLeaseScope(row: Pick<RunRow, 'plugin_id' | 'source_id' | 'scope_type' | 'scope_key'>, scope: CollectionScope): boolean {
+  return row.plugin_id === scope.pluginId && row.source_id === scope.sourceId && row.scope_type === scope.scopeType && row.scope_key === scope.scopeKey;
+}
+
+function leaseScopeValues(scope: CollectionScope): string[] {
+  return [scope.pluginId, scope.sourceId, scope.scopeType, scope.scopeKey];
 }
 
 function parseJson(value: JsonValue | string): JsonValue { return typeof value === 'string' ? JSON.parse(value) as JsonValue : value; }
@@ -68,15 +76,17 @@ export function createMysqlRecordStorage(connection: MysqlPlatformDbConnection):
       try {
         await connection.withClient(async client => {
           const hash = collectionScopeIdentity(input);
-          const lockName = hash.toString('hex');
+          const leaseHash = collectionLeaseIdentity(input);
+          const lockName = leaseHash.toString('hex');
           const [locks] = await client.query('SELECT GET_LOCK(?, 5) AS acquired', [lockName]) as [{ acquired: number | null }[], unknown];
           if (locks[0]?.acquired !== 1) throw new StorageError('PERSIST_FAILED');
           try {
-            const [active] = await client.query<RunRow[]>(`SELECT id FROM collection_runs WHERE scope_hash=?
-              AND status='running' AND coordinated=1 AND heartbeat_at > UTC_TIMESTAMP(3) - INTERVAL 2 MINUTE LIMIT 1`, [hash]);
+            const [active] = await client.query<RunRow[]>(`SELECT id FROM collection_runs WHERE plugin_id=? AND source_id=? AND scope_type=? AND scope_key=?
+              AND status='running' AND coordinated=1 AND heartbeat_at > UTC_TIMESTAMP(3) - INTERVAL 2 MINUTE LIMIT 1`, leaseScopeValues(input));
             if (input.exclusive && active[0]) throw new StorageError('RUN_ALREADY_ACTIVE', active[0].id);
             await client.execute(`UPDATE collection_runs SET status='failed', finished_at=UTC_TIMESTAMP(3)
-              WHERE scope_hash=? AND status='running' AND coordinated=1 AND ?=1`, [hash, input.exclusive ? 1 : 0]);
+              WHERE plugin_id=? AND source_id=? AND scope_type=? AND scope_key=? AND status='running' AND coordinated=1 AND ?=1`,
+            [...leaseScopeValues(input), input.exclusive ? 1 : 0]);
             await client.execute(`INSERT INTO collection_runs
               (id, scope_hash, plugin_id, source_id, scope_type, scope_key, config_revision, started_at, heartbeat_at, coordinated, \`trigger\`, request_id, scheduled_at, schedule_timezone)
               VALUES (?,?,?,?,?,?,?,?,UTC_TIMESTAMP(3),?,?,?,?,?)`, [
@@ -122,12 +132,17 @@ export function createMysqlRecordStorage(connection: MysqlPlatformDbConnection):
       validateScheduledDuplicate(input);
       try {
         await connection.withClient(async client => {
-          const [active] = await client.query<RunRow[]>('SELECT id, plugin_id, source_id, scope_type, scope_key, config_revision FROM collection_runs WHERE id=?', [input.activeRunId]);
-          if (!active[0] || !sameScope(active[0], input)) throw new StorageError('RUN_NOT_FOUND');
-          await client.execute(`INSERT INTO scheduled_collection_references
-            (id, active_run_id, scheduled_at, schedule_timezone, observed_at) VALUES (?,?,?,?,?)
-            ON DUPLICATE KEY UPDATE active_run_id=VALUES(active_run_id)`,
-          [randomUUID(), input.activeRunId, new Date(input.scheduledAt), input.scheduleTimezone, new Date(input.observedAt)]);
+          await client.beginTransaction();
+          try {
+            const [active] = await client.query<RunRow[]>(`SELECT id, plugin_id, source_id, scope_type, scope_key, config_revision FROM collection_runs
+              WHERE id=? AND status='running' AND coordinated=1 AND heartbeat_at > UTC_TIMESTAMP(3) - INTERVAL 2 MINUTE FOR UPDATE`, [input.activeRunId]);
+            if (!active[0] || !sameLeaseScope(active[0], input)) throw new StorageError('RUN_NOT_FOUND');
+            await client.execute(`INSERT INTO scheduled_collection_references
+              (id, active_run_id, scheduled_at, schedule_timezone, observed_at) VALUES (?,?,?,?,?)
+              ON DUPLICATE KEY UPDATE active_run_id=VALUES(active_run_id)`,
+            [randomUUID(), input.activeRunId, new Date(input.scheduledAt), input.scheduleTimezone, new Date(input.observedAt)]);
+            await client.commit();
+          } catch (error) { await rollback(client); throw error; }
         });
       } catch (error) { throw publicFailure(error); }
     },
@@ -152,8 +167,9 @@ export function createMysqlRecordStorage(connection: MysqlPlatformDbConnection):
       validateCommitBatch(input);
       await connection.withClient(async client => {
         const scopeHash = collectionScopeIdentity(input.scope);
+        const leaseHash = collectionLeaseIdentity(input.scope);
         // MySQL GET_LOCK 이름은 64자 제한이므로 SHA-256 hex 자체를 사용한다.
-        const lockName = scopeHash.toString('hex');
+        const lockName = leaseHash.toString('hex');
         let locked = false;
         try {
           const [lockRows] = await client.query<(RowDataPacket & { acquired: number | null })[]>('SELECT GET_LOCK(?, 5) AS acquired', [lockName]);

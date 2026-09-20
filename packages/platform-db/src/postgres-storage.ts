@@ -1,5 +1,6 @@
 import type { PoolClient } from 'pg';
 import type { PostgresPlatformDbConnection } from './postgres';
+import { collectionLeaseIdentity } from './storage-identity';
 import {
   canonicalExternalKey, StorageError, validateCommitBatch, validateScheduledDuplicate, validateScope, validateStartRun,
   type CollectionScope, type CommitStorageBatch, type FinishCollectionRun, type JsonValue,
@@ -22,7 +23,7 @@ function scopeValues(scope: CollectionScope): readonly string[] {
   return [scope.pluginId, scope.sourceId, scope.scopeType, scope.scopeKey, scope.configRevision];
 }
 
-function scopeLockKey(scope: CollectionScope): string { return scopeValues(scope).join('\u001f'); }
+function scopeLockKey(scope: CollectionScope): string { return collectionLeaseIdentity(scope).toString('hex'); }
 
 async function rollback(client: PoolClient): Promise<void> { await client.query('ROLLBACK').catch(() => undefined); }
 
@@ -114,13 +115,18 @@ export function createPostgresRecordStorage(connection: PostgresPlatformDbConnec
       validateScheduledDuplicate(input);
       try {
         await connection.withClient(async client => {
-          const active = await client.query<{ id: string }>(`SELECT id FROM collection_runs WHERE id=$1 AND plugin_id=$2 AND source_id=$3
-            AND scope_type=$4 AND scope_key=$5 AND config_revision=$6`, [input.activeRunId, ...scopeValues(input)]);
-          if (!active.rows[0]) throw new StorageError('RUN_NOT_FOUND');
-          await client.query(`INSERT INTO scheduled_collection_references
-            (active_run_id, scheduled_at, schedule_timezone, observed_at) VALUES ($1,$2,$3,$4)
-            ON CONFLICT (active_run_id, scheduled_at, schedule_timezone) DO NOTHING`,
-          [input.activeRunId, input.scheduledAt, input.scheduleTimezone, input.observedAt]);
+          await client.query('BEGIN');
+          try {
+            const active = await client.query<{ id: string }>(`SELECT id FROM collection_runs WHERE id=$1 AND plugin_id=$2 AND source_id=$3
+              AND scope_type=$4 AND scope_key=$5 AND status='running' AND coordinated
+              AND heartbeat_at > now() - interval '2 minutes' FOR UPDATE`, [input.activeRunId, ...scopeValues(input).slice(0, 4)]);
+            if (!active.rows[0]) throw new StorageError('RUN_NOT_FOUND');
+            await client.query(`INSERT INTO scheduled_collection_references
+              (active_run_id, scheduled_at, schedule_timezone, observed_at) VALUES ($1,$2,$3,$4)
+              ON CONFLICT (active_run_id, scheduled_at, schedule_timezone) DO NOTHING`,
+            [input.activeRunId, input.scheduledAt, input.scheduleTimezone, input.observedAt]);
+            await client.query('COMMIT');
+          } catch (error) { await rollback(client); throw error; }
         });
       } catch (error) { throw publicFailure(error); }
     },
