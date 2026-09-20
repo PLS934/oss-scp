@@ -1,5 +1,6 @@
 import { join } from 'node:path';
 import { describe, expect, test, vi } from 'vitest';
+import { StorageError } from '@oss-scp/platform-db';
 import { CollectionRunnerError, runCollection } from '../dist/index.js';
 
 const fixture = (name) => join(import.meta.dirname, 'fixtures', name);
@@ -24,6 +25,7 @@ function createStorage(initialCheckpoint = null, overrides = {}) {
     get checkpoint() { return checkpoint; },
     async getCheckpoint(input) { calls.push(['getCheckpoint', input]); return checkpoint; },
     async startRun(input) { calls.push(['startRun', input]); return 'run-1'; },
+    async recordScheduledDuplicate(input) { calls.push(['recordScheduledDuplicate', input]); },
     async commitBatch(input) { calls.push(['commitBatch', input]); checkpoint = input.nextCheckpoint; },
     async finishRun(input) { calls.push(['finishRun', input]); },
     ...overrides,
@@ -41,6 +43,21 @@ describe('runCollection', () => {
     await runCollection({ plugin, scope, storage, transform, trigger: 'api', requestId: 'request-1', collector: async () => {} });
     expect(storage.calls.find(([name]) => name === 'startRun')[1]).toMatchObject({ trigger: 'api', requestId: 'request-1', exclusive: true });
     expect(JSON.stringify(storage.calls.filter(([name]) => name !== 'startRun'))).not.toContain('request-1');
+  });
+
+  test('scheduled trigger의 예정 instant와 timezone을 저장 시작에만 전달한다', async () => {
+    const storage = createStorage();
+    await runCollection({ plugin, scope, storage, transform, trigger: 'scheduled', scheduledAt: '2026-09-19T13:00:00.000Z', scheduleTimezone: 'Asia/Seoul', collector: async () => {} });
+    expect(storage.calls.find(([name]) => name === 'startRun')[1]).toMatchObject({ trigger: 'scheduled', scheduledAt: '2026-09-19T13:00:00.000Z', scheduleTimezone: 'Asia/Seoul' });
+  });
+
+  test('lease loser는 원천 수집 없이 activeRunId가 보존된 already_running을 반환한다', async () => {
+    const collector = vi.fn();
+    const storage = createStorage(null, { async startRun() { throw new StorageError('RUN_ALREADY_ACTIVE', 'active-run-1'); } });
+    await expect(runCollection({ plugin, scope, storage, transform, collector, trigger: 'scheduled', scheduledAt: '2026-09-19T13:00:00.000Z', scheduleTimezone: 'Asia/Seoul' }))
+      .rejects.toMatchObject({ code: 'already_running', activeRunId: 'active-run-1' });
+    expect(collector).not.toHaveBeenCalled();
+    expect(storage.calls.some(([name]) => name === 'finishRun')).toBe(false);
   });
 
   test('저장된 opaque checkpoint부터 범용 collector를 실행하고 성공을 기록한다', async () => {
@@ -66,7 +83,9 @@ describe('runCollection', () => {
 
   test('가공 격리 오류를 정상 레코드와 원자 저장하고 partial로 집계한다', async () => {
     const storage = createStorage();
-    const result = await runCollection({ plugin, scope, storage, transform,
+    const result = await runCollection({
+      plugin, scope, storage, transform,
+      trigger: 'scheduled', scheduledAt: '2026-09-19T13:00:00.000Z', scheduleTimezone: 'Asia/Seoul',
       collector: async (_context, onBatch) => {
         await onBatch(batch(null, { page: 1 }, [{ id: 'ok', score: 1 }, { id: 'bad', reject: true }]));
         await onBatch(batch({ page: 1 }, { page: 2 }, [{ id: 'next', score: 2 }]));
@@ -124,8 +143,9 @@ describe('runCollection', () => {
     const starts = [];
     const storage = createStorage({ offset: 10 }, { async commitBatch() { throw new Error('db'); } });
     const collector = async (context, onBatch) => { starts.push(context.checkpoint); await onBatch(batch(context.checkpoint, { offset: 20 }, [{ id: 'a', score: 1 }])); };
-    await expect(runCollection({ plugin, scope, storage, transform, collector })).rejects.toMatchObject({ code: 'storage' });
-    await expect(runCollection({ plugin, scope, storage, transform, collector })).rejects.toMatchObject({ code: 'storage' });
+    const schedule = { trigger: 'scheduled', scheduledAt: '2026-09-19T13:00:00.000Z', scheduleTimezone: 'Asia/Seoul' };
+    await expect(runCollection({ plugin, scope, storage, transform, collector, ...schedule })).rejects.toMatchObject({ code: 'storage' });
+    await expect(runCollection({ plugin, scope, storage, transform, collector, ...schedule })).rejects.toMatchObject({ code: 'storage' });
     expect(starts).toEqual([{ offset: 10 }, { offset: 10 }]);
     expect(storage.checkpoint).toEqual({ offset: 10 });
   });

@@ -36,7 +36,7 @@ export interface DataTypeDefinition {
 }
 export interface RelationDefinition { from: { types: string[] }; to: { types: string[] }; }
 export interface PluginDataDefinition { types: Record<string, DataTypeDefinition>; relations?: Record<string, RelationDefinition>; }
-export interface PluginRuntimeDefinition { id: string; name: string; version: string; transformPath: string; data: PluginDataDefinition; menu?: PluginMenuDefinition; }
+export interface PluginRuntimeDefinition { id: string; name: string; version: string; transformPath: string; transformDigest?: string; data: PluginDataDefinition; menu?: PluginMenuDefinition; }
 
 export interface SourceConfigBase {
   apiVersion: 'oss-scp/source-v1';
@@ -246,6 +246,16 @@ export interface LoadedPluginDetail {
   transformFiles: PluginTransformFiles;
 }
 
+export interface CollectionSchedule {
+  enabled: boolean;
+  timezone: string;
+  time: string;
+}
+
+export interface CollectionConfiguration {
+  schedule: CollectionSchedule;
+}
+
 export type ConfigurationResult =
-  | { ok: true; definitions: CollectionDefinition[]; menus: ClientMenuItem[]; plugins: ClientPluginSummary[]; pluginDetails: LoadedPluginDetail[] }
+  | { ok: true; definitions: CollectionDefinition[]; menus: ClientMenuItem[]; plugins: ClientPluginSummary[]; pluginDetails: LoadedPluginDetail[]; collection: CollectionConfiguration }
   | { ok: false; errors: ConfigurationIssue[] };

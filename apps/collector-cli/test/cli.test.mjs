@@ -1,15 +1,21 @@
+import { createHash } from 'node:crypto';
 import { describe, expect, it, vi } from 'vitest';
+import { CollectionRunnerError } from '@oss-scp/collection-engine';
 import {
   collectionScope,
+  collectionProcessInvocation,
   connectPlatformStorage,
   connectPostgresStorage,
   configRevision,
   executeManualCollection,
   configRoot,
   idempotentClose,
+  MAX_PUBLIC_EVENT_BYTES,
   parsePluginId,
+  parsePublicEvent,
   publicEvent,
   selectDefinition,
+  verifyScheduledCollectionSnapshot,
 } from '../dist/index.js';
 
 const plugin = { id: 'sample-plugin', name: 'Sample', version: '1.0.0', transformPath: '/one/dist/transform.js', data: { types: {} } };
@@ -32,6 +38,24 @@ describe('CLI 선택과 revision', () => {
     }
   });
 
+  it('프로세스 trigger와 scheduled metadata 조합만 엄격히 허용한다', () => {
+    expect(collectionProcessInvocation({})).toEqual({ trigger: 'cli' });
+    expect(collectionProcessInvocation({ OSS_SCP_COLLECTION_TRIGGER: 'startup' })).toEqual({ trigger: 'startup' });
+    expect(collectionProcessInvocation({
+      OSS_SCP_COLLECTION_TRIGGER: 'scheduled',
+      OSS_SCP_COLLECTION_EXPECTED_REVISION: 'a'.repeat(64),
+      OSS_SCP_COLLECTION_SCHEDULED_AT: '2026-09-19T13:00:00.000Z',
+      OSS_SCP_COLLECTION_SCHEDULE_TIMEZONE: 'Asia/Seoul',
+    })).toEqual({ trigger: 'scheduled', scheduledAt: '2026-09-19T13:00:00.000Z', scheduleTimezone: 'Asia/Seoul', expectedConfigRevision: 'a'.repeat(64) });
+    for (const env of [
+      { OSS_SCP_COLLECTION_TRIGGER: 'unknown' },
+      { OSS_SCP_COLLECTION_TRIGGER: 'scheduled' },
+      { OSS_SCP_COLLECTION_TRIGGER: 'scheduled', OSS_SCP_COLLECTION_EXPECTED_REVISION: 'a'.repeat(64), OSS_SCP_COLLECTION_SCHEDULED_AT: 'bad', OSS_SCP_COLLECTION_SCHEDULE_TIMEZONE: 'Asia/Seoul' },
+      { OSS_SCP_COLLECTION_TRIGGER: 'scheduled', OSS_SCP_COLLECTION_EXPECTED_REVISION: 'a'.repeat(64), OSS_SCP_COLLECTION_SCHEDULED_AT: '2026-09-19T13:00:00.000Z', OSS_SCP_COLLECTION_SCHEDULE_TIMEZONE: 'bad/zone' },
+      { OSS_SCP_COLLECTION_TRIGGER: 'cli', OSS_SCP_COLLECTION_SCHEDULED_AT: '2026-09-19T13:00:00.000Z' },
+    ]) expect(() => collectionProcessInvocation(env)).toThrowError(expect.objectContaining({ code: 'repository_config' }));
+  });
+
   it('명시적 외부 설정 루트만 사용한다', () => {
     expect(configRoot({ OSS_SCP_CONFIG_ROOT: '/config' })).toBe('/config');
     expect(() => configRoot({})).toThrowError(expect.objectContaining({ code: 'repository_config' }));
@@ -48,6 +72,45 @@ describe('CLI 선택과 revision', () => {
     expect(configRevision(moved)).toBe(configRevision(definition));
     expect(configRevision({ ...definition, request: { ...definition.request, path: '/changed' } })).not.toBe(configRevision(definition));
     expect(collectionScope('/repo', definition)).toMatchObject({ pluginId: 'sample-plugin', sourceId: 'sample-connection', scopeType: 'full', scopeKey: '' });
+  });
+
+  it('snapshot digest와 revision을 module top-level 실행 전에 검증하고 정확한 바이트만 실행한다', () => {
+    const source = 'const snapshotKind = "scheduled"; exports.transform = ({ record }) => ({ ...record, snapshotKind });\n';
+    const digest = createHash('sha256').update(source).digest('hex');
+    const snapshotted = { ...definition, plugin: { ...plugin, transformDigest: digest } };
+    const snapshot = { definition: snapshotted, transform: { digest, sourceBase64: Buffer.from(source).toString('base64') } };
+    const verified = verifyScheduledCollectionSnapshot(snapshot, 'sample-plugin', configRevision(snapshotted));
+    expect(verified.transform({ record: { exact: true } })).toEqual({ exact: true, snapshotKind: 'scheduled' });
+
+    const changed = { ...snapshot, transform: { ...snapshot.transform, digest: '0'.repeat(64) } };
+    expect(() => verifyScheduledCollectionSnapshot(changed, 'sample-plugin', configRevision(snapshotted))).toThrowError(expect.objectContaining({ code: 'repository_config' }));
+
+    expect(() => verifyScheduledCollectionSnapshot(snapshot, 'sample-plugin', '0'.repeat(64))).toThrowError(expect.objectContaining({ code: 'repository_config' }));
+    expect(() => verifyScheduledCollectionSnapshot({ ...snapshot, unexpected: true }, 'sample-plugin', configRevision(snapshotted))).toThrowError(expect.objectContaining({ code: 'repository_config' }));
+  });
+
+  it('scheduled snapshot의 local require를 main/helper top-level 실행 전에 거부한다', () => {
+    const source = 'const executed = Number({ valueOf: () => ({ value: true }).missing() }); exports.transform = require("./helper.js").transform;\n';
+    const digest = createHash('sha256').update(source).digest('hex');
+    const snapshotted = { ...definition, plugin: { ...plugin, transformDigest: digest } };
+    expect(() => verifyScheduledCollectionSnapshot(
+      { definition: snapshotted, transform: { digest, sourceBase64: Buffer.from(source).toString('base64') } },
+      'sample-plugin', configRevision(snapshotted),
+    )).toThrow();
+  });
+
+  it('collector public event를 크기와 exact schema로 제한한다', () => {
+    const event = {
+      version: 1, timestamp: '2026-09-19T13:00:01.000Z', event: 'collection_finished', pluginId: 'sample-plugin', status: 'duplicate',
+      activeRunId: '123e4567-e89b-42d3-a456-426614174001', scheduledAt: '2026-09-19T13:00:00.000Z', scheduleTimezone: 'Asia/Seoul',
+    };
+    expect(parsePublicEvent(JSON.stringify(event), 'sample-plugin')).toEqual(event);
+    for (const invalid of [
+      `${JSON.stringify(event)}\nuntrusted`,
+      JSON.stringify({ ...event, extra: true }),
+      JSON.stringify({ ...event, scheduleTimezone: 'invalid' }),
+      'x'.repeat(MAX_PUBLIC_EVENT_BYTES + 1),
+    ]) expect(() => parsePublicEvent(invalid, 'sample-plugin')).toThrow();
   });
 });
 
@@ -80,6 +143,50 @@ describe('실행 조립과 결과', () => {
     const deps = dependencies();
     await executeManualCollection({ args: ['sample-plugin'], root: '/repo', env: {}, signal: new AbortController().signal, dependencies: deps, trigger: 'api', requestId: 'request-1' });
     expect(deps.run).toHaveBeenCalledWith(expect.objectContaining({ trigger: 'api', requestId: 'request-1' }));
+  });
+
+  it('scheduled trigger의 예정 instant와 timezone을 runner에 전달한다', async () => {
+    const deps = dependencies();
+    await executeManualCollection({
+      args: ['sample-plugin'], root: '/repo', env: {}, signal: new AbortController().signal,
+      dependencies: deps, trigger: 'scheduled', scheduledAt: '2026-09-19T13:00:00.000Z', scheduleTimezone: 'Asia/Seoul',
+    });
+    expect(deps.run).toHaveBeenCalledWith(expect.objectContaining({
+      trigger: 'scheduled', scheduledAt: '2026-09-19T13:00:00.000Z', scheduleTimezone: 'Asia/Seoul',
+    }));
+  });
+
+  it('scheduled snapshot revision이 바뀌면 DB와 runner 전에 거부한다', async () => {
+    const deps = dependencies();
+    const outcome = await executeManualCollection({
+      args: ['sample-plugin'], root: '/repo', env: {}, signal: new AbortController().signal,
+      dependencies: deps, trigger: 'scheduled', expectedConfigRevision: '0'.repeat(64),
+      scheduledAt: '2026-09-19T13:00:00.000Z', scheduleTimezone: 'Asia/Seoul',
+    });
+    expect(outcome).toMatchObject({ exitCode: 1, errorCode: 'repository_config' });
+    expect(deps.connectStorage).not.toHaveBeenCalled(); expect(deps.run).not.toHaveBeenCalled();
+  });
+
+  it('scheduled lease loser를 실패 대신 active run 상관관계가 있는 duplicate로 반환한다', async () => {
+    const source = 'exports.transform = ({ record }) => record;\n';
+    const digest = createHash('sha256').update(source).digest('hex');
+    const snapshotted = { ...definition, plugin: { ...plugin, transformDigest: digest } };
+    const scheduledSnapshot = verifyScheduledCollectionSnapshot(
+      { definition: snapshotted, transform: { digest, sourceBase64: Buffer.from(source).toString('base64') } },
+      'sample-plugin', configRevision(snapshotted),
+    );
+    const deps = dependencies({
+      validate: vi.fn(() => { throw new Error('current config must not be read'); }),
+      run: vi.fn(async () => { throw new CollectionRunnerError('already_running', 'active-run-1'); }),
+    });
+    const outcome = await executeManualCollection({
+      args: ['sample-plugin'], root: '/repo', env: {}, signal: new AbortController().signal,
+      dependencies: deps, trigger: 'scheduled', expectedConfigRevision: configRevision(snapshotted),
+      scheduledAt: '2026-09-19T13:00:00.000Z', scheduleTimezone: 'Asia/Seoul', scheduledSnapshot,
+    });
+    expect(deps.validate).not.toHaveBeenCalled();
+    expect(outcome).toEqual({ exitCode: 0, status: 'duplicate', pluginId: 'sample-plugin', activeRunId: 'active-run-1', scheduledAt: '2026-09-19T13:00:00.000Z', scheduleTimezone: 'Asia/Seoul' });
+    expect(publicEvent(outcome, '2026-09-19T13:00:01.000Z')).toMatchObject({ status: 'duplicate', activeRunId: 'active-run-1', scheduledAt: '2026-09-19T13:00:00.000Z', scheduleTimezone: 'Asia/Seoul' });
   });
 
   it('설정 실패 전에 DB와 runner를 호출하지 않는다', async () => {

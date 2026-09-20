@@ -36,9 +36,22 @@ export interface StorageIssue {
   keyHint?: string;
 }
 
-export type CollectionTrigger = 'startup' | 'cli' | 'api';
-export interface StartCollectionRun extends CollectionScope { startedAt: string; exclusive?: boolean; trigger?: CollectionTrigger; requestId?: string }
+export type CollectionTrigger = 'startup' | 'scheduled' | 'cli' | 'api';
+export interface StartCollectionRun extends CollectionScope {
+  startedAt: string;
+  exclusive?: boolean;
+  trigger?: CollectionTrigger;
+  requestId?: string;
+  scheduledAt?: string;
+  scheduleTimezone?: string;
+}
 export interface FinishCollectionRun { runId: string; status: 'success' | 'partial' | 'failed'; finishedAt: string }
+export interface RecordScheduledDuplicate extends CollectionScope {
+  activeRunId: string;
+  scheduledAt: string;
+  scheduleTimezone: string;
+  observedAt: string;
+}
 
 export interface CommitStorageBatch {
   runId: string;
@@ -57,6 +70,7 @@ export interface RecordStorage {
   startRun(input: StartCollectionRun): Promise<string>;
   renewRun?(runId: string): Promise<void>;
   finishRun(input: FinishCollectionRun): Promise<void>;
+  recordScheduledDuplicate(input: RecordScheduledDuplicate): Promise<void>;
   getCheckpoint(scope: CollectionScope): Promise<JsonValue | null>;
   commitBatch(input: CommitStorageBatch): Promise<void>;
 }
@@ -127,6 +141,12 @@ function validText(value: unknown, max: number = STORAGE_LIMITS.identifierCharac
 
 function validTimestamp(value: string): boolean { return validText(value) && !Number.isNaN(Date.parse(value)); }
 
+function validTimezone(value: unknown): value is string {
+  if (!validText(value)) return false;
+  try { new Intl.DateTimeFormat('en-US', { timeZone: value }).format(0); return true; }
+  catch { return false; }
+}
+
 export function validateScope(scope: CollectionScope): void {
   if (!validText(scope.pluginId) || !validText(scope.sourceId) || !validText(scope.configRevision)) throw new StorageError('INVALID_INPUT');
   if (scope.scopeType === 'full' ? scope.scopeKey !== '' : scope.scopeType !== 'asset' || !validText(scope.scopeKey)) throw new StorageError('INVALID_INPUT');
@@ -159,7 +179,17 @@ export function validateCommitBatch(input: CommitStorageBatch): void {
 export function validateStartRun(input: StartCollectionRun): void {
   validateScope(input);
   if (!validTimestamp(input.startedAt)) throw new StorageError('INVALID_INPUT');
-  if (input.trigger !== undefined && !['startup', 'cli', 'api'].includes(input.trigger)) throw new StorageError('INVALID_INPUT');
+  if (input.trigger !== undefined && !['startup', 'scheduled', 'cli', 'api'].includes(input.trigger)) throw new StorageError('INVALID_INPUT');
   if (input.requestId !== undefined && !validText(input.requestId)) throw new StorageError('INVALID_INPUT');
   if (input.requestId !== undefined && input.trigger !== 'api') throw new StorageError('INVALID_INPUT');
+  const scheduled = input.trigger === 'scheduled';
+  if (scheduled !== (input.scheduledAt !== undefined && input.scheduleTimezone !== undefined)) throw new StorageError('INVALID_INPUT');
+  if (scheduled && (!validTimestamp(input.scheduledAt!) || new Date(input.scheduledAt!).toISOString() !== input.scheduledAt || !validTimezone(input.scheduleTimezone))) throw new StorageError('INVALID_INPUT');
+}
+
+export function validateScheduledDuplicate(input: RecordScheduledDuplicate): void {
+  validateScope(input);
+  if (!validText(input.activeRunId) || !validTimestamp(input.observedAt)
+    || !validTimestamp(input.scheduledAt) || new Date(input.scheduledAt).toISOString() !== input.scheduledAt
+    || !validTimezone(input.scheduleTimezone)) throw new StorageError('INVALID_INPUT');
 }

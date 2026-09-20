@@ -6,6 +6,12 @@ import type { PlatformDbAdapterFactory, PlatformDbConfig, PlatformDbTls } from '
 
 type Environment = Readonly<Record<string, string | undefined>>;
 
+export const PLATFORM_DB_ENVIRONMENT_KEYS = Object.freeze([
+  'PLATFORM_DB_TYPE', 'PLATFORM_DB_HOST', 'PLATFORM_DB_PORT', 'PLATFORM_DB_NAME', 'PLATFORM_DB_USER',
+  'PLATFORM_DB_PASSWORD', 'PLATFORM_DB_PASSWORD_FILE', 'PLATFORM_DB_POOL_MAX', 'PLATFORM_DB_CONNECT_TIMEOUT_MS',
+  'PLATFORM_DB_TLS_MODE', 'PLATFORM_DB_TLS_CA_FILE',
+] as const satisfies readonly PlatformDbSetting[]);
+
 function text(env: Environment, key: PlatformDbSetting): string {
   const value = env[key];
   if (value === undefined) throw new PlatformDbConfigError('REQUIRED', key);

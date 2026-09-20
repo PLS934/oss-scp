@@ -5,9 +5,10 @@ import { basename, isAbsolute, join, relative, resolve, sep } from 'node:path';
 import { loadSourceDefinition } from './source-loader';
 import { loadLocalCsvSource } from './source-loaders/file';
 import { loadHttpCsvSource } from './source-loaders/http-csv';
-import { loadPostgresSource } from './source-loaders/db';
+import { isLivePostgresDefinition, loadPostgresSource } from './source-loaders/db';
 import type {
   CollectionDefinition,
+  CollectionConfiguration,
   ClientDetailDefinition,
   ClientListDefinition,
   ClientMenuItem,
@@ -30,10 +31,19 @@ export type * from './types';
 export { isLivePostgresDefinition, validateReadQuery } from './source-loaders/db';
 export { resolveSecret } from './secrets';
 export { HttpAuthenticationError, resolveHttpAuthenticationHeaders } from './http-auth';
+export { assertSelfContainedTransform, loadSelfContainedTransformSnapshot, loadTransformSnapshot, MAX_TRANSFORM_BYTES, transformDigest } from './transform-snapshot';
+export { scheduledCredentialEnvironment } from './scheduled-environment';
+import { loadSelfContainedTransformSnapshot, transformDigest } from './transform-snapshot';
+import { scheduledCredentialEnvironment } from './scheduled-environment';
 
-interface Registry {
+interface ConnectionRegistry {
   plugins?: string[];
   connections?: string[];
+}
+
+interface PluginRegistry {
+  plugins: string[];
+  collection?: { schedule?: { enabled?: boolean; timezone?: string; time?: string } };
 }
 
 interface Candidate<T> {
@@ -60,6 +70,11 @@ const validateSource = ajv.compile<SourceConfig>(schema('source.schema.json'));
 const validateConnection = ajv.compile<ConnectionConfig>(
   schema('connection.schema.json'),
 );
+const validatePluginRegistry = ajv.compile<PluginRegistry>(schema('plugin-registry.schema.json'));
+
+const defaultCollectionConfiguration: CollectionConfiguration = {
+  schedule: { enabled: false, timezone: 'Asia/Seoul', time: '22:00' },
+};
 
 function displayPath(root: string, file: string): string {
   const path = relative(root, file);
@@ -167,7 +182,7 @@ function readRegistry(
   key: 'plugins' | 'connections',
   errors: ConfigurationIssue[],
 ): string[] {
-  const value = readJson(root, file, errors) as Registry | undefined;
+  const value = readJson(root, file, errors) as ConnectionRegistry | undefined;
   if (value === undefined) return [];
   if (
     value === null ||
@@ -181,6 +196,34 @@ function readRegistry(
     return [];
   }
   return value[key];
+}
+
+function loadPluginRegistry(root: string, file: string, errors: ConfigurationIssue[]): {
+  entries: string[];
+  collection: CollectionConfiguration;
+} {
+  const value = readJson(root, file, errors);
+  if (value === undefined) return { entries: [], collection: defaultCollectionConfiguration };
+  if (!validate(root, file, value, validatePluginRegistry, errors)) {
+    return { entries: [], collection: defaultCollectionConfiguration };
+  }
+  const schedule = value.collection?.schedule;
+  const timezone = schedule?.timezone ?? defaultCollectionConfiguration.schedule.timezone;
+  try {
+    new Intl.DateTimeFormat('en-US', { timeZone: timezone }).format(0);
+  } catch {
+    issue(errors, root, file, '/collection/schedule/timezone', 'must be a valid IANA timezone');
+  }
+  return {
+    entries: value.plugins,
+    collection: {
+      schedule: {
+        enabled: schedule?.enabled ?? false,
+        timezone,
+        time: schedule?.time ?? defaultCollectionConfiguration.schedule.time,
+      },
+    },
+  };
 }
 
 function loadConnections(
@@ -217,6 +260,7 @@ function loadConnections(
 
 function loadPlugins(
   root: string,
+  entries: readonly string[],
   connections: Map<string, Candidate<ConnectionConfig>>,
   errors: ConfigurationIssue[],
   menus: ClientMenuItem[],
@@ -225,7 +269,6 @@ function loadPlugins(
 ): CollectionDefinition[] {
   const pluginRoot = join(root, 'plugins');
   const registryFile = join(pluginRoot, 'registry.json');
-  const entries = readRegistry(root, registryFile, 'plugins', errors);
   const definitions: CollectionDefinition[] = [];
   const pluginIds = new Set<string>();
   const menuPaths = new Map<string, string>();
@@ -613,12 +656,13 @@ export function validateRepository(rootDirectory: string): ConfigurationResult {
   const root = resolve(rootDirectory);
   const errors: ConfigurationIssue[] = [];
   const connections = loadConnections(root, errors);
+  const pluginRegistry = loadPluginRegistry(root, join(root, 'plugins', 'registry.json'), errors);
   const menus: ClientMenuItem[] = [];
   const plugins: ClientPluginSummary[] = [];
   const pluginDetails: LoadedPluginDetail[] = [];
-  const definitions = loadPlugins(root, connections, errors, menus, plugins, pluginDetails);
+  const definitions = loadPlugins(root, pluginRegistry.entries, connections, errors, menus, plugins, pluginDetails);
   menus.sort((a, b) => a.group < b.group ? -1 : a.group > b.group ? 1 : a.order - b.order || (a.title < b.title ? -1 : a.title > b.title ? 1 : a.path < b.path ? -1 : a.path > b.path ? 1 : 0));
-  return errors.length > 0 ? { ok: false, errors } : { ok: true, definitions, menus, plugins, pluginDetails };
+  return errors.length > 0 ? { ok: false, errors } : { ok: true, definitions, menus, plugins, pluginDetails, collection: pluginRegistry.collection };
 }
 
 const loadModule = createRequire(__filename);
@@ -627,15 +671,22 @@ export async function preflightConfiguration(rootDirectory: string): Promise<Con
   const result = validateRepository(rootDirectory);
   if (!result.ok) return result;
   const errors: ConfigurationIssue[] = [];
+  const definitions: CollectionDefinition[] = [];
   for (const definition of result.definitions) {
     try {
-      const loaded = loadModule(definition.plugin.transformPath) as { transform?: unknown };
-      if (typeof loaded.transform !== 'function') {
-        issue(errors, resolve(rootDirectory), definition.plugin.transformPath, '/transform', `plugin ${definition.plugin.id} must export transform`);
+      const source = readFileSync(definition.plugin.transformPath);
+      const digest = transformDigest(source);
+      if (result.collection.schedule.enabled && !isLivePostgresDefinition(definition)) {
+        scheduledCredentialEnvironment(definition);
+        loadSelfContainedTransformSnapshot(source, definition.plugin.transformPath);
+      } else {
+        const loaded = loadModule(definition.plugin.transformPath) as { transform?: unknown };
+        if (typeof loaded.transform !== 'function') throw new Error('invalid transform export');
       }
+      definitions.push({ ...definition, plugin: { ...definition.plugin, transformDigest: digest } });
     } catch {
       issue(errors, resolve(rootDirectory), definition.plugin.transformPath, '/transform', `plugin ${definition.plugin.id} module cannot be loaded`);
     }
   }
-  return errors.length > 0 ? { ok: false, errors } : result;
+  return errors.length > 0 ? { ok: false, errors } : { ...result, definitions };
 }

@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto';
 import { relative, resolve } from 'node:path';
-import { runCollection, CollectionRunnerError, type CollectionCollector, type CollectionRunResult, type RunCollectionOptions } from '@oss-scp/collection-engine';
+import { runCollection, CollectionRunnerError, loadTransformBytes, type CollectionCollector, type CollectionRunResult, type RunCollectionOptions } from '@oss-scp/collection-engine';
 import { collectHttpOffset, collectHttpSingle } from '@oss-scp/http-collector';
 import { collectHttpCsv } from '@oss-scp/http-csv-source';
 import { collectLocalCsv } from '@oss-scp/local-csv-source';
@@ -13,7 +13,7 @@ import {
   type CollectionScope,
   type RecordStorage,
 } from '@oss-scp/platform-db';
-import { isLivePostgresDefinition, preflightConfiguration, type CollectionDefinition, type ConfigurationResult, type HttpCsvCollectionDefinition, type OffsetCollectionDefinition, type SingleCollectionDefinition } from '@oss-scp/plugin-config';
+import { isLivePostgresDefinition, MAX_TRANSFORM_BYTES, preflightConfiguration, transformDigest, type CollectionDefinition, type ConfigurationResult, type HttpCsvCollectionDefinition, type OffsetCollectionDefinition, type SingleCollectionDefinition } from '@oss-scp/plugin-config';
 
 export type CliErrorCode =
   | 'usage'
@@ -47,7 +47,16 @@ export interface CliFailure {
   errorCode: CliErrorCode;
 }
 
-export type CliOutcome = CliSuccess | CliFailure;
+export interface CliDuplicate {
+  exitCode: 0;
+  status: 'duplicate';
+  pluginId: string;
+  activeRunId: string;
+  scheduledAt: string;
+  scheduleTimezone: string;
+}
+
+export type CliOutcome = CliSuccess | CliFailure | CliDuplicate;
 
 export interface Closeable { close(): Promise<void> }
 export type Runner = (options: RunCollectionOptions) => Promise<CollectionRunResult>;
@@ -72,6 +81,75 @@ function stable(value: unknown): unknown {
 
 export function configRevision(definition: CollectionDefinition): string {
   return createHash('sha256').update(JSON.stringify(stable(definition))).digest('hex');
+}
+
+export interface SerializedScheduledCollectionSnapshot {
+  definition: CollectionDefinition;
+  transform: { digest: string; sourceBase64: string };
+}
+
+export interface VerifiedScheduledCollectionSnapshot {
+  definition: CollectionDefinition;
+  transform: RunCollectionOptions['transform'];
+}
+
+function exactKeys(value: Record<string, unknown>, expected: readonly string[]): boolean {
+  const keys = Object.keys(value).sort();
+  return keys.length === expected.length && keys.every((key, index) => key === [...expected].sort()[index]);
+}
+
+export function verifyScheduledCollectionSnapshot(
+  value: unknown,
+  pluginId: string,
+  expectedRevision: string,
+): VerifiedScheduledCollectionSnapshot {
+  if (value === null || typeof value !== 'object' || Array.isArray(value) || !exactKeys(value as Record<string, unknown>, ['definition', 'transform'])) {
+    throw new ManualCollectionError('repository_config', 'config');
+  }
+  const { definition, transform } = value as { definition?: unknown; transform?: unknown };
+  if (definition === null || typeof definition !== 'object' || Array.isArray(definition)
+    || transform === null || typeof transform !== 'object' || Array.isArray(transform)
+    || !exactKeys(transform as Record<string, unknown>, ['digest', 'sourceBase64'])) {
+    throw new ManualCollectionError('repository_config', 'config');
+  }
+  const candidate = definition as CollectionDefinition;
+  const plugin = (candidate as { plugin?: unknown }).plugin;
+  const snapshot = transform as { digest?: unknown; sourceBase64?: unknown };
+  if (plugin === null || typeof plugin !== 'object' || Array.isArray(plugin)
+    || (plugin as { id?: unknown }).id !== pluginId
+    || typeof (plugin as { transformPath?: unknown }).transformPath !== 'string'
+    || typeof (plugin as { transformDigest?: unknown }).transformDigest !== 'string'
+    || typeof snapshot.digest !== 'string' || !/^[a-f0-9]{64}$/.test(snapshot.digest)
+    || snapshot.digest !== (plugin as { transformDigest: string }).transformDigest
+    || typeof snapshot.sourceBase64 !== 'string') {
+    throw new ManualCollectionError('repository_config', 'config');
+  }
+  const source = Buffer.from(snapshot.sourceBase64, 'base64');
+  if (source.byteLength === 0 || source.byteLength > MAX_TRANSFORM_BYTES || source.toString('base64') !== snapshot.sourceBase64
+    || transformDigest(source) !== snapshot.digest || configRevision(candidate) !== expectedRevision) {
+    throw new ManualCollectionError('repository_config', 'config');
+  }
+  const loaded = loadTransformBytes(source, (plugin as { transformPath: string }).transformPath);
+  return { definition: candidate, transform: loaded };
+}
+
+export async function readScheduledCollectionSnapshot(
+  input: AsyncIterable<Uint8Array | string>,
+  pluginId: string,
+  expectedRevision: string,
+): Promise<VerifiedScheduledCollectionSnapshot> {
+  const chunks: Buffer[] = [];
+  let bytes = 0;
+  for await (const chunk of input) {
+    const value = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk);
+    bytes += value.byteLength;
+    if (bytes > MAX_TRANSFORM_BYTES * 2) throw new ManualCollectionError('repository_config', 'config');
+    chunks.push(value);
+  }
+  let parsed: unknown;
+  try { parsed = JSON.parse(Buffer.concat(chunks).toString('utf8')); }
+  catch { throw new ManualCollectionError('repository_config', 'config'); }
+  return verifyScheduledCollectionSnapshot(parsed, pluginId, expectedRevision);
 }
 
 export function parsePluginId(args: readonly string[]): string {
@@ -209,8 +287,12 @@ export async function executeManualCollection(options: {
   root: string;
   env: Readonly<Record<string, string | undefined>>;
   signal: AbortSignal;
-  trigger?: 'startup' | 'cli' | 'api';
+  trigger?: 'startup' | 'scheduled' | 'cli' | 'api';
   requestId?: string;
+  scheduledAt?: string;
+  scheduleTimezone?: string;
+  expectedConfigRevision?: string;
+  scheduledSnapshot?: VerifiedScheduledCollectionSnapshot;
   dependencies?: ManualCollectionDependencies;
 }): Promise<CliOutcome> {
   const dependencies = options.dependencies ?? defaultDependencies;
@@ -218,13 +300,35 @@ export async function executeManualCollection(options: {
   let resource: Closeable | undefined;
   try {
     pluginId = parsePluginId(options.args);
-    const definition = selectDefinition(await dependencies.validate(options.root), pluginId);
+    const definition = options.scheduledSnapshot?.definition ?? selectDefinition(await dependencies.validate(options.root), pluginId);
+    if (definition.plugin.id !== pluginId || (options.expectedConfigRevision !== undefined && configRevision(definition) !== options.expectedConfigRevision)) {
+      throw new ManualCollectionError('repository_config', 'config');
+    }
     const collector = collectorFor(definition, dependencies.now);
     const connected = await dependencies.connectStorage(options.env);
     resource = idempotentClose(connected.resource);
-    const result = await dependencies.run({ plugin: definition.plugin, scope: collectionScope(options.root, definition), collector, storage: connected.storage, signal: options.signal, now: dependencies.now, trigger: options.trigger ?? 'cli', ...(options.requestId ? { requestId: options.requestId } : {}) });
+    const result = await dependencies.run({
+      plugin: definition.plugin,
+      scope: collectionScope(options.root, definition),
+      collector,
+      storage: connected.storage,
+      signal: options.signal,
+      now: dependencies.now,
+      trigger: options.trigger ?? 'cli',
+      ...(options.requestId ? { requestId: options.requestId } : {}),
+      ...(options.scheduledAt ? { scheduledAt: options.scheduledAt } : {}),
+      ...(options.scheduleTimezone ? { scheduleTimezone: options.scheduleTimezone } : {}),
+      ...(options.scheduledSnapshot?.transform ? { transform: options.scheduledSnapshot.transform } : {}),
+    });
     return { exitCode: result.status === 'success' ? 0 : 2, status: result.status, pluginId, result };
   } catch (error) {
+    if (error instanceof CollectionRunnerError && error.code === 'already_running' && error.activeRunId
+      && options.trigger === 'scheduled' && options.scheduledAt && options.scheduleTimezone) {
+      return {
+        exitCode: 0, status: 'duplicate', pluginId: pluginId!, activeRunId: error.activeRunId,
+        scheduledAt: options.scheduledAt, scheduleTimezone: options.scheduleTimezone,
+      };
+    }
     const normalized = error instanceof ManualCollectionError ? error
       : error instanceof CollectionRunnerError && error.code === 'cancelled' ? new ManualCollectionError('cancelled', 'cancelled')
       : options.signal.aborted ? new ManualCollectionError('cancelled', 'cancelled')
@@ -240,22 +344,93 @@ export async function executeManualCollection(options: {
   }
 }
 
+export function collectionProcessInvocation(env: Readonly<Record<string, string | undefined>>): {
+  trigger: 'startup' | 'scheduled' | 'cli';
+  scheduledAt?: string;
+  scheduleTimezone?: string;
+  expectedConfigRevision?: string;
+} {
+  const rawTrigger = env.OSS_SCP_COLLECTION_TRIGGER ?? 'cli';
+  if (!['startup', 'scheduled', 'cli'].includes(rawTrigger)) throw new ManualCollectionError('repository_config', 'config');
+  const scheduledAt = env.OSS_SCP_COLLECTION_SCHEDULED_AT;
+  const scheduleTimezone = env.OSS_SCP_COLLECTION_SCHEDULE_TIMEZONE;
+  const expectedConfigRevision = env.OSS_SCP_COLLECTION_EXPECTED_REVISION;
+  if (rawTrigger !== 'scheduled') {
+    if (scheduledAt !== undefined || scheduleTimezone !== undefined || expectedConfigRevision !== undefined) throw new ManualCollectionError('repository_config', 'config');
+    return { trigger: rawTrigger as 'startup' | 'cli' };
+  }
+  if (!scheduledAt || !scheduleTimezone || !expectedConfigRevision || !/^[a-f0-9]{64}$/.test(expectedConfigRevision)) throw new ManualCollectionError('repository_config', 'config');
+  try {
+    if (new Date(scheduledAt).toISOString() !== scheduledAt) throw new Error('invalid instant');
+    new Intl.DateTimeFormat('en-US', { timeZone: scheduleTimezone }).format(0);
+  } catch {
+    throw new ManualCollectionError('repository_config', 'config');
+  }
+  return { trigger: 'scheduled', scheduledAt, scheduleTimezone, expectedConfigRevision };
+}
+
 export interface PublicEvent {
   version: 1;
   timestamp: string;
   event: 'collection_finished';
   pluginId?: string;
-  status: 'success' | 'partial' | 'failed' | 'cancelled';
+  status: 'success' | 'partial' | 'duplicate' | 'failed' | 'cancelled';
   runId?: string;
   batches?: number;
   processed?: number;
   accepted?: number;
   rejected?: number;
   errorCode?: CliErrorCode;
+  activeRunId?: string;
+  scheduledAt?: string;
+  scheduleTimezone?: string;
+}
+
+export const MAX_PUBLIC_EVENT_BYTES = 16 * 1024;
+
+function canonicalTimestamp(value: unknown): value is string {
+  if (typeof value !== 'string') return false;
+  try { return new Date(value).toISOString() === value; } catch { return false; }
+}
+
+function identifier(value: unknown): value is string {
+  return typeof value === 'string' && /^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$/.test(value);
+}
+
+function runIdentifier(value: unknown): value is string {
+  return typeof value === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value);
+}
+
+function count(value: unknown): value is number { return typeof value === 'number' && Number.isSafeInteger(value) && value >= 0; }
+
+/** scheduled parent가 신뢰할 수 있는 단일 collector event만 엄격하게 해석한다. */
+export function parsePublicEvent(serialized: string, expectedPluginId: string): PublicEvent {
+  if (Buffer.byteLength(serialized) === 0 || Buffer.byteLength(serialized) > MAX_PUBLIC_EVENT_BYTES) throw new Error('invalid public event');
+  let parsed: unknown;
+  try { parsed = JSON.parse(serialized); } catch { throw new Error('invalid public event'); }
+  if (parsed === null || typeof parsed !== 'object' || Array.isArray(parsed)) throw new Error('invalid public event');
+  const event = parsed as Record<string, unknown>;
+  if (event.version !== 1 || event.event !== 'collection_finished' || event.pluginId !== expectedPluginId
+    || !identifier(event.pluginId) || !canonicalTimestamp(event.timestamp)) throw new Error('invalid public event');
+  const common = ['event', 'pluginId', 'status', 'timestamp', 'version'];
+  if (event.status === 'success' || event.status === 'partial') {
+    if (!exactKeys(event, [...common, 'accepted', 'batches', 'processed', 'rejected', 'runId']) || !runIdentifier(event.runId)
+      || !count(event.batches) || !count(event.processed) || !count(event.accepted) || !count(event.rejected)
+      || (event.accepted as number) + (event.rejected as number) !== event.processed) throw new Error('invalid public event');
+  } else if (event.status === 'duplicate') {
+    if (!exactKeys(event, [...common, 'activeRunId', 'scheduledAt', 'scheduleTimezone']) || !runIdentifier(event.activeRunId)
+      || !canonicalTimestamp(event.scheduledAt) || typeof event.scheduleTimezone !== 'string') throw new Error('invalid public event');
+    try { new Intl.DateTimeFormat('en-US', { timeZone: event.scheduleTimezone }).format(0); } catch { throw new Error('invalid public event'); }
+  } else if (event.status === 'failed' || event.status === 'cancelled') {
+    if (!exactKeys(event, [...common, 'errorCode']) || typeof event.errorCode !== 'string'
+      || !(new Set<CliErrorCode>(['usage', 'repository_config', 'plugin_not_found', 'unsupported_collector', 'platform_db_config', 'unsupported_db_storage', 'platform_db_connection', 'collection_failed', 'cancelled'])).has(event.errorCode as CliErrorCode)) throw new Error('invalid public event');
+  } else throw new Error('invalid public event');
+  return event as unknown as PublicEvent;
 }
 
 export function publicEvent(outcome: CliOutcome, timestamp: string): PublicEvent {
   const base = { version: 1 as const, timestamp, event: 'collection_finished' as const, ...(outcome.pluginId ? { pluginId: outcome.pluginId } : {}), status: outcome.status };
   if ('result' in outcome) return { ...base, runId: outcome.result.runId, batches: outcome.result.batches, processed: outcome.result.processed, accepted: outcome.result.accepted, rejected: outcome.result.rejected };
+  if (outcome.status === 'duplicate') return { ...base, activeRunId: outcome.activeRunId, scheduledAt: outcome.scheduledAt, scheduleTimezone: outcome.scheduleTimezone };
   return { ...base, errorCode: outcome.errorCode };
 }

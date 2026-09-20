@@ -192,6 +192,10 @@ pluginId + dataType + sourceId + externalKeyType + externalKey
 
 `collection_runs`는 플러그인·수집처·실행 범위·설정 revision, 상태와 처리 집계를 기록합니다. `collection_checkpoints`는 같은 범위의 마지막 저장 완료 위치를 보관합니다. `collection_issues`에는 격리된 원천 레코드의 위치, 오류 코드·경로·제한된 메시지와 key hint만 기록하며 원천 레코드 전체와 응답 메타데이터는 복제하지 않습니다.
 
+실행 이력의 `trigger`는 `startup`, `scheduled`, `cli`, `api`를 구분합니다. `scheduled` 실행만 예정 UTC instant인 `scheduled_at`과 설정 IANA 시간대인 `schedule_timezone`을 함께 가져야 하며 다른 trigger에는 두 값을 허용하지 않습니다. `api` 실행의 `request_id`도 다른 trigger와 혼용할 수 없습니다. PostgreSQL과 MySQL adapter는 이 조합을 공통 입력 계약과 DB 제약에서 모두 검사합니다. 마지막 성공 시각은 별도 mutable 상태가 아니라 `status='success'`인 완료 이력에서 계산합니다.
+
+네 trigger는 plugin·source·설정 revision·full 범위의 같은 실행 lease를 사용합니다. 여러 API 인스턴스의 scheduled timer나 기동·CLI·API 요청이 겹쳐도 DB 실행권을 얻은 하나만 원천 결과와 checkpoint를 확정합니다. scheduled 실패 또는 partial 결과도 기존 batch transaction 의미를 바꾸지 않으며, 원천 upsert가 소유하지 않는 담당자·수동 상태 행은 그대로 보존됩니다.
+
 `commitBatch`는 다음 항목을 선택한 DB의 하나의 transaction으로 확정합니다.
 
 1. 레코드 upsert와 내부 ID 유지

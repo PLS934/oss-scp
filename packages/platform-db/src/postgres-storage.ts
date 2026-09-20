@@ -1,7 +1,8 @@
 import type { PoolClient } from 'pg';
 import type { PostgresPlatformDbConnection } from './postgres';
+import { collectionLeaseIdentity } from './storage-identity';
 import {
-  canonicalExternalKey, StorageError, validateCommitBatch, validateScope, validateStartRun,
+  canonicalExternalKey, StorageError, validateCommitBatch, validateScheduledDuplicate, validateScope, validateStartRun,
   type CollectionScope, type CommitStorageBatch, type FinishCollectionRun, type JsonValue,
   type RecordStorage, type StartCollectionRun, type StorageRecordReference,
 } from './storage';
@@ -22,7 +23,21 @@ function scopeValues(scope: CollectionScope): readonly string[] {
   return [scope.pluginId, scope.sourceId, scope.scopeType, scope.scopeKey, scope.configRevision];
 }
 
-function scopeLockKey(scope: CollectionScope): string { return scopeValues(scope).join('\u001f'); }
+function scopeLockKey(scope: CollectionScope): string { return collectionLeaseIdentity(scope).toString('hex'); }
+
+function activeLeaseConflict(error: unknown): boolean {
+  return typeof error === 'object' && error !== null
+    && (error as { code?: unknown }).code === '23505'
+    && (error as { constraint?: unknown }).constraint === 'collection_runs_one_active_lease_index';
+}
+
+function guardedActiveRunId(error: unknown): string | undefined {
+  if (typeof error !== 'object' || error === null) return undefined;
+  const value = error as { code?: unknown; constraint?: unknown; detail?: unknown };
+  if (value.code !== 'P0001' || value.constraint !== 'collection_runs_one_active_lease_guard'
+    || typeof value.detail !== 'string' || !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value.detail)) return undefined;
+  return value.detail;
+}
 
 async function rollback(client: PoolClient): Promise<void> { await client.query('ROLLBACK').catch(() => undefined); }
 
@@ -65,14 +80,29 @@ export function createPostgresRecordStorage(connection: PostgresPlatformDbConnec
               AND coordinated AND heartbeat_at > now() - interval '2 minutes' LIMIT 1`, scopeValues(input).slice(0, 4));
             if (input.exclusive && active.rows[0]) throw new StorageError('RUN_ALREADY_ACTIVE', active.rows[0].id);
             await client.query(`UPDATE collection_runs SET status='failed', finished_at=now()
-              WHERE plugin_id=$1 AND source_id=$2 AND scope_type=$3 AND scope_key=$4 AND status='running' AND coordinated AND $5::boolean`, [...scopeValues(input).slice(0, 4), input.exclusive === true]);
+              WHERE plugin_id=$1 AND source_id=$2 AND scope_type=$3 AND scope_key=$4 AND status='running' AND coordinated
+              AND heartbeat_at <= now() - interval '2 minutes' AND $5::boolean`, [...scopeValues(input).slice(0, 4), input.exclusive === true]);
             const result = await client.query<{ id: string }>(`INSERT INTO collection_runs
-              (plugin_id, source_id, scope_type, scope_key, config_revision, started_at, heartbeat_at, coordinated, trigger, request_id)
-              VALUES ($1,$2,$3,$4,$5,$6,now(),$7,$8,$9) RETURNING id`, [...scopeValues(input), input.startedAt, input.exclusive === true, input.trigger ?? 'cli', input.requestId ?? null]);
+              (plugin_id, source_id, scope_type, scope_key, config_revision, started_at, heartbeat_at, coordinated, trigger, request_id, scheduled_at, schedule_timezone)
+              VALUES ($1,$2,$3,$4,$5,$6,now(),$7,$8,$9,$10,$11) RETURNING id`, [
+                ...scopeValues(input), input.startedAt, input.exclusive === true, input.trigger ?? 'cli', input.requestId ?? null,
+                input.scheduledAt ?? null, input.scheduleTimezone ?? null,
+              ]);
             await client.query('COMMIT');
             if (!result.rows[0]) throw new StorageError('PERSIST_FAILED');
             return result.rows[0].id;
-          } catch (error) { await rollback(client); throw error; }
+          } catch (error) {
+            await rollback(client);
+            const guardedRunId = guardedActiveRunId(error);
+            if (input.exclusive && guardedRunId) throw new StorageError('RUN_ALREADY_ACTIVE', guardedRunId);
+            if (input.exclusive && activeLeaseConflict(error)) {
+              const winner = await client.query<{ id: string }>(`SELECT id FROM collection_runs WHERE plugin_id=$1 AND source_id=$2
+                AND scope_type=$3 AND scope_key=$4 AND status='running' AND coordinated
+                ORDER BY started_at DESC, id DESC LIMIT 1`, scopeValues(input).slice(0, 4));
+              if (winner.rows[0]) throw new StorageError('RUN_ALREADY_ACTIVE', winner.rows[0].id);
+            }
+            throw error;
+          }
         });
       } catch (error) { throw publicFailure(error); }
     },
@@ -90,14 +120,35 @@ export function createPostgresRecordStorage(connection: PostgresPlatformDbConnec
       if (!input.runId || Number.isNaN(Date.parse(input.finishedAt)) || !['success', 'partial', 'failed'].includes(input.status)) throw new StorageError('INVALID_INPUT');
       try {
         await connection.withClient(async client => {
-          const found = await client.query<{ status: string; isolated_count: string; coordinated: boolean; lease_valid: boolean }>(`SELECT status, isolated_count, coordinated,
-            heartbeat_at > now() - interval '2 minutes' AS lease_valid FROM collection_runs WHERE id=$1`, [input.runId]);
-          const run = found.rows[0];
-          if (!run) throw new StorageError('RUN_NOT_FOUND');
-          if (run.status !== 'running') throw new StorageError('RUN_NOT_ACTIVE');
-          if (run.coordinated && !run.lease_valid) throw new StorageError('RUN_NOT_ACTIVE');
-          if ((input.status === 'success' && Number(run.isolated_count) > 0) || (input.status === 'partial' && Number(run.isolated_count) === 0)) throw new StorageError('INVALID_INPUT');
-          await client.query('UPDATE collection_runs SET status=$2, finished_at=$3 WHERE id=$1', [input.runId, input.status, input.finishedAt]);
+          await client.query('BEGIN');
+          try {
+            const found = await client.query<{ status: string; isolated_count: string; coordinated: boolean; lease_valid: boolean }>(`SELECT status, isolated_count, coordinated,
+              heartbeat_at > now() - interval '2 minutes' AS lease_valid FROM collection_runs WHERE id=$1 FOR UPDATE`, [input.runId]);
+            const run = found.rows[0];
+            if (!run) throw new StorageError('RUN_NOT_FOUND');
+            if (run.status !== 'running') throw new StorageError('RUN_NOT_ACTIVE');
+            if (run.coordinated && !run.lease_valid) throw new StorageError('RUN_NOT_ACTIVE');
+            if ((input.status === 'success' && Number(run.isolated_count) > 0) || (input.status === 'partial' && Number(run.isolated_count) === 0)) throw new StorageError('INVALID_INPUT');
+            await client.query("SELECT set_config('oss_scp.finishing_run_id', $1, true)", [input.runId]);
+            const updated = await client.query("UPDATE collection_runs SET status=$2, finished_at=$3 WHERE id=$1 AND status='running'", [input.runId, input.status, input.finishedAt]);
+            if (updated.rowCount !== 1) throw new StorageError('RUN_NOT_ACTIVE');
+            await client.query('COMMIT');
+          } catch (error) { await rollback(client); throw error; }
+        });
+      } catch (error) { throw publicFailure(error); }
+    },
+
+    async recordScheduledDuplicate(input): Promise<void> {
+      validateScheduledDuplicate(input);
+      try {
+        await connection.withClient(async client => {
+          const referenced = await client.query<{ id: string }>(`SELECT id FROM collection_runs WHERE id=$1 AND plugin_id=$2 AND source_id=$3
+            AND scope_type=$4 AND scope_key=$5`, [input.activeRunId, ...scopeValues(input).slice(0, 4)]);
+          if (!referenced.rows[0]) throw new StorageError('RUN_NOT_FOUND');
+          await client.query(`INSERT INTO scheduled_collection_references
+            (active_run_id, scheduled_at, schedule_timezone, observed_at) VALUES ($1,$2,$3,$4)
+            ON CONFLICT (active_run_id, scheduled_at, schedule_timezone) DO NOTHING`,
+          [input.activeRunId, input.scheduledAt, input.scheduleTimezone, input.observedAt]);
         });
       } catch (error) { throw publicFailure(error); }
     },

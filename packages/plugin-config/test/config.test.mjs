@@ -1,8 +1,10 @@
 import { cpSync, mkdtempSync, mkdirSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
+import { loadEnvFile } from 'node:process';
 import { afterEach, describe, expect, test } from 'vitest';
-import { preflightConfiguration, resolveSecret, validateReadQuery, validateRepository } from '../dist/index.js';
+import { assertSelfContainedTransform, loadSelfContainedTransformSnapshot, preflightConfiguration, resolveSecret, validateReadQuery, validateRepository } from '../dist/index.js';
+import { createHash } from 'node:crypto';
 
 const repositoryRoot = resolve(import.meta.dirname, '../../..');
 const temporaryRoots = [];
@@ -96,6 +98,50 @@ describe('validateRepository', () => {
     if (result.ok) expect(result.definitions.map(item => item.plugin.id)).toEqual(['sample1-offset-api', 'vulnerabilities-local-csv', 'vulnerabilities-http-csv', 'sample2-single-api', 'dependency-track-db']);
   });
 
+  test('수집 일정 생략·비활성·기본값·사용자 값을 엄격하게 검증한다', () => {
+    const root = temporaryRepository();
+    const registry = readJson(root, 'plugins/registry.json');
+    delete registry.collection;
+    writeJson(root, 'plugins/registry.json', registry);
+    let result = validateRepository(root);
+    expect(result.ok && result.collection.schedule).toEqual({ enabled: false, timezone: 'Asia/Seoul', time: '22:00' });
+
+    registry.collection = { schedule: { enabled: false } };
+    writeJson(root, 'plugins/registry.json', registry);
+    result = validateRepository(root);
+    expect(result.ok && result.collection.schedule).toEqual({ enabled: false, timezone: 'Asia/Seoul', time: '22:00' });
+
+    registry.collection.schedule = { enabled: true };
+    writeJson(root, 'plugins/registry.json', registry);
+    result = validateRepository(root);
+    expect(result.ok && result.collection.schedule).toEqual({ enabled: true, timezone: 'Asia/Seoul', time: '22:00' });
+
+    registry.collection.schedule = { enabled: true, timezone: 'America/New_York', time: '03:15' };
+    writeJson(root, 'plugins/registry.json', registry);
+    result = validateRepository(root);
+    expect(result.ok && result.collection.schedule).toEqual({ enabled: true, timezone: 'America/New_York', time: '03:15' });
+  });
+
+  test.each([
+    ['알 수 없는 키', { enabled: true, extra: 'secret-value' }, '/collection/schedule/extra'],
+    ['잘못된 enabled 타입', { enabled: 'true' }, '/collection/schedule/enabled'],
+    ['잘못된 time 타입', { enabled: true, time: 2200 }, '/collection/schedule/time'],
+    ['느슨한 시각', { enabled: true, time: '2:00' }, '/collection/schedule/time'],
+    ['범위를 벗어난 시각', { enabled: true, time: '24:00' }, '/collection/schedule/time'],
+    ['잘못된 timezone', { enabled: true, timezone: 'Not/A_Zone' }, '/collection/schedule/timezone'],
+  ])('수집 일정의 %s을 안전한 설정 오류로 거부한다', (_name, schedule, path) => {
+    const root = temporaryRepository();
+    const registry = readJson(root, 'plugins/registry.json');
+    registry.collection = { schedule };
+    writeJson(root, 'plugins/registry.json', registry);
+    const result = validateRepository(root);
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.errors).toContainEqual(expect.objectContaining({ file: 'plugins/registry.json', path }));
+      expect(JSON.stringify(result.errors)).not.toContain('secret-value');
+    }
+  });
+
   test('심볼릭 링크를 통한 설정 루트 이탈을 거부한다', () => {
     const root = temporaryRepository();
     const outside = mkdtempSync(join(tmpdir(), 'oss-scp-outside-'));
@@ -119,6 +165,123 @@ describe('validateRepository', () => {
     writeFileSync(target, 'throw new Error("DO_NOT_PRINT_SECRET");\n');
     result = await preflightConfiguration(root);
     expect(JSON.stringify(result)).not.toContain('DO_NOT_PRINT_SECRET');
+  });
+
+  test('preflight가 실행한 정확한 transform 바이트 digest를 runtime definition에 고정한다', async () => {
+    const root = temporaryRepository();
+    const target = join(root, 'plugins/sample1-offset-api/dist/transform.js');
+    const source = 'exports.transform = ({ record }) => record;\n';
+    writeFileSync(target, source);
+    const result = await preflightConfiguration(root);
+    expect(result.ok).toBe(true);
+    if (result.ok) expect(result.definitions.find(item => item.plugin.id === 'sample1-offset-api')?.plugin.transformDigest)
+      .toBe(createHash('sha256').update(source).digest('hex'));
+  });
+
+  test('schedule 비활성 preflight는 self-contained ESM transform의 기존 module loading 계약을 유지한다', async () => {
+    const root = temporaryRepository();
+    const directory = join(root, 'plugins/sample1-offset-api');
+    const target = join(directory, 'dist/transform.js');
+    writeJson(root, 'plugins/sample1-offset-api/package.json', { type: 'module' });
+    writeFileSync(target, 'export const transform = ({ record }) => ({ records: [{ type: "asset", values: record }] });\n');
+
+    const result = await preflightConfiguration(root);
+
+    expect(result.ok).toBe(true);
+    if (result.ok) expect(result.definitions.find(item => item.plugin.id === 'sample1-offset-api')?.plugin.transformDigest)
+      .toBe(createHash('sha256').update(readFileSync(target)).digest('hex'));
+  });
+
+  test('scheduled transform의 filesystem require를 top-level 실행 전에 거부하고 비-scheduled preflight는 유지한다', async () => {
+    const root = temporaryRepository();
+    const registry = readJson(root, 'plugins/registry.json');
+    registry.collection = { schedule: { enabled: true, timezone: 'UTC', time: '00:00' } };
+    writeJson(root, 'plugins/registry.json', registry);
+    const directory = join(root, 'plugins/sample1-offset-api/dist');
+    writeFileSync(join(directory, 'helper.js'), 'globalThis.__ossScpHelperExecuted = true; exports.transform = ({ record }) => record;\n');
+    writeFileSync(join(directory, 'transform.js'), 'globalThis.__ossScpMainExecuted = true; exports.transform = require("./helper.js").transform;\n');
+    delete globalThis.__ossScpMainExecuted; delete globalThis.__ossScpHelperExecuted;
+    const scheduled = await preflightConfiguration(root);
+    expect(scheduled.ok).toBe(false);
+    expect(globalThis.__ossScpMainExecuted).toBeUndefined();
+    expect(globalThis.__ossScpHelperExecuted).toBeUndefined();
+
+    registry.collection.schedule.enabled = false;
+    writeJson(root, 'plugins/registry.json', registry);
+    const manual = await preflightConfiguration(root);
+    expect(manual.ok).toBe(true);
+    expect(globalThis.__ossScpMainExecuted).toBe(true);
+    expect(globalThis.__ossScpHelperExecuted).toBe(true);
+    delete globalThis.__ossScpMainExecuted; delete globalThis.__ossScpHelperExecuted;
+  });
+
+  test('scheduled credential envRef가 .env의 NODE_OPTIONS --require를 child에 주입하지 못하게 기동 전 거부한다', async () => {
+    const root = temporaryRepository();
+    const registry = readJson(root, 'plugins/registry.json');
+    registry.collection = { schedule: { enabled: true, timezone: 'UTC', time: '00:00' } };
+    writeJson(root, 'plugins/registry.json', registry);
+    const connection = readJson(root, 'connections/mock-api-sample1.json');
+    connection.config.auth = { type: 'bearer', tokenRef: { env: 'NODE_OPTIONS' } };
+    writeJson(root, 'connections/mock-api-sample1.json', connection);
+    const injected = join(root, 'injected.cjs');
+    writeFileSync(injected, 'globalThis.__ossScpNodeOptionsExecuted = true;\n');
+    writeFileSync(join(root, '.env'), `NODE_OPTIONS=--require=${injected}\n`);
+    const previous = process.env.NODE_OPTIONS;
+    delete process.env.NODE_OPTIONS;
+    try {
+      loadEnvFile(join(root, '.env'));
+      const scheduled = await preflightConfiguration(root);
+      expect(scheduled.ok).toBe(false);
+      expect(globalThis.__ossScpNodeOptionsExecuted).toBeUndefined();
+
+      registry.collection.schedule.enabled = false;
+      writeJson(root, 'plugins/registry.json', registry);
+      expect((await preflightConfiguration(root)).ok).toBe(true);
+    } finally {
+      if (previous === undefined) delete process.env.NODE_OPTIONS; else process.env.NODE_OPTIONS = previous;
+      delete globalThis.__ossScpNodeOptionsExecuted;
+    }
+  });
+
+  test.each([
+    ['globalThis.process', 'globalThis.process.getBuiltinModule("node:fs")'],
+    ['process alias', 'const p = process; p.getBuiltinModule("node:fs")'],
+    ['computed ambient property', 'const key = "getBuiltinModule"; globalThis.process[key]("node:fs")'],
+    ['Reflect.get', 'Reflect.get(globalThis, "process")'],
+    ['node:module createRequire', 'const create = require("node:module").createRequire; create(__filename)("node:fs")'],
+    ['constructor chain', '({}).constructor.constructor("return process")()'],
+    ['destructured constructor chain', 'const { constructor: { constructor: F } } = record; F("return process")()'],
+    ['eval', 'eval("process")'],
+    ['Function', 'Function("return process")()'],
+    ['ambient this', 'this.process'],
+    ['module loader', 'module.require("node:fs")'],
+    ['dynamic import', 'import("node:fs")'],
+  ])('scheduled transform allowlist가 %s 우회를 실행 전에 거부한다', (_name, escape) => {
+    const runtimeTrap = 'const executed = Number({ valueOf: () => ({ value: true }).missing() });';
+    const source = `${runtimeTrap}\nexports.transform = ({ record }) => { ${escape}; return record; };\n`;
+    expect(() => loadSelfContainedTransformSnapshot(Buffer.from(source), '/snapshot/transform.js'))
+      .toThrowError(/^scheduled transform/);
+  });
+
+  test('repository의 배포 transform은 scheduled 순수 mapping allowlist를 충족한다', () => {
+    for (const directory of ['dependency-track-db', 'sample1-offset-api', 'sample2-single-api', 'vulnerabilities-http-csv', 'vulnerabilities-local-csv']) {
+      expect(() => assertSelfContainedTransform(readFileSync(join(repositoryRoot, 'plugins', directory, 'dist/transform.js')))).not.toThrow();
+    }
+  });
+
+  test.each([
+    ['sibling scope', 'const selected = ({ record }) => fetch(record.url); const sibling = () => { const fetch = value => value; return fetch("safe"); }; exports.transform = selected;'],
+    ['nested sibling scope', 'const selected = ({ record }) => { const unsafe = () => console.log(record); const sibling = () => { const console = { log: value => value }; return console.log(record); }; return unsafe(); }; exports.transform = selected;'],
+  ])('scheduled lexical allowlist가 %s의 binding을 ambient 참조에 평탄화하지 않는다', (_name, body) => {
+    const runtimeTrap = 'const executed = Number({ valueOf: () => ({ value: true }).missing() });';
+    expect(() => loadSelfContainedTransformSnapshot(Buffer.from(`${runtimeTrap}\n${body}\n`), '/snapshot/transform.js'))
+      .toThrowError(/^scheduled transform/);
+  });
+
+  test('scheduled 순수 mapping은 async arrow와 await를 지원한다', async () => {
+    const source = 'exports.transform = async ({ record }) => { const mapped = await record; return { ...mapped, async: true }; };\n';
+    const transform = loadSelfContainedTransformSnapshot(Buffer.from(source), '/snapshot/transform.js');
+    await expect(transform({ record: { id: 'one' } })).resolves.toEqual({ id: 'one', async: true });
   });
   test('sample1과 sample2 설정을 내부 수집 정의로 해석한다', () => {
     const result = validateRepository(repositoryRoot);

@@ -40,7 +40,7 @@ gzip -dc "$first/oss-scp-web-${first_version}.tar.gz" | docker load
 export OSS_SCP_VERSION="$first_version"
 first_compose="$first/oss-scp-${first_version}-compose.yaml"
 docker compose -p "$project" -f "$first_compose" up -d --wait --wait-timeout 90 postgres
-docker compose -p "$project" -f "$first_compose" run --rm api node node_modules/@oss-scp/platform-db/dist/migrate-cli.js | grep -q '6개 적용'
+docker compose -p "$project" -f "$first_compose" run --rm api node node_modules/@oss-scp/platform-db/dist/migrate-cli.js | grep -q '10개 적용'
 docker compose -p "$project" -f "$first_compose" up -d --wait --wait-timeout 90 api web
 test "$(curl --fail --silent --show-error --max-time 5 "http://127.0.0.1:${API_PORT}/api/v1/health")" = '{"status":"ok"}'
 test "$(curl --fail --silent --show-error --max-time 5 "http://127.0.0.1:${API_PORT}/api/v1/ready")" = '{"status":"ready"}'
@@ -62,7 +62,7 @@ test "$(docker inspect "${project}-web-1" --format '{{index .Config.Labels "org.
 test "$(docker inspect "${project}-postgres-1" --format '{{range .Mounts}}{{if eq .Destination "/var/lib/postgresql/data"}}{{.Name}}{{end}}{{end}}')" = "$volume_before"
 test "$(docker inspect "${project}-api-1" --format '{{range .Mounts}}{{if eq .Destination "/config"}}{{.Source}}{{end}}{{end}}')" = "$config_before"
 test "$(docker compose -p "$project" -f "$second_compose" exec -T postgres psql -U oss_scp_app -d oss_scp -Atc 'SELECT value FROM release_smoke_marker')" = 'preserved'
-test "$(docker compose -p "$project" -f "$second_compose" exec -T postgres psql -U oss_scp_app -d oss_scp -Atc 'SELECT count(*) FROM oss_scp_schema_migrations')" = '6'
+test "$(docker compose -p "$project" -f "$second_compose" exec -T postgres psql -U oss_scp_app -d oss_scp -Atc 'SELECT count(*) FROM oss_scp_schema_migrations')" = '10'
 test "$(curl --fail --silent --show-error --max-time 5 "http://127.0.0.1:${API_PORT}/api/v1/ready")" = '{"status":"ready"}'
 docker compose -p "$project" -f "$second_compose" exec -T web grep -R -q "$second_version" /usr/share/nginx/html/assets
 

@@ -17,6 +17,10 @@ export function collectionScopeIdentity(scope: CollectionScope): Buffer {
   return digest([scope.pluginId, scope.sourceId, scope.scopeType, scope.scopeKey, scope.configRevision]);
 }
 
+export function collectionLeaseIdentity(scope: CollectionScope): Buffer {
+  return digest([scope.pluginId, scope.sourceId, scope.scopeType, scope.scopeKey]);
+}
+
 export function recordQueryScopeIdentity(pluginId: string, sourceId: string, dataType: string): Buffer {
   return digest([pluginId, sourceId, dataType]);
 }

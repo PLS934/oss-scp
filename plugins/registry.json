@@ -5,5 +5,10 @@
     "./vulnerabilities-http-csv",
     "./sample2-single-api",
     "./dependency-track-db"
-  ]
+  ],
+  "collection": {
+    "schedule": {
+      "enabled": false
+    }
+  }
 }

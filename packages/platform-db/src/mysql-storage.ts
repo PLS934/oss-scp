@@ -2,10 +2,10 @@ import { randomUUID } from 'node:crypto';
 import type { PoolConnection, RowDataPacket } from 'mysql2/promise';
 import type { MysqlPlatformDbConnection } from './mysql';
 import {
-  collectionScopeIdentity, recordIdentity, recordQueryScopeIdentity, relationIdentity, relationScopeIdentity,
+  collectionLeaseIdentity, collectionScopeIdentity, recordIdentity, recordQueryScopeIdentity, relationIdentity, relationScopeIdentity,
 } from './storage-identity';
 import {
-  canonicalExternalKey, StorageError, validateCommitBatch, validateScope, validateStartRun,
+  canonicalExternalKey, StorageError, validateCommitBatch, validateScheduledDuplicate, validateScope, validateStartRun,
   type CollectionScope, type CommitStorageBatch, type FinishCollectionRun, type JsonValue,
   type RecordStorage, type StartCollectionRun, type StorageRecordReference,
 } from './storage';
@@ -31,6 +31,10 @@ function scopeValues(scope: CollectionScope): readonly string[] {
 function sameScope(row: Pick<RunRow, 'plugin_id' | 'source_id' | 'scope_type' | 'scope_key' | 'config_revision'>, scope: CollectionScope): boolean {
   return row.plugin_id === scope.pluginId && row.source_id === scope.sourceId && row.scope_type === scope.scopeType
     && row.scope_key === scope.scopeKey && row.config_revision === scope.configRevision;
+}
+
+function sameLeaseScope(row: Pick<RunRow, 'plugin_id' | 'source_id' | 'scope_type' | 'scope_key'>, scope: CollectionScope): boolean {
+  return row.plugin_id === scope.pluginId && row.source_id === scope.sourceId && row.scope_type === scope.scopeType && row.scope_key === scope.scopeKey;
 }
 
 function parseJson(value: JsonValue | string): JsonValue { return typeof value === 'string' ? JSON.parse(value) as JsonValue : value; }
@@ -68,18 +72,34 @@ export function createMysqlRecordStorage(connection: MysqlPlatformDbConnection):
       try {
         await connection.withClient(async client => {
           const hash = collectionScopeIdentity(input);
-          const lockName = hash.toString('hex');
+          const leaseHash = collectionLeaseIdentity(input);
+          const lockName = leaseHash.toString('hex');
           const [locks] = await client.query('SELECT GET_LOCK(?, 5) AS acquired', [lockName]) as [{ acquired: number | null }[], unknown];
           if (locks[0]?.acquired !== 1) throw new StorageError('PERSIST_FAILED');
           try {
-            const [active] = await client.query<RunRow[]>(`SELECT id FROM collection_runs WHERE scope_hash=?
-              AND status='running' AND coordinated=1 AND heartbeat_at > UTC_TIMESTAMP(3) - INTERVAL 2 MINUTE LIMIT 1`, [hash]);
+            const [active] = await client.query<RunRow[]>(`SELECT id FROM collection_runs WHERE lease_hash=?
+              AND status='running' AND coordinated=1 AND heartbeat_at > UTC_TIMESTAMP(3) - INTERVAL 2 MINUTE LIMIT 1`, [leaseHash]);
             if (input.exclusive && active[0]) throw new StorageError('RUN_ALREADY_ACTIVE', active[0].id);
             await client.execute(`UPDATE collection_runs SET status='failed', finished_at=UTC_TIMESTAMP(3)
-              WHERE scope_hash=? AND status='running' AND coordinated=1 AND ?=1`, [hash, input.exclusive ? 1 : 0]);
-            await client.execute(`INSERT INTO collection_runs
-              (id, scope_hash, plugin_id, source_id, scope_type, scope_key, config_revision, started_at, heartbeat_at, coordinated, \`trigger\`, request_id)
-              VALUES (?,?,?,?,?,?,?,?,UTC_TIMESTAMP(3),?,?,?)`, [id, hash, ...scopeValues(input), new Date(input.startedAt), input.exclusive ? 1 : 0, input.trigger ?? 'cli', input.requestId ?? null]);
+              WHERE lease_hash=? AND status='running' AND coordinated=1
+              AND heartbeat_at <= UTC_TIMESTAMP(3) - INTERVAL 2 MINUTE AND ?=1`, [leaseHash, input.exclusive ? 1 : 0]);
+            if (input.exclusive) await client.query('SET @oss_scp_active_run_id = NULL');
+            try {
+              await client.execute(`INSERT INTO collection_runs
+                (id, scope_hash, plugin_id, source_id, scope_type, scope_key, config_revision, started_at, heartbeat_at, coordinated, \`trigger\`, request_id, scheduled_at, schedule_timezone)
+                VALUES (?,?,?,?,?,?,?,?,UTC_TIMESTAMP(3),?,?,?,?,?)
+                ${input.exclusive ? 'ON DUPLICATE KEY UPDATE id=(@oss_scp_active_run_id:=collection_runs.id)' : ''}`, [
+                  id, hash, ...scopeValues(input), new Date(input.startedAt), input.exclusive ? 1 : 0, input.trigger ?? 'cli', input.requestId ?? null,
+                  input.scheduledAt ? new Date(input.scheduledAt) : null, input.scheduleTimezone ?? null,
+                ]);
+              if (input.exclusive) {
+                const [conflict] = await client.query<(RowDataPacket & { active_run_id: string | null })[]>(
+                  'SELECT @oss_scp_active_run_id AS active_run_id');
+                if (conflict[0]?.active_run_id) throw new StorageError('RUN_ALREADY_ACTIVE', conflict[0].active_run_id);
+              }
+            } finally {
+              if (input.exclusive) await client.query('SET @oss_scp_active_run_id = NULL').catch(() => undefined);
+            }
           } finally { await client.query('SELECT RELEASE_LOCK(?)', [lockName]).catch(() => undefined); }
         });
         return id;
@@ -108,9 +128,26 @@ export function createMysqlRecordStorage(connection: MysqlPlatformDbConnection):
             if (run.status !== 'running') throw new StorageError('RUN_NOT_ACTIVE');
             if (run.coordinated === 1 && run.lease_valid !== 1) throw new StorageError('RUN_NOT_ACTIVE');
             if ((input.status === 'success' && Number(run.isolated_count) > 0) || (input.status === 'partial' && Number(run.isolated_count) === 0)) throw new StorageError('INVALID_INPUT');
-            await client.execute('UPDATE collection_runs SET status=?, finished_at=? WHERE id=?', [input.status, new Date(input.finishedAt), input.runId]);
+            await client.execute(`UPDATE collection_runs SET status=?, finished_at=?,
+              finish_authorized=IF(?='failed', true, finish_authorized) WHERE id=?`,
+            [input.status, new Date(input.finishedAt), input.status, input.runId]);
             await client.commit();
           } catch (error) { await rollback(client); throw error; }
+        });
+      } catch (error) { throw publicFailure(error); }
+    },
+
+    async recordScheduledDuplicate(input): Promise<void> {
+      validateScheduledDuplicate(input);
+      try {
+        await connection.withClient(async client => {
+          const [referenced] = await client.query<RunRow[]>(`SELECT id, plugin_id, source_id, scope_type, scope_key, config_revision
+            FROM collection_runs WHERE id=?`, [input.activeRunId]);
+          if (!referenced[0] || !sameLeaseScope(referenced[0], input)) throw new StorageError('RUN_NOT_FOUND');
+          await client.execute(`INSERT INTO scheduled_collection_references
+            (id, active_run_id, scheduled_at, schedule_timezone, observed_at) VALUES (?,?,?,?,?)
+            ON DUPLICATE KEY UPDATE active_run_id=VALUES(active_run_id)`,
+          [randomUUID(), input.activeRunId, new Date(input.scheduledAt), input.scheduleTimezone, new Date(input.observedAt)]);
         });
       } catch (error) { throw publicFailure(error); }
     },
@@ -135,8 +172,9 @@ export function createMysqlRecordStorage(connection: MysqlPlatformDbConnection):
       validateCommitBatch(input);
       await connection.withClient(async client => {
         const scopeHash = collectionScopeIdentity(input.scope);
+        const leaseHash = collectionLeaseIdentity(input.scope);
         // MySQL GET_LOCK 이름은 64자 제한이므로 SHA-256 hex 자체를 사용한다.
-        const lockName = scopeHash.toString('hex');
+        const lockName = leaseHash.toString('hex');
         let locked = false;
         try {
           const [lockRows] = await client.query<(RowDataPacket & { acquired: number | null })[]>('SELECT GET_LOCK(?, 5) AS acquired', [lockName]);
