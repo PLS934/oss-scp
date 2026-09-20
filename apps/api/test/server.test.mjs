@@ -1,5 +1,5 @@
 import 'reflect-metadata';
-import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { encodeRecordCursor } from '@oss-scp/platform-db';
 import { Test } from '@nestjs/testing';
 import { AppModule } from '../dist/app.module.js';
@@ -46,6 +46,19 @@ describe('준비되지 않은 DB', () => {
       expect(ready.status).toBe(503);
       expect(await ready.json()).toEqual({ status: 'not_ready' });
     } finally { await app.close(); }
+  });
+});
+
+describe('수집 lifecycle', () => {
+  it('애플리케이션 종료 시 scheduled와 startup 자식을 닫은 뒤 DB를 닫는다', async () => {
+    const order = [];
+    const connection = { checkReady: async () => true, close: vi.fn(async () => { order.push('db'); }) };
+    const startup = { close: vi.fn(async () => { order.push('startup'); }) };
+    const scheduled = { close: vi.fn(async () => { order.push('scheduled'); }) };
+    const live = { close: vi.fn(async () => { order.push('live'); }) };
+    const module = await Test.createTestingModule({ imports: [AppModule.register(connection, undefined, undefined, startup, live, undefined, undefined, scheduled)] }).compile();
+    const app = module.createNestApplication(); await app.init(); await app.close();
+    expect(order).toEqual(['scheduled', 'startup', 'live', 'db']);
   });
 });
 

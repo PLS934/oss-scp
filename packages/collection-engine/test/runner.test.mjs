@@ -43,6 +43,12 @@ describe('runCollection', () => {
     expect(JSON.stringify(storage.calls.filter(([name]) => name !== 'startRun'))).not.toContain('request-1');
   });
 
+  test('scheduled trigger의 예정 instant와 timezone을 저장 시작에만 전달한다', async () => {
+    const storage = createStorage();
+    await runCollection({ plugin, scope, storage, transform, trigger: 'scheduled', scheduledAt: '2026-09-19T13:00:00.000Z', scheduleTimezone: 'Asia/Seoul', collector: async () => {} });
+    expect(storage.calls.find(([name]) => name === 'startRun')[1]).toMatchObject({ trigger: 'scheduled', scheduledAt: '2026-09-19T13:00:00.000Z', scheduleTimezone: 'Asia/Seoul' });
+  });
+
   test('저장된 opaque checkpoint부터 범용 collector를 실행하고 성공을 기록한다', async () => {
     const storage = createStorage({ cursor: 'saved' });
     const contexts = [];
@@ -66,7 +72,9 @@ describe('runCollection', () => {
 
   test('가공 격리 오류를 정상 레코드와 원자 저장하고 partial로 집계한다', async () => {
     const storage = createStorage();
-    const result = await runCollection({ plugin, scope, storage, transform,
+    const result = await runCollection({
+      plugin, scope, storage, transform,
+      trigger: 'scheduled', scheduledAt: '2026-09-19T13:00:00.000Z', scheduleTimezone: 'Asia/Seoul',
       collector: async (_context, onBatch) => {
         await onBatch(batch(null, { page: 1 }, [{ id: 'ok', score: 1 }, { id: 'bad', reject: true }]));
         await onBatch(batch({ page: 1 }, { page: 2 }, [{ id: 'next', score: 2 }]));
@@ -124,8 +132,9 @@ describe('runCollection', () => {
     const starts = [];
     const storage = createStorage({ offset: 10 }, { async commitBatch() { throw new Error('db'); } });
     const collector = async (context, onBatch) => { starts.push(context.checkpoint); await onBatch(batch(context.checkpoint, { offset: 20 }, [{ id: 'a', score: 1 }])); };
-    await expect(runCollection({ plugin, scope, storage, transform, collector })).rejects.toMatchObject({ code: 'storage' });
-    await expect(runCollection({ plugin, scope, storage, transform, collector })).rejects.toMatchObject({ code: 'storage' });
+    const schedule = { trigger: 'scheduled', scheduledAt: '2026-09-19T13:00:00.000Z', scheduleTimezone: 'Asia/Seoul' };
+    await expect(runCollection({ plugin, scope, storage, transform, collector, ...schedule })).rejects.toMatchObject({ code: 'storage' });
+    await expect(runCollection({ plugin, scope, storage, transform, collector, ...schedule })).rejects.toMatchObject({ code: 'storage' });
     expect(starts).toEqual([{ offset: 10 }, { offset: 10 }]);
     expect(storage.checkpoint).toEqual({ offset: 10 });
   });

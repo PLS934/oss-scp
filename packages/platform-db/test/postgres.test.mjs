@@ -149,6 +149,28 @@ describe('PostgreSQL 공통 레코드 저장 계약', () => {
     await expect(storage.finishRun({ runId, status: 'success', finishedAt: '2026-09-11T01:03:00Z' })).rejects.toMatchObject({ code: 'RUN_NOT_ACTIVE' });
   });
 
+  it('기존 trigger와 scheduled metadata·결과·마지막 성공을 같은 이력에 기록한다', async () => {
+    const scope = testScope('scheduled-run');
+    const scheduledAt = '2026-09-19T13:00:00.000Z';
+    const partial = await storage.startRun({
+      ...scope, startedAt: '2026-09-19T13:00:01.000Z', exclusive: true,
+      trigger: 'scheduled', scheduledAt, scheduleTimezone: 'Asia/Seoul',
+    });
+    await commit(partial, scope, { acceptedCount: 0, records: [], issues: [{ sourceIndex: 0, code: 'INVALID', path: '/', message: 'invalid' }] });
+    await storage.finishRun({ runId: partial, status: 'partial', finishedAt: '2026-09-19T13:01:00.000Z' });
+    const metadata = await connection.withClient(client => client.query(
+      'SELECT trigger, scheduled_at, schedule_timezone, status FROM collection_runs WHERE id=$1', [partial],
+    ));
+    expect(metadata.rows[0]).toMatchObject({ trigger: 'scheduled', schedule_timezone: 'Asia/Seoul', status: 'partial' });
+    expect(metadata.rows[0].scheduled_at.toISOString()).toBe(scheduledAt);
+    expect(await query.getLastSuccessAt(scope.pluginId, scope.sourceId)).toBeNull();
+
+    const startup = await storage.startRun({ ...scope, startedAt: '2026-09-20T13:00:00.000Z', exclusive: true, trigger: 'startup' });
+    await commit(startup, scope, { nextCheckpoint: { offset: 2 } });
+    await storage.finishRun({ runId: startup, status: 'success', finishedAt: '2026-09-20T13:01:00.000Z' });
+    expect(await query.getLastSuccessAt(scope.pluginId, scope.sourceId)).toBe('2026-09-20T13:01:00.000Z');
+  });
+
   it('재전달은 내부 ID를 유지하고 타입·출처 범위는 분리한다', async () => {
     const scope = testScope('identity');
     const firstRun = await start(scope);
@@ -196,7 +218,10 @@ describe('PostgreSQL 공통 레코드 저장 계약', () => {
       ],
       relations: [{ type: 'has-finding', from: { type: 'asset', key: 'server-1' }, to: { type: 'finding', key: 'finding-1' } }],
     });
-    const nextRun = await start(scope);
+    const nextRun = await storage.startRun({
+      ...scope, startedAt: '2026-09-12T13:00:01.000Z', trigger: 'scheduled',
+      scheduledAt: '2026-09-12T13:00:00.000Z', scheduleTimezone: 'Asia/Seoul',
+    });
     await commit(nextRun, scope, {
       expectedCheckpoint: { offset: 1 }, nextCheckpoint: { offset: 2 },
       records: [], processedCount: 0, acceptedCount: 0,
@@ -273,7 +298,10 @@ describe('PostgreSQL 공통 레코드 저장 계약', () => {
       await client.query('CREATE TABLE IF NOT EXISTS test_platform_assignments(record_id uuid PRIMARY KEY REFERENCES platform_records(id), assignee text NOT NULL)');
       await client.query('INSERT INTO test_platform_assignments(record_id, assignee) VALUES ($1,$2)', [record.rows[0].id, 'security-team']);
     });
-    const nextRun = await start(scope);
+    const nextRun = await storage.startRun({
+      ...scope, startedAt: '2026-09-12T13:00:01.000Z', trigger: 'scheduled',
+      scheduledAt: '2026-09-12T13:00:00.000Z', scheduleTimezone: 'Asia/Seoul',
+    });
     await commit(nextRun, scope, {
       expectedCheckpoint: { offset: 1 }, nextCheckpoint: { offset: 2 },
       records: [{ type: 'asset', key: 'server-1', values: { hostname: 'new-source-value' } }],
@@ -402,6 +430,34 @@ describe('PostgreSQL 공통 레코드 저장 계약', () => {
     await expect(commit(first, scope)).rejects.toMatchObject({ code: 'RUN_NOT_ACTIVE' });
     await storage.renewRun(second);
     await commit(second, scope);
+  });
+
+  it('scheduled는 startup·CLI·API와 lease를 공유하고 다중 인스턴스 중 하나만 실행권을 얻는다', async () => {
+    for (const [trigger, extra] of [['startup', {}], ['cli', {}], ['api', { requestId: randomUUID() }]]) {
+      const scope = testScope(`scheduled-conflict-${trigger}`);
+      const scheduled = await storage.startRun({
+        ...scope, startedAt: '2026-09-19T13:00:01.000Z', exclusive: true, trigger: 'scheduled',
+        scheduledAt: '2026-09-19T13:00:00.000Z', scheduleTimezone: 'Asia/Seoul',
+      });
+      await expect(storage.startRun({ ...scope, startedAt: '2026-09-19T13:00:02.000Z', exclusive: true, trigger, ...extra }))
+        .rejects.toMatchObject({ code: 'RUN_ALREADY_ACTIVE', activeRunId: scheduled });
+      await storage.finishRun({ runId: scheduled, status: 'failed', finishedAt: '2026-09-19T13:01:00.000Z' });
+    }
+
+    const otherConnection = await postgresAdapter.connect(config());
+    try {
+      const otherStorage = createPostgresRecordStorage(otherConnection);
+      const scope = testScope('scheduled-multi-instance');
+      const input = {
+        ...scope, startedAt: '2026-09-20T13:00:01.000Z', exclusive: true, trigger: 'scheduled',
+        scheduledAt: '2026-09-20T13:00:00.000Z', scheduleTimezone: 'Asia/Seoul',
+      };
+      const results = await Promise.allSettled([storage.startRun(input), otherStorage.startRun(input)]);
+      expect(results.filter(result => result.status === 'fulfilled')).toHaveLength(1);
+      expect(results.filter(result => result.status === 'rejected')[0].reason).toMatchObject({ code: 'RUN_ALREADY_ACTIVE' });
+      const runId = results.find(result => result.status === 'fulfilled').value;
+      await storage.finishRun({ runId, status: 'failed', finishedAt: '2026-09-20T13:01:00.000Z' });
+    } finally { await otherConnection.close(); }
   });
 });
 

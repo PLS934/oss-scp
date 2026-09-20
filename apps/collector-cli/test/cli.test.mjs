@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import {
   collectionScope,
+  collectionProcessInvocation,
   connectPlatformStorage,
   connectPostgresStorage,
   configRevision,
@@ -30,6 +31,24 @@ describe('CLI 선택과 revision', () => {
     for (const args of [[], ['sample-plugin', 'extra'], ['--root=/tmp'], ['Bad']]) {
       expect(() => parsePluginId(args)).toThrowError(expect.objectContaining({ code: 'usage' }));
     }
+  });
+
+  it('프로세스 trigger와 scheduled metadata 조합만 엄격히 허용한다', () => {
+    expect(collectionProcessInvocation({})).toEqual({ trigger: 'cli' });
+    expect(collectionProcessInvocation({ OSS_SCP_COLLECTION_TRIGGER: 'startup' })).toEqual({ trigger: 'startup' });
+    expect(collectionProcessInvocation({
+      OSS_SCP_COLLECTION_TRIGGER: 'scheduled',
+      OSS_SCP_COLLECTION_EXPECTED_REVISION: 'a'.repeat(64),
+      OSS_SCP_COLLECTION_SCHEDULED_AT: '2026-09-19T13:00:00.000Z',
+      OSS_SCP_COLLECTION_SCHEDULE_TIMEZONE: 'Asia/Seoul',
+    })).toEqual({ trigger: 'scheduled', scheduledAt: '2026-09-19T13:00:00.000Z', scheduleTimezone: 'Asia/Seoul', expectedConfigRevision: 'a'.repeat(64) });
+    for (const env of [
+      { OSS_SCP_COLLECTION_TRIGGER: 'unknown' },
+      { OSS_SCP_COLLECTION_TRIGGER: 'scheduled' },
+      { OSS_SCP_COLLECTION_TRIGGER: 'scheduled', OSS_SCP_COLLECTION_EXPECTED_REVISION: 'a'.repeat(64), OSS_SCP_COLLECTION_SCHEDULED_AT: 'bad', OSS_SCP_COLLECTION_SCHEDULE_TIMEZONE: 'Asia/Seoul' },
+      { OSS_SCP_COLLECTION_TRIGGER: 'scheduled', OSS_SCP_COLLECTION_EXPECTED_REVISION: 'a'.repeat(64), OSS_SCP_COLLECTION_SCHEDULED_AT: '2026-09-19T13:00:00.000Z', OSS_SCP_COLLECTION_SCHEDULE_TIMEZONE: 'bad/zone' },
+      { OSS_SCP_COLLECTION_TRIGGER: 'cli', OSS_SCP_COLLECTION_SCHEDULED_AT: '2026-09-19T13:00:00.000Z' },
+    ]) expect(() => collectionProcessInvocation(env)).toThrowError(expect.objectContaining({ code: 'repository_config' }));
   });
 
   it('명시적 외부 설정 루트만 사용한다', () => {
@@ -80,6 +99,28 @@ describe('실행 조립과 결과', () => {
     const deps = dependencies();
     await executeManualCollection({ args: ['sample-plugin'], root: '/repo', env: {}, signal: new AbortController().signal, dependencies: deps, trigger: 'api', requestId: 'request-1' });
     expect(deps.run).toHaveBeenCalledWith(expect.objectContaining({ trigger: 'api', requestId: 'request-1' }));
+  });
+
+  it('scheduled trigger의 예정 instant와 timezone을 runner에 전달한다', async () => {
+    const deps = dependencies();
+    await executeManualCollection({
+      args: ['sample-plugin'], root: '/repo', env: {}, signal: new AbortController().signal,
+      dependencies: deps, trigger: 'scheduled', scheduledAt: '2026-09-19T13:00:00.000Z', scheduleTimezone: 'Asia/Seoul',
+    });
+    expect(deps.run).toHaveBeenCalledWith(expect.objectContaining({
+      trigger: 'scheduled', scheduledAt: '2026-09-19T13:00:00.000Z', scheduleTimezone: 'Asia/Seoul',
+    }));
+  });
+
+  it('scheduled snapshot revision이 바뀌면 DB와 runner 전에 거부한다', async () => {
+    const deps = dependencies();
+    const outcome = await executeManualCollection({
+      args: ['sample-plugin'], root: '/repo', env: {}, signal: new AbortController().signal,
+      dependencies: deps, trigger: 'scheduled', expectedConfigRevision: '0'.repeat(64),
+      scheduledAt: '2026-09-19T13:00:00.000Z', scheduleTimezone: 'Asia/Seoul',
+    });
+    expect(outcome).toMatchObject({ exitCode: 1, errorCode: 'repository_config' });
+    expect(deps.connectStorage).not.toHaveBeenCalled(); expect(deps.run).not.toHaveBeenCalled();
   });
 
   it('설정 실패 전에 DB와 runner를 호출하지 않는다', async () => {

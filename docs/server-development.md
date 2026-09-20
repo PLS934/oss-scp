@@ -196,6 +196,29 @@ API와 수동 수집 CLI는 `OSS_SCP_CONFIG_ROOT`가 가리키는 운영자 설�
 
 API는 기동 검증에 성공한 수집 정의와 메뉴를 하나의 읽기 전용 runtime snapshot으로 고정합니다. 실행 중 외부 설정 파일을 수정하거나 디렉터리를 교체해도 현재 프로세스에는 반영되지 않습니다. 운영 hot reload와 설정 watcher는 지원하지 않으므로, 변경한 설정 revision을 먼저 검증한 뒤 API를 재기동해야 합니다. 재기동 시 전체 검증이 실패하면 API는 DB 연결과 listen 전에 종료하고, 설정 루트 기준 상대 파일·필드와 안전하게 일반화한 원인을 함께 출력합니다.
 
+### 일일 전체 수집 일정
+
+일정은 외부 설정 루트의 `plugins/registry.json`에 plugin 등록 목록과 함께 둡니다. 생략하거나 `enabled: false`이면 scheduled timer와 실행 이력을 만들지 않습니다. `enabled: true`일 때 `timezone`과 `time`을 생략하면 각각 `Asia/Seoul`, `22:00`을 사용합니다.
+
+```json
+{
+  "plugins": ["./sample1-offset-api"],
+  "collection": {
+    "schedule": {
+      "enabled": true,
+      "timezone": "Asia/Seoul",
+      "time": "22:00"
+    }
+  }
+}
+```
+
+`timezone`은 IANA 식별자, `time`은 초가 없는 엄격한 24시간제 `HH:mm`입니다. 알 수 없는 키·타입·값은 DB 연결과 HTTP listen 전에 설정 오류로 거부합니다. 일정은 기동 시 registry와 함께 snapshot으로 고정되므로 파일 수정만으로 현재 timer가 바뀌지 않으며, 전체 설정 검증에 성공한 재기동 뒤 적용됩니다.
+
+예정 시각에는 등록·활성 상태인 저장형 대상만 full 범위로 각각 실행합니다. `persistence: none` 라이브 대상은 제외하고, 한 대상의 실패는 다른 대상을 막지 않습니다. 모든 API 인스턴스가 timer를 가질 수 있지만 기동·scheduled·수동 CLI·수동 API는 같은 DB lease를 사용하므로 하나만 결과를 확정합니다. API 중단 중 놓친 일정은 재기동할 때 보충하지 않고 다음 발생만 예약합니다.
+
+DST 시계 전진으로 지정 시각이 없으면 그 현지 날짜의 gap 뒤 첫 유효 시각에 한 번 실행하고, 시계 후퇴로 같은 시각이 두 번 나타나면 첫 instant에만 실행합니다. 각 실행 뒤 고정 24시간을 더하지 않고 다음 현지 날짜를 다시 계산합니다. 정상 종료는 pending timer를 제거하고 진행 중 scheduled 자식에 `SIGTERM`을 전달합니다.
+
 로컬 실행 예시:
 
 ```bash

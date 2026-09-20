@@ -16,10 +16,16 @@ import { AccountManagementDisabledAuthorizer, MANUAL_SYNC_AUTHORIZER, MANUAL_SYN
 import { AUTH_RUNTIME, AuthService, type AuthRuntime } from './auth.service';
 import { AuthController } from './auth.controller';
 import { AuthGuard } from './auth.guard';
+import type { ScheduledCollectionManager } from './scheduled-collection';
 
 class PlatformDbLifecycle implements OnApplicationShutdown {
-  constructor(private readonly connection: PlatformDbConnection, private readonly live: LiveQueryManager, private readonly startup?: StartupCollectionManager) {}
-  async onApplicationShutdown() { await this.startup?.close(); await this.live.close(); await this.connection.close(); }
+  constructor(
+    private readonly connection: PlatformDbConnection,
+    private readonly live: LiveQueryManager,
+    private readonly startup?: StartupCollectionManager,
+    private readonly scheduled?: ScheduledCollectionManager,
+  ) {}
+  async onApplicationShutdown() { await this.scheduled?.close(); await this.startup?.close(); await this.live.close(); await this.connection.close(); }
 }
 
 @Module({})
@@ -32,6 +38,7 @@ export class AppModule {
     live: LiveQueryManager = new LiveQueryManager(registry),
     manualSync?: { executor?: ManualSyncExecutor; authorizer?: ManualSyncAuthorizer; configRoot?: string },
     auth: AuthRuntime = { config: { enabled: false } },
+    scheduled?: ScheduledCollectionManager,
   ): DynamicModule {
     const unavailable: RecordQuery = {
       listRecords: async () => { throw new Error('record query adapter unavailable'); },
@@ -56,7 +63,7 @@ export class AppModule {
         AuthService,
         AuthGuard,
         { provide: APP_GUARD, useExisting: AuthGuard },
-        { provide: PlatformDbLifecycle, useFactory: (live: LiveQueryManager) => new PlatformDbLifecycle(connection, live, startup), inject: [LIVE_QUERY] },
+        { provide: PlatformDbLifecycle, useFactory: (live: LiveQueryManager) => new PlatformDbLifecycle(connection, live, startup, scheduled), inject: [LIVE_QUERY] },
       ],
       exports: [PLUGIN_RUNTIME_REGISTRY],
     };

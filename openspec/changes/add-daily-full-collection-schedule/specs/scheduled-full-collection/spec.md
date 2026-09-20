@@ -1,0 +1,62 @@
+## Purpose
+
+운영자가 선택한 IANA 시간대와 현지 시각에 등록·활성 저장형 대상을 매일 한 번 안전하게 전체 동기화하는 외부 동작을 정의한다.
+
+## ADDED Requirements
+
+### Requirement: 일일 수집 일정 설정과 기동 검증
+플랫폼은 외부 배포 설정에서 일일 수집의 `enabled`, `timezone`, `time`을 입력받아야 한다(SHALL). 설정을 생략하거나 `enabled: false`이면 정기 수집을 실행하지 않아야 하며(MUST NOT), `enabled: true`에서 생략한 timezone과 time은 각각 `Asia/Seoul`, `22:00`이어야 한다(SHALL). timezone은 유효한 IANA 식별자이고 time은 엄격한 24시간제 `HH:mm`이어야 하며, 알 수 없는 키·잘못된 타입·값은 HTTP listen 전에 기동을 실패시켜야 한다(SHALL).
+
+#### Scenario: 설정 생략과 비활성화
+- **WHEN** 일정 설정이 없거나 `enabled`가 false인 유효한 설정으로 API를 시작한다
+- **THEN** 정기 수집 timer와 scheduled 실행 이력을 만들지 않고 기동·수동 수집의 기존 동작을 유지한다
+
+#### Scenario: 활성화 기본값
+- **WHEN** 운영자가 `enabled: true`만 설정한다
+- **THEN** 플랫폼은 Asia/Seoul 현지 시각 매일 22:00을 다음 실행 시각으로 사용한다
+
+#### Scenario: 잘못된 일정 설정
+- **WHEN** 일정 설정에 알 수 없는 키, 잘못된 타입, 유효하지 않은 IANA timezone 또는 엄격한 `HH:mm`이 아닌 time이 있다
+- **THEN** 플랫폼은 원천 수집과 HTTP listen 전에 비민감 설정 오류로 기동을 거부한다
+
+### Requirement: 예정 시각마다 활성 저장형 대상 전체 수집
+활성 일정의 예정 시각마다 플랫폼은 기동 시 확정한 registry의 등록·활성 저장형 대상을 각각 full 범위로 한 번 요청해야 한다(SHALL). `persistence: none` 대상은 제외해야 하며(MUST), 대상별 실행은 기존 공통 수집 runner와 영속 실행권을 사용해야 한다(SHALL).
+
+#### Scenario: 여러 활성 대상
+- **WHEN** 예정 시각에 등록·활성 저장형 대상이 둘 이상 있다
+- **THEN** 플랫폼은 각 대상을 full 범위로 요청하고 한 대상의 실패가 다른 대상의 시작이나 완료를 막지 않는다
+
+#### Scenario: 대상 없음 또는 live 대상만 존재
+- **WHEN** 예정 시각에 등록·활성 저장형 대상이 없다
+- **THEN** 플랫폼은 원천 수집, lease, 실행 이력을 만들지 않고 다음 일정을 계산한다
+
+#### Scenario: 다른 trigger와 동시 실행
+- **WHEN** scheduled 요청이 같은 설정 revision·대상·full 범위의 기동·CLI·API 실행과 겹친다
+- **THEN** DB 실행권을 얻은 하나만 원천 수집과 결과 확정을 수행하고 중복 요청은 현재 실행을 참조한다
+
+### Requirement: 현지 일자와 DST에 대해 하루 한 번 실행
+플랫폼은 각 실행 뒤 설정 timezone의 다음 현지 날짜 발생 시각을 다시 계산해야 하며(SHALL), 경과 간격을 반복 재생해서는 안 된다(MUST NOT). 존재하지 않는 현지 시각은 해당 현지 날짜의 첫 유효 시각에 한 번 실행하고, 두 번 나타나는 현지 시각은 첫 번째 발생에만 실행해야 한다(SHALL).
+
+#### Scenario: DST gap
+- **WHEN** 설정 time이 timezone의 시계 전진으로 해당 현지 날짜에 존재하지 않는다
+- **THEN** 플랫폼은 gap 뒤 첫 유효 시각에 한 번 실행하고 그 날짜에 다시 실행하지 않는다
+
+#### Scenario: DST overlap
+- **WHEN** 설정 time이 timezone의 시계 후퇴로 같은 현지 날짜에 두 번 나타난다
+- **THEN** 플랫폼은 첫 번째 발생 시각에만 실행한다
+
+#### Scenario: 중단 중 놓친 일정
+- **WHEN** 하나 이상의 예정 시각 동안 API가 중단된 뒤 재시작한다
+- **THEN** 플랫폼은 놓친 scheduled 실행을 보충하지 않고 재시작 이후의 다음 발생만 예약하며 독립적인 기동 수집은 기존 계약대로 요청한다
+
+### Requirement: 설정 snapshot과 안전한 종료
+실행 중인 API는 기동 시 검증한 일정과 registry snapshot을 계속 사용해야 하며(SHALL), 파일 변경은 성공적인 재기동 뒤에만 적용해야 한다(MUST). 종료 시 pending timer를 취소하고 시작된 scheduled 자식 수집에 기존 취소 계약을 전달해야 한다(SHALL).
+
+#### Scenario: 실행 중 설정 변경
+- **WHEN** API 기동 뒤 외부 설정의 일정 또는 registry가 변경된다
+- **THEN** 현재 프로세스의 일정과 대상 snapshot은 바뀌지 않고 재기동 검증 뒤에만 새 설정이 적용된다
+
+#### Scenario: 종료 중 scheduled 수집
+- **WHEN** 예정 수집이 진행 중인 동안 API가 종료 신호를 받는다
+- **THEN** pending timer를 제거하고 진행 중 자식 수집에 취소를 전달하며 완료되지 않은 실행을 성공으로 기록하지 않는다
+

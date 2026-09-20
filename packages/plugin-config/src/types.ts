@@ -246,6 +246,16 @@ export interface LoadedPluginDetail {
   transformFiles: PluginTransformFiles;
 }
 
+export interface CollectionSchedule {
+  enabled: boolean;
+  timezone: string;
+  time: string;
+}
+
+export interface CollectionConfiguration {
+  schedule: CollectionSchedule;
+}
+
 export type ConfigurationResult =
-  | { ok: true; definitions: CollectionDefinition[]; menus: ClientMenuItem[]; plugins: ClientPluginSummary[]; pluginDetails: LoadedPluginDetail[] }
+  | { ok: true; definitions: CollectionDefinition[]; menus: ClientMenuItem[]; plugins: ClientPluginSummary[]; pluginDetails: LoadedPluginDetail[]; collection: CollectionConfiguration }
   | { ok: false; errors: ConfigurationIssue[] };

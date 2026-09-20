@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { canonicalExternalKey, StorageError, validateCommitBatch } from '../dist/index.js';
+import { canonicalExternalKey, StorageError, validateCommitBatch, validateStartRun } from '../dist/index.js';
 
 const scope = { pluginId: 'sample', sourceId: 'source', scopeType: 'full', scopeKey: '', configRevision: 'rev-1' };
 const batch = patch => ({
@@ -9,6 +9,18 @@ const batch = patch => ({
 });
 
 describe('공통 저장 입력 계약', () => {
+  it('scheduled metadata를 trigger와 함께만 허용한다', () => {
+    const base = { ...scope, startedAt: '2026-09-19T13:00:01.000Z' };
+    expect(() => validateStartRun({ ...base, trigger: 'scheduled', scheduledAt: '2026-09-19T13:00:00.000Z', scheduleTimezone: 'Asia/Seoul' })).not.toThrow();
+    for (const input of [
+      { ...base, trigger: 'scheduled' },
+      { ...base, trigger: 'scheduled', scheduledAt: 'not-an-instant', scheduleTimezone: 'Asia/Seoul' },
+      { ...base, trigger: 'scheduled', scheduledAt: '2026-09-19T13:00:00Z', scheduleTimezone: 'Asia/Seoul' },
+      { ...base, trigger: 'scheduled', scheduledAt: '2026-09-19T13:00:00.000Z', scheduleTimezone: 'invalid/zone' },
+      { ...base, trigger: 'cli', scheduledAt: '2026-09-19T13:00:00.000Z', scheduleTimezone: 'Asia/Seoul' },
+      { ...base, trigger: 'scheduled', requestId: 'request-1', scheduledAt: '2026-09-19T13:00:00.000Z', scheduleTimezone: 'Asia/Seoul' },
+    ]) expect(() => validateStartRun(input)).toThrowError(expect.objectContaining({ code: 'INVALID_INPUT' }));
+  });
   it('문자열·숫자 키와 -0을 손실 없이 canonical 형태로 구분한다', () => {
     expect(canonicalExternalKey('1')).toEqual({ type: 'string', value: '1' });
     expect(canonicalExternalKey(1)).toEqual({ type: 'number', value: '1' });

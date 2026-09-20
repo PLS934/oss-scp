@@ -49,7 +49,7 @@ let value=""; process.stdin.on("data", chunk => value += chunk); process.stdin.o
 docker compose -p "$project" up --build -d --wait --wait-timeout 90 postgres
 api_image_id="$(docker image inspect oss-scp-api:local --format '{{.Id}}')"
 web_image_id="$(docker image inspect oss-scp-web:local --format '{{.Id}}')"
-docker compose -p "$project" run --rm api node node_modules/@oss-scp/platform-db/dist/migrate-cli.js | grep -q '6개 적용'
+docker compose -p "$project" run --rm api node node_modules/@oss-scp/platform-db/dist/migrate-cli.js | grep -q '7개 적용'
 docker compose -p "$project" up -d --wait --wait-timeout 90 api
 check_response "http://127.0.0.1:${API_PORT}"
 curl --fail --silent --show-error --max-time 5 "http://127.0.0.1:${API_PORT}/api/v1/plugin-menus" | grep -q 'sample1-offset-api'
@@ -65,7 +65,7 @@ docker compose -p "$project" run --rm api node node_modules/@oss-scp/collector-c
 docker compose -p "$project" stop postgres
 docker compose -p "$project" rm -f postgres
 docker compose -p "$project" up -d --wait --wait-timeout 90 postgres api
-test "$(docker compose -p "$project" exec -T postgres psql -U oss_scp_app -d oss_scp -Atc 'select count(*) from oss_scp_schema_migrations')" = 6
+test "$(docker compose -p "$project" exec -T postgres psql -U oss_scp_app -d oss_scp -Atc 'select count(*) from oss_scp_schema_migrations')" = 7
 test "$(docker inspect "${project}-postgres-1" --format '{{json .NetworkSettings.Ports}}')" = '{"5432/tcp":null}'
 docker run -d --name "$standalone" --network "${project}_default" -p 127.0.0.1::3000 \
   -v "$OSS_SCP_CONFIG_PATH:/config:ro" -e OSS_SCP_CONFIG_ROOT=/config \
@@ -118,6 +118,23 @@ curl --fail --silent --show-error --max-time 5 "http://127.0.0.1:${API_PORT}/api
 docker compose -p "$project" run --rm api node node_modules/@oss-scp/collector-cli/dist/process.js vulnerabilities-local-csv \
   | node -e 'let value=""; process.stdin.on("data", chunk => value += chunk); process.stdin.on("end", () => { const event=JSON.parse(value); if (event.status !== "success" || event.accepted < 1) process.exit(1); });'
 
+# 같은 읽기 전용 revision의 collection.schedule을 UTC 다음 발생으로 주입하고 scheduled 이력을 확인합니다.
+CONFIG_REVISION_ROOT="$config_revision_root" node -e '
+const fs = require("node:fs");
+const file = `${process.env.CONFIG_REVISION_ROOT}/plugins/registry.json`;
+const registry = JSON.parse(fs.readFileSync(file, "utf8"));
+const due = new Date(Date.now() + 120000);
+registry.collection = { schedule: { enabled: true, timezone: "UTC", time: `${String(due.getUTCHours()).padStart(2, "0")}:${String(due.getUTCMinutes()).padStart(2, "0")}` } };
+fs.writeFileSync(file, `${JSON.stringify(registry, null, 2)}\n`);
+'
+docker compose -p "$project" up -d --force-recreate --wait --wait-timeout 90 api
+for ((attempt=0; attempt<150; attempt++)); do
+  scheduled_count=$(docker compose -p "$project" exec -T postgres psql -U oss_scp_app -d oss_scp -Atc "SELECT count(*) FROM collection_runs WHERE trigger='scheduled' AND schedule_timezone='UTC'")
+  if [ "$scheduled_count" -gt 0 ]; then break; fi
+  sleep 1
+done
+test "$scheduled_count" -gt 0
+
 # 잘못된 revision은 DB 접속 시도보다 먼저 preflight에서 중단되어야 합니다.
 cp "$config_revision_root/plugins/vulnerabilities-local-csv/dist/transform.js" "$config_revision_root/valid-transform.js"
 printf '%s\n' 'module.exports = {};' > "$config_revision_root/plugins/vulnerabilities-local-csv/dist/transform.js"
@@ -139,4 +156,4 @@ docker run -d --name "$unresponsive" \
   --health-cmd="node healthcheck.mjs" --health-interval=1s --health-timeout=1s --health-retries=2 oss-scp-api:local \
   node -e 'require("node:http").createServer(() => {}).listen(3000, "0.0.0.0")' >/dev/null
 wait_health "$unresponsive" unhealthy
-echo 'Compose·동일 이미지 설정 revision 교체·preflight 기동 차단·수동 수집·비루트·볼륨/개발 의존성 제외·무응답 unhealthy: 통과'
+echo 'Compose·일일 UTC schedule·동일 이미지 설정 revision 교체·preflight 기동 차단·수동 수집·비루트·볼륨/개발 의존성 제외·무응답 unhealthy: 통과'

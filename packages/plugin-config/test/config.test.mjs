@@ -96,6 +96,50 @@ describe('validateRepository', () => {
     if (result.ok) expect(result.definitions.map(item => item.plugin.id)).toEqual(['sample1-offset-api', 'vulnerabilities-local-csv', 'vulnerabilities-http-csv', 'sample2-single-api', 'dependency-track-db']);
   });
 
+  test('수집 일정 생략·비활성·기본값·사용자 값을 엄격하게 검증한다', () => {
+    const root = temporaryRepository();
+    const registry = readJson(root, 'plugins/registry.json');
+    delete registry.collection;
+    writeJson(root, 'plugins/registry.json', registry);
+    let result = validateRepository(root);
+    expect(result.ok && result.collection.schedule).toEqual({ enabled: false, timezone: 'Asia/Seoul', time: '22:00' });
+
+    registry.collection = { schedule: { enabled: false } };
+    writeJson(root, 'plugins/registry.json', registry);
+    result = validateRepository(root);
+    expect(result.ok && result.collection.schedule).toEqual({ enabled: false, timezone: 'Asia/Seoul', time: '22:00' });
+
+    registry.collection.schedule = { enabled: true };
+    writeJson(root, 'plugins/registry.json', registry);
+    result = validateRepository(root);
+    expect(result.ok && result.collection.schedule).toEqual({ enabled: true, timezone: 'Asia/Seoul', time: '22:00' });
+
+    registry.collection.schedule = { enabled: true, timezone: 'America/New_York', time: '03:15' };
+    writeJson(root, 'plugins/registry.json', registry);
+    result = validateRepository(root);
+    expect(result.ok && result.collection.schedule).toEqual({ enabled: true, timezone: 'America/New_York', time: '03:15' });
+  });
+
+  test.each([
+    ['알 수 없는 키', { enabled: true, extra: 'secret-value' }, '/collection/schedule/extra'],
+    ['잘못된 enabled 타입', { enabled: 'true' }, '/collection/schedule/enabled'],
+    ['잘못된 time 타입', { enabled: true, time: 2200 }, '/collection/schedule/time'],
+    ['느슨한 시각', { enabled: true, time: '2:00' }, '/collection/schedule/time'],
+    ['범위를 벗어난 시각', { enabled: true, time: '24:00' }, '/collection/schedule/time'],
+    ['잘못된 timezone', { enabled: true, timezone: 'Not/A_Zone' }, '/collection/schedule/timezone'],
+  ])('수집 일정의 %s을 안전한 설정 오류로 거부한다', (_name, schedule, path) => {
+    const root = temporaryRepository();
+    const registry = readJson(root, 'plugins/registry.json');
+    registry.collection = { schedule };
+    writeJson(root, 'plugins/registry.json', registry);
+    const result = validateRepository(root);
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.errors).toContainEqual(expect.objectContaining({ file: 'plugins/registry.json', path }));
+      expect(JSON.stringify(result.errors)).not.toContain('secret-value');
+    }
+  });
+
   test('심볼릭 링크를 통한 설정 루트 이탈을 거부한다', () => {
     const root = temporaryRepository();
     const outside = mkdtempSync(join(tmpdir(), 'oss-scp-outside-'));

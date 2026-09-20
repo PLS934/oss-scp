@@ -6,7 +6,7 @@ oss-scp는 외부 자산·취약점 데이터를 수집·가공해 플랫폼 DB�
 
 현재 합의한 제품 요구사항과 구현 순서를 관리한다. 파일명·JSON·SDK는 명세 작성용 초안이며 구현 완료를 뜻하지 않는다. 세부 계약은 단계별 OpenSpec change에서 확정한다.
 
-현재 구현된 범위는 React·NestJS와 로컬·Docker 실행 환경, HTTP JSON offset·single 및 로컬·HTTP CSV 수집, 공통 가공·저장·수동 수집 CLI, PostgreSQL·MySQL 연결과 저장·조회, 외부 플러그인 설정 검증, registry 기반 메뉴·기본 목록·상세와 cursor 기반 첫·이전·다음 묶음 이동이다. 기동·재시작 시 전체 수집, 대상별 실행 조정·상태 조회 API, HTTP CSV의 공통 CLI 연결과 GitHub Release 번들 자산 자동화도 구현되어 있다. 인증·권한, 담당자 관리, 매일 22시 정기 수집, 검색·필터·정렬·개인별 목록 설정과 운영 상태 화면 등은 남아 있다. 구현된 계약은 [OpenSpec 본 명세](../../openspec/specs/)를 기준으로 하고, 아래 단계별 계획과 구분한다. 실행 방법은 [클라이언트 가이드](../client-development.md), [서버 가이드](../server-development.md), 브랜치·배포 절차는 [개발 워크플로](../development-workflow.md)를 따른다.
+현재 구현된 범위는 React·NestJS와 로컬·Docker 실행 환경, HTTP JSON offset·single 및 로컬·HTTP CSV 수집, 공통 가공·저장·수동 수집 CLI, PostgreSQL·MySQL 연결과 저장·조회, 외부 플러그인 설정 검증, registry 기반 메뉴·기본 목록·상세와 cursor 기반 첫·이전·다음 묶음 이동이다. 기동·재시작 시 전체 수집, 배포 설정 기반 IANA 시간대 일일 전체 수집, 대상별 실행 조정·상태 조회 API, HTTP CSV의 공통 CLI 연결과 GitHub Release 번들 자산 자동화도 구현되어 있다. 인증·권한, 담당자 관리, 검색·필터·정렬·개인별 목록 설정과 운영 상태 화면 등은 남아 있다. 구현된 계약은 [OpenSpec 본 명세](../../openspec/specs/)를 기준으로 하고, 아래 단계별 계획과 구분한다. 실행 방법은 [클라이언트 가이드](../client-development.md), [서버 가이드](../server-development.md), 브랜치·배포 절차는 [개발 워크플로](../development-workflow.md)를 따른다.
 
 ### 계정관리 옵션
 

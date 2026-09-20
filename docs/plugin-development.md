@@ -49,7 +49,7 @@ packages/plugin-config/
         └── single.ts
 ```
 
-`plugin.json`은 플러그인 ID·이름·릴리스 버전, 같은 폴더의 source와 빌드된 transform 파일, 데이터 종류·필드·유일키·관계, 메뉴와 기본 목록을 정의합니다. sample1의 `source.json`은 `/sample1` 경로, GET, `rows`·`total` 응답 경로와 offset·limit 설정을 정의합니다. sample2의 `source.json`은 `/sample2` 경로, GET, `items` 응답 경로와 `single` 방식을 정의합니다.
+`plugin.json`은 플러그인 ID·이름·릴리스 버전, 같은 폴더의 source와 빌드된 transform 파일, 데이터 종류·필드·유일키·관계, 메뉴와 기본 목록을 정의합니다. sample1의 `source.json`은 `/sample1` 경로, GET, `rows`·`total` 응답 경로와 offset·limit 설정을 정의합니다. sample2의 `source.json`은 `/sample2` 경로, GET, `items` 응답 경로와 `single` 방식을 정의합니다. 전역 일일 전체 수집 일정은 별도 환경변수 경로가 아니라 같은 `plugins/registry.json`의 선택적 `collection.schedule`에 선언하며 자세한 형식과 DST·재시작 규칙은 [서버 개발 가이드](server-development.md#일일-전체-수집-일정)를 따릅니다.
 
 ## 홈의 등록 정보
 

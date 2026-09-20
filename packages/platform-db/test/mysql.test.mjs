@@ -83,7 +83,7 @@ describe('MySQL 어댑터', () => {
 describe('MySQL migration', () => {
   it('제품별 기본 디렉터리만 선택한다', () => {
     expect(defaultMigrationsDirectory('mysql')).toMatch(/migrations\/mysql$/);
-    expect(discoverMigrations(defaultMigrationsDirectory('mysql')).map(item => item.version)).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9]);
+    expect(discoverMigrations(defaultMigrationsDirectory('mysql')).map(item => item.version)).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9, 10]);
   });
   it('최초 적용·재실행·checksum과 실패 버전 미기록을 검증한다', async () => {
     const connection = await mysqlAdapter.connect(config());
@@ -160,6 +160,28 @@ describe('MySQL 공통 레코드 저장·조회 계약', () => {
     await expect(storage.finishRun({ runId, status: 'success', finishedAt: '2026-09-11T01:03:00.000Z' })).rejects.toMatchObject({ code: 'RUN_NOT_ACTIVE' });
   });
 
+  it('기존 trigger와 scheduled metadata·결과·마지막 성공을 같은 이력에 기록한다', async () => {
+    const scope = scopeFor('scheduled-run');
+    const scheduledAt = '2026-09-19T13:00:00.000Z';
+    const partial = await storage.startRun({
+      ...scope, startedAt: '2026-09-19T13:00:01.000Z', exclusive: true,
+      trigger: 'scheduled', scheduledAt, scheduleTimezone: 'Asia/Seoul',
+    });
+    await commit(partial, scope, { acceptedCount: 0, records: [], issues: [{ sourceIndex: 0, code: 'INVALID', path: '/', message: 'invalid' }] });
+    await storage.finishRun({ runId: partial, status: 'partial', finishedAt: '2026-09-19T13:01:00.000Z' });
+    const [metadata] = await connection.withClient(client => client.query(
+      'SELECT `trigger`, scheduled_at, schedule_timezone, status FROM collection_runs WHERE id=?', [partial],
+    ));
+    expect(metadata[0]).toMatchObject({ trigger: 'scheduled', schedule_timezone: 'Asia/Seoul', status: 'partial' });
+    expect(new Date(metadata[0].scheduled_at).toISOString()).toBe(scheduledAt);
+    expect(await query.getLastSuccessAt(scope.pluginId, scope.sourceId)).toBeNull();
+
+    const startup = await storage.startRun({ ...scope, startedAt: '2026-09-20T13:00:00.000Z', exclusive: true, trigger: 'startup' });
+    await commit(startup, scope, { nextCheckpoint: { offset: 2 } });
+    await storage.finishRun({ runId: startup, status: 'success', finishedAt: '2026-09-20T13:01:00.000Z' });
+    expect(await query.getLastSuccessAt(scope.pluginId, scope.sourceId)).toBe('2026-09-20T13:01:00.000Z');
+  });
+
   it('키 타입·대소문자·긴 키를 구분하고 재수집 내부 ID를 유지한다', async () => {
     const scope = scopeFor('identity');
     const longKey = '가'.repeat(2048);
@@ -175,7 +197,10 @@ describe('MySQL 공통 레코드 저장·조회 계약', () => {
       await client.query('CREATE TABLE IF NOT EXISTS test_mysql_assignments(record_id char(36) CHARACTER SET ascii COLLATE ascii_bin PRIMARY KEY, assignee varchar(255) NOT NULL, CONSTRAINT test_mysql_assignments_record_fk FOREIGN KEY(record_id) REFERENCES platform_records(id)) ENGINE=InnoDB');
       await client.query('INSERT INTO test_mysql_assignments(record_id, assignee) VALUES (?, ?)', [before[0].id, 'security-team']);
     });
-    const next = await start(scope, '2026-09-11T02:00:00.000Z');
+    const next = await storage.startRun({
+      ...scope, startedAt: '2026-09-11T02:00:01.000Z', trigger: 'scheduled',
+      scheduledAt: '2026-09-11T02:00:00.000Z', scheduleTimezone: 'UTC',
+    });
     await commit(next, scope, { expectedCheckpoint: { offset: 1 }, nextCheckpoint: { offset: 2 }, records: [{ type: 'asset', key: 'Key', values: { value: 'updated' } }] });
     const page = await query.listRecords({ pluginId: scope.pluginId, sourceId: scope.sourceId, dataType: 'asset', limit: 20 });
     expect(page.items).toHaveLength(4);
@@ -253,6 +278,19 @@ describe('MySQL 공통 레코드 저장·조회 계약', () => {
     await expect(commit(first, scope)).rejects.toMatchObject({ code: 'RUN_NOT_ACTIVE' });
     await storage.renewRun(second);
     await commit(second, scope);
+  });
+
+  it('scheduled는 startup·CLI·API와 동일한 MySQL lease를 공유한다', async () => {
+    for (const [trigger, extra] of [['startup', {}], ['cli', {}], ['api', { requestId: randomUUID() }]]) {
+      const scope = scopeFor(`scheduled-conflict-${trigger}`);
+      const scheduled = await storage.startRun({
+        ...scope, startedAt: '2026-09-19T13:00:01.000Z', exclusive: true, trigger: 'scheduled',
+        scheduledAt: '2026-09-19T13:00:00.000Z', scheduleTimezone: 'Asia/Seoul',
+      });
+      await expect(storage.startRun({ ...scope, startedAt: '2026-09-19T13:00:02.000Z', exclusive: true, trigger, ...extra }))
+        .rejects.toMatchObject({ code: 'RUN_ALREADY_ACTIVE', activeRunId: scheduled });
+      await storage.finishRun({ runId: scheduled, status: 'failed', finishedAt: '2026-09-19T13:01:00.000Z' });
+    }
   });
 });
 

@@ -209,8 +209,11 @@ export async function executeManualCollection(options: {
   root: string;
   env: Readonly<Record<string, string | undefined>>;
   signal: AbortSignal;
-  trigger?: 'startup' | 'cli' | 'api';
+  trigger?: 'startup' | 'scheduled' | 'cli' | 'api';
   requestId?: string;
+  scheduledAt?: string;
+  scheduleTimezone?: string;
+  expectedConfigRevision?: string;
   dependencies?: ManualCollectionDependencies;
 }): Promise<CliOutcome> {
   const dependencies = options.dependencies ?? defaultDependencies;
@@ -219,10 +222,24 @@ export async function executeManualCollection(options: {
   try {
     pluginId = parsePluginId(options.args);
     const definition = selectDefinition(await dependencies.validate(options.root), pluginId);
+    if (options.expectedConfigRevision !== undefined && configRevision(definition) !== options.expectedConfigRevision) {
+      throw new ManualCollectionError('repository_config', 'config');
+    }
     const collector = collectorFor(definition, dependencies.now);
     const connected = await dependencies.connectStorage(options.env);
     resource = idempotentClose(connected.resource);
-    const result = await dependencies.run({ plugin: definition.plugin, scope: collectionScope(options.root, definition), collector, storage: connected.storage, signal: options.signal, now: dependencies.now, trigger: options.trigger ?? 'cli', ...(options.requestId ? { requestId: options.requestId } : {}) });
+    const result = await dependencies.run({
+      plugin: definition.plugin,
+      scope: collectionScope(options.root, definition),
+      collector,
+      storage: connected.storage,
+      signal: options.signal,
+      now: dependencies.now,
+      trigger: options.trigger ?? 'cli',
+      ...(options.requestId ? { requestId: options.requestId } : {}),
+      ...(options.scheduledAt ? { scheduledAt: options.scheduledAt } : {}),
+      ...(options.scheduleTimezone ? { scheduleTimezone: options.scheduleTimezone } : {}),
+    });
     return { exitCode: result.status === 'success' ? 0 : 2, status: result.status, pluginId, result };
   } catch (error) {
     const normalized = error instanceof ManualCollectionError ? error
@@ -238,6 +255,31 @@ export async function executeManualCollection(options: {
   } finally {
     await resource?.close();
   }
+}
+
+export function collectionProcessInvocation(env: Readonly<Record<string, string | undefined>>): {
+  trigger: 'startup' | 'scheduled' | 'cli';
+  scheduledAt?: string;
+  scheduleTimezone?: string;
+  expectedConfigRevision?: string;
+} {
+  const rawTrigger = env.OSS_SCP_COLLECTION_TRIGGER ?? 'cli';
+  if (!['startup', 'scheduled', 'cli'].includes(rawTrigger)) throw new ManualCollectionError('repository_config', 'config');
+  const scheduledAt = env.OSS_SCP_COLLECTION_SCHEDULED_AT;
+  const scheduleTimezone = env.OSS_SCP_COLLECTION_SCHEDULE_TIMEZONE;
+  const expectedConfigRevision = env.OSS_SCP_COLLECTION_EXPECTED_REVISION;
+  if (rawTrigger !== 'scheduled') {
+    if (scheduledAt !== undefined || scheduleTimezone !== undefined || expectedConfigRevision !== undefined) throw new ManualCollectionError('repository_config', 'config');
+    return { trigger: rawTrigger as 'startup' | 'cli' };
+  }
+  if (!scheduledAt || !scheduleTimezone || !expectedConfigRevision || !/^[a-f0-9]{64}$/.test(expectedConfigRevision)) throw new ManualCollectionError('repository_config', 'config');
+  try {
+    if (new Date(scheduledAt).toISOString() !== scheduledAt) throw new Error('invalid instant');
+    new Intl.DateTimeFormat('en-US', { timeZone: scheduleTimezone }).format(0);
+  } catch {
+    throw new ManualCollectionError('repository_config', 'config');
+  }
+  return { trigger: 'scheduled', scheduledAt, scheduleTimezone, expectedConfigRevision };
 }
 
 export interface PublicEvent {

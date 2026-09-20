@@ -55,6 +55,8 @@ export interface RunCollectionOptions {
   now?: () => string;
   trigger?: CollectionTrigger;
   requestId?: string;
+  scheduledAt?: string;
+  scheduleTimezone?: string;
 }
 
 function abortIfNeeded(signal: AbortSignal): void {
@@ -106,7 +108,15 @@ export async function runCollection(options: RunCollectionOptions): Promise<Coll
 
   let runId: string;
   try {
-    runId = await options.storage.startRun({ ...options.scope, startedAt: now(), exclusive: true, trigger: options.trigger ?? 'cli', ...(options.requestId ? { requestId: options.requestId } : {}) });
+    runId = await options.storage.startRun({
+      ...options.scope,
+      startedAt: now(),
+      exclusive: true,
+      trigger: options.trigger ?? 'cli',
+      ...(options.requestId ? { requestId: options.requestId } : {}),
+      ...(options.scheduledAt ? { scheduledAt: options.scheduledAt } : {}),
+      ...(options.scheduleTimezone ? { scheduleTimezone: options.scheduleTimezone } : {}),
+    });
   } catch (error) {
     if (error instanceof StorageError && error.code === 'RUN_ALREADY_ACTIVE') throw new CollectionRunnerError('already_running', error.activeRunId);
     throw new CollectionRunnerError('storage');
