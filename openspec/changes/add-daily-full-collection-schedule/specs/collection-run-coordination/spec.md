@@ -27,6 +27,14 @@
 - **WHEN** rolling 배포 중 revision 포함 legacy lock을 사용하는 인스턴스와 revision 비포함 새 lock을 사용하는 인스턴스가 같은 대상·scope에 동시에 insert한다
 - **THEN** PostgreSQL과 MySQL의 DB 제약은 lock 이름과 무관하게 active run 하나만 허용하고 새 adapter가 관측한 unique 충돌을 `RUN_ALREADY_ACTIVE(activeRunId)`로 변환한다
 
+#### Scenario: legacy cleanup 역순 경합
+- **WHEN** 구버전 인스턴스가 active precheck를 마친 뒤 새 revision의 fresh run이 시작되고 구버전의 범위 기반 cleanup·insert가 뒤늦게 실행된다
+- **THEN** DB fence는 fresh run의 lease를 해제하는 cleanup을 거부하고 구버전 insert도 진행되지 않게 하며, heartbeat가 만료된 진짜 stale run cleanup은 계속 허용한다
+
+#### Scenario: conflict 직후 winner 완료
+- **WHEN** loser insert가 active winner와 충돌하고 adapter가 오류를 처리하기 전에 winner가 완료된다
+- **THEN** PostgreSQL DB conflict payload 또는 MySQL 동일 insert statement의 conflict capture로 winner의 immutable ID를 원자적으로 회수해 `RUN_ALREADY_ACTIVE(activeRunId)`를 반환하며 완료된 winner에도 duplicate audit를 연결할 수 있다
+
 #### Scenario: migration 전 기존 중복 active run
 - **WHEN** active-run uniqueness migration을 적용할 DB에 같은 revision 비포함 lease identity의 coordinated running row가 둘 이상 있다
 - **THEN** migration은 실행 이력을 자동 삭제하거나 상태 변경하지 않고 실패해 운영자의 명시적 확인·정리를 요구한다

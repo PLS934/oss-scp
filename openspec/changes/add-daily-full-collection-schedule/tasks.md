@@ -64,3 +64,10 @@
 - [x] 10.3 duplicate 참조가 winner 완료 뒤에도 revision 비포함 FK identity로 저장되며 missing/scope mismatch를 거부하는 양 DB 테스트를 통과시킨다.
 - [x] 10.4 MySQL generated lease hash와 active 조회 index를 추가하고 digest·EXPLAIN 계약 및 migration count fixture를 갱신한다.
 - [x] 10.5 focused·전체·process·PostgreSQL/MySQL·외부 DB·bundle/release Docker 검증과 strict OpenSpec 및 diff 검증을 통과시킨다.
+
+## 11. rolling cleanup·conflict winner 경합 보강
+
+- [x] 11.1 legacy precheck 뒤 시작된 fresh run을 범위 cleanup이 해제하지 못하도록 PostgreSQL/MySQL DB fence를 추가하고 stale cleanup은 유지한다.
+- [x] 11.2 PostgreSQL insert guard conflict payload와 MySQL 동일 statement conflict capture로 status 전이와 무관하게 충돌 winner ID를 식별한다.
+- [x] 11.3 양 DB에서 legacy precheck→new start→legacy cleanup/insert 역순 및 conflict 직후 winner 완료·duplicate audit 회귀 테스트를 통과시킨다.
+- [x] 11.4 focused·전체·process·PostgreSQL/MySQL·외부 DB·bundle/release Docker 검증과 strict OpenSpec 및 diff 검증을 통과시킨다.

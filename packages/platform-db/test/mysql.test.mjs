@@ -83,7 +83,7 @@ describe('MySQL 어댑터', () => {
 describe('MySQL migration', () => {
   it('제품별 기본 디렉터리만 선택한다', () => {
     expect(defaultMigrationsDirectory('mysql')).toMatch(/migrations\/mysql$/);
-    expect(discoverMigrations(defaultMigrationsDirectory('mysql')).map(item => item.version)).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]);
+    expect(discoverMigrations(defaultMigrationsDirectory('mysql')).map(item => item.version)).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15]);
   });
   it('최초 적용·재실행·checksum과 실패 버전 미기록을 검증한다', async () => {
     const connection = await mysqlAdapter.connect(config());
@@ -115,7 +115,7 @@ describe('MySQL migration', () => {
     const oldScope = { pluginId: `mysql-migration-duplicate-${randomUUID()}`, sourceId: 'source', scopeType: 'full', scopeKey: '', configRevision: 'rev-1' };
     const newScope = { ...oldScope, configRevision: 'rev-2' };
     try {
-      await runMysqlMigrations(connection, migrations.slice(0, -1), 5000);
+      await runMysqlMigrations(connection, migrations.slice(0, -4), 5000);
       for (const scope of [oldScope, newScope]) await connection.withClient(client => client.execute(`INSERT INTO collection_runs
         (id, scope_hash, plugin_id, source_id, scope_type, scope_key, config_revision, started_at, heartbeat_at, coordinated)
         VALUES (?,?,?,?,?,?,?,UTC_TIMESTAMP(3),UTC_TIMESTAMP(3),1)`, [
@@ -394,6 +394,105 @@ describe('MySQL 공통 레코드 저장·조회 계약', () => {
       [collectionLeaseIdentity(oldScope)]));
       expect(plan[0].key).toBe('collection_runs_active_lease_index');
       await storage.finishRun({ runId: legacyRunId, status: 'failed', finishedAt: '2026-09-20T15:01:00.000Z' });
+    } finally { await legacyConnection.close(); }
+  });
+
+  it('legacy MySQL cleanup은 precheck 뒤 시작된 fresh lease를 해제하지 않고 stale lease만 정리한다', async () => {
+    const oldScope = scopeFor('legacy-cleanup-reverse-race');
+    const newScope = { ...oldScope, configRevision: 'rev-2' };
+    const legacyConnection = await mysqlAdapter.connect(config());
+    const legacyLock = collectionScopeIdentity(oldScope).toString('hex');
+    let newRunId;
+    try {
+      await legacyConnection.withClient(async client => {
+        await client.query('SELECT GET_LOCK(?, 1)', [legacyLock]);
+        const [precheck] = await client.query(`SELECT id FROM collection_runs WHERE plugin_id=? AND source_id=?
+          AND scope_type=? AND scope_key=? AND status='running' AND coordinated=1`,
+        [oldScope.pluginId, oldScope.sourceId, oldScope.scopeType, oldScope.scopeKey]);
+        expect(precheck).toHaveLength(0);
+        newRunId = await storage.startRun({ ...newScope, startedAt: '2026-09-20T16:00:00.000Z', exclusive: true });
+        await expect(client.execute(`UPDATE collection_runs SET status='failed', finished_at=UTC_TIMESTAMP(3)
+          WHERE plugin_id=? AND source_id=? AND scope_type=? AND scope_key=? AND status='running' AND coordinated=1 AND ?=1`,
+        [oldScope.pluginId, oldScope.sourceId, oldScope.scopeType, oldScope.scopeKey, 1]))
+          .rejects.toMatchObject({ errno: 3819, sqlMessage: expect.stringContaining('collection_runs_fresh_cleanup_guard') });
+        await client.query('SELECT RELEASE_LOCK(?)', [legacyLock]);
+      });
+      const [active] = await connection.withClient(client => client.query('SELECT id, status FROM collection_runs WHERE id=?', [newRunId]));
+      expect(active[0]).toMatchObject({ id: newRunId, status: 'running' });
+      await connection.withClient(client => client.execute('UPDATE collection_runs SET heartbeat_at=UTC_TIMESTAMP(3) - INTERVAL 3 MINUTE WHERE id=?', [newRunId]));
+
+      const legacyRunId = randomUUID();
+      await legacyConnection.withClient(async client => {
+        await client.query('SELECT GET_LOCK(?, 1)', [legacyLock]);
+        try {
+          await client.execute(`UPDATE collection_runs SET status='failed', finished_at=UTC_TIMESTAMP(3)
+            WHERE plugin_id=? AND source_id=? AND scope_type=? AND scope_key=? AND status='running' AND coordinated=1 AND ?=1`,
+          [oldScope.pluginId, oldScope.sourceId, oldScope.scopeType, oldScope.scopeKey, 1]);
+          await client.execute(`INSERT INTO collection_runs
+            (id, scope_hash, plugin_id, source_id, scope_type, scope_key, config_revision, started_at, heartbeat_at, coordinated)
+            VALUES (?,?,?,?,?,?,?,?,UTC_TIMESTAMP(3),1)`, [
+            legacyRunId, collectionScopeIdentity(oldScope), oldScope.pluginId, oldScope.sourceId, oldScope.scopeType, oldScope.scopeKey,
+            oldScope.configRevision, new Date('2026-09-20T16:04:00.000Z'),
+          ]);
+        } finally { await client.query('SELECT RELEASE_LOCK(?)', [legacyLock]); }
+      });
+      const [evidence] = await connection.withClient(client => client.query('SELECT id, status FROM collection_runs WHERE id IN (?,?) ORDER BY id', [newRunId, legacyRunId]));
+      expect(evidence).toEqual(expect.arrayContaining([{ id: newRunId, status: 'failed' }, { id: legacyRunId, status: 'running' }]));
+      await storage.finishRun({ runId: legacyRunId, status: 'failed', finishedAt: '2026-09-20T16:05:00.000Z' });
+    } finally { await legacyConnection.close(); }
+  });
+
+  it('MySQL DB conflict winner ID는 winner가 즉시 완료돼도 duplicate audit에 연결된다', async () => {
+    const scope = scopeFor('atomic-conflict-winner');
+    const scheduledAt = '2026-09-20T17:00:00.000Z';
+    const legacyConnection = await mysqlAdapter.connect(config());
+    let winner;
+    let completed = false;
+    const conflictConnection = {
+      withClient: work => connection.withClient(client => work(new Proxy(client, {
+        get(target, property) {
+          if (property === 'query') return async (...args) => {
+            const result = await target.query(...args);
+            if (!winner && typeof args[0] === 'string' && args[0].includes('heartbeat_at > UTC_TIMESTAMP(3) - INTERVAL 2 MINUTE')) {
+              winner = randomUUID();
+              await legacyConnection.withClient(legacy => legacy.execute(`INSERT INTO collection_runs
+                (id, scope_hash, plugin_id, source_id, scope_type, scope_key, config_revision, started_at, heartbeat_at, coordinated, \`trigger\`, scheduled_at, schedule_timezone)
+                VALUES (?,?,?,?,?,?,?,?,UTC_TIMESTAMP(3),1,'scheduled',?,?)`, [
+                winner, collectionScopeIdentity(scope), scope.pluginId, scope.sourceId, scope.scopeType, scope.scopeKey,
+                scope.configRevision, new Date('2026-09-20T17:00:01.000Z'), new Date(scheduledAt), 'UTC',
+              ]));
+            }
+            return result;
+          };
+          if (property === 'execute') return async (...args) => {
+            const result = await target.execute(...args);
+            if (!completed && typeof args[0] === 'string' && args[0].includes('INSERT INTO collection_runs')) {
+              completed = true;
+              await storage.finishRun({ runId: winner, status: 'failed', finishedAt: '2026-09-20T17:00:02.000Z' });
+            }
+            return result;
+          };
+          const value = Reflect.get(target, property);
+          return typeof value === 'function' ? value.bind(target) : value;
+        },
+      }))),
+    };
+    const loserStorage = createMysqlRecordStorage(conflictConnection);
+    try {
+      const error = await loserStorage.startRun({
+        ...scope, configRevision: 'rev-2', startedAt: '2026-09-20T17:00:01.500Z', exclusive: true,
+        trigger: 'scheduled', scheduledAt, scheduleTimezone: 'UTC',
+      }).catch(value => value);
+      expect(error).toMatchObject({ code: 'RUN_ALREADY_ACTIVE', activeRunId: winner });
+      expect(completed).toBe(true);
+      await loserStorage.recordScheduledDuplicate({
+        ...scope, configRevision: 'rev-2', activeRunId: error.activeRunId, scheduledAt, scheduleTimezone: 'UTC', observedAt: '2026-09-20T17:00:03.000Z',
+      });
+      const [evidence] = await connection.withClient(client => client.query(`SELECT r.status,
+        (SELECT count(*) FROM scheduled_collection_references WHERE active_run_id=r.id) AS reference_count
+        FROM collection_runs r WHERE r.id=?`, [winner]));
+      expect(evidence[0].status).toBe('failed');
+      expect(Number(evidence[0].reference_count)).toBe(1);
     } finally { await legacyConnection.close(); }
   });
 

@@ -31,6 +31,14 @@ function activeLeaseConflict(error: unknown): boolean {
     && (error as { constraint?: unknown }).constraint === 'collection_runs_one_active_lease_index';
 }
 
+function guardedActiveRunId(error: unknown): string | undefined {
+  if (typeof error !== 'object' || error === null) return undefined;
+  const value = error as { code?: unknown; constraint?: unknown; detail?: unknown };
+  if (value.code !== 'P0001' || value.constraint !== 'collection_runs_one_active_lease_guard'
+    || typeof value.detail !== 'string' || !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value.detail)) return undefined;
+  return value.detail;
+}
+
 async function rollback(client: PoolClient): Promise<void> { await client.query('ROLLBACK').catch(() => undefined); }
 
 async function jsonbEqual(client: PoolClient, left: unknown, right: unknown): Promise<boolean> {
@@ -85,6 +93,8 @@ export function createPostgresRecordStorage(connection: PostgresPlatformDbConnec
             return result.rows[0].id;
           } catch (error) {
             await rollback(client);
+            const guardedRunId = guardedActiveRunId(error);
+            if (input.exclusive && guardedRunId) throw new StorageError('RUN_ALREADY_ACTIVE', guardedRunId);
             if (input.exclusive && activeLeaseConflict(error)) {
               const winner = await client.query<{ id: string }>(`SELECT id FROM collection_runs WHERE plugin_id=$1 AND source_id=$2
                 AND scope_type=$3 AND scope_key=$4 AND status='running' AND coordinated
@@ -119,6 +129,7 @@ export function createPostgresRecordStorage(connection: PostgresPlatformDbConnec
             if (run.status !== 'running') throw new StorageError('RUN_NOT_ACTIVE');
             if (run.coordinated && !run.lease_valid) throw new StorageError('RUN_NOT_ACTIVE');
             if ((input.status === 'success' && Number(run.isolated_count) > 0) || (input.status === 'partial' && Number(run.isolated_count) === 0)) throw new StorageError('INVALID_INPUT');
+            await client.query("SELECT set_config('oss_scp.finishing_run_id', $1, true)", [input.runId]);
             const updated = await client.query("UPDATE collection_runs SET status=$2, finished_at=$3 WHERE id=$1 AND status='running'", [input.runId, input.status, input.finishedAt]);
             if (updated.rowCount !== 1) throw new StorageError('RUN_NOT_ACTIVE');
             await client.query('COMMIT');

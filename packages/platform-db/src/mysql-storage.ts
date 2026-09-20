@@ -37,13 +37,6 @@ function sameLeaseScope(row: Pick<RunRow, 'plugin_id' | 'source_id' | 'scope_typ
   return row.plugin_id === scope.pluginId && row.source_id === scope.sourceId && row.scope_type === scope.scopeType && row.scope_key === scope.scopeKey;
 }
 
-function activeLeaseConflict(error: unknown): boolean {
-  if (typeof error !== 'object' || error === null) return false;
-  const value = error as { code?: unknown; errno?: unknown; sqlMessage?: unknown };
-  return (value.code === 'ER_DUP_ENTRY' || value.errno === 1062)
-    && typeof value.sqlMessage === 'string' && value.sqlMessage.includes('collection_runs_one_active_lease_index');
-}
-
 function parseJson(value: JsonValue | string): JsonValue { return typeof value === 'string' ? JSON.parse(value) as JsonValue : value; }
 
 function normalizedJson(value: JsonValue): string {
@@ -90,19 +83,23 @@ export function createMysqlRecordStorage(connection: MysqlPlatformDbConnection):
             await client.execute(`UPDATE collection_runs SET status='failed', finished_at=UTC_TIMESTAMP(3)
               WHERE lease_hash=? AND status='running' AND coordinated=1
               AND heartbeat_at <= UTC_TIMESTAMP(3) - INTERVAL 2 MINUTE AND ?=1`, [leaseHash, input.exclusive ? 1 : 0]);
-            await client.execute(`INSERT INTO collection_runs
-              (id, scope_hash, plugin_id, source_id, scope_type, scope_key, config_revision, started_at, heartbeat_at, coordinated, \`trigger\`, request_id, scheduled_at, schedule_timezone)
-              VALUES (?,?,?,?,?,?,?,?,UTC_TIMESTAMP(3),?,?,?,?,?)`, [
-                id, hash, ...scopeValues(input), new Date(input.startedAt), input.exclusive ? 1 : 0, input.trigger ?? 'cli', input.requestId ?? null,
-                input.scheduledAt ? new Date(input.scheduledAt) : null, input.scheduleTimezone ?? null,
-              ]);
-          } catch (error) {
-            if (input.exclusive && activeLeaseConflict(error)) {
-              const [winner] = await client.query<RunRow[]>(`SELECT id FROM collection_runs WHERE lease_hash=? AND status='running' AND coordinated=1
-                ORDER BY started_at DESC, id DESC LIMIT 1`, [leaseHash]);
-              if (winner[0]) throw new StorageError('RUN_ALREADY_ACTIVE', winner[0].id);
+            if (input.exclusive) await client.query('SET @oss_scp_active_run_id = NULL');
+            try {
+              await client.execute(`INSERT INTO collection_runs
+                (id, scope_hash, plugin_id, source_id, scope_type, scope_key, config_revision, started_at, heartbeat_at, coordinated, \`trigger\`, request_id, scheduled_at, schedule_timezone)
+                VALUES (?,?,?,?,?,?,?,?,UTC_TIMESTAMP(3),?,?,?,?,?)
+                ${input.exclusive ? 'ON DUPLICATE KEY UPDATE id=(@oss_scp_active_run_id:=collection_runs.id)' : ''}`, [
+                  id, hash, ...scopeValues(input), new Date(input.startedAt), input.exclusive ? 1 : 0, input.trigger ?? 'cli', input.requestId ?? null,
+                  input.scheduledAt ? new Date(input.scheduledAt) : null, input.scheduleTimezone ?? null,
+                ]);
+              if (input.exclusive) {
+                const [conflict] = await client.query<(RowDataPacket & { active_run_id: string | null })[]>(
+                  'SELECT @oss_scp_active_run_id AS active_run_id');
+                if (conflict[0]?.active_run_id) throw new StorageError('RUN_ALREADY_ACTIVE', conflict[0].active_run_id);
+              }
+            } finally {
+              if (input.exclusive) await client.query('SET @oss_scp_active_run_id = NULL').catch(() => undefined);
             }
-            throw error;
           } finally { await client.query('SELECT RELEASE_LOCK(?)', [lockName]).catch(() => undefined); }
         });
         return id;
@@ -131,7 +128,9 @@ export function createMysqlRecordStorage(connection: MysqlPlatformDbConnection):
             if (run.status !== 'running') throw new StorageError('RUN_NOT_ACTIVE');
             if (run.coordinated === 1 && run.lease_valid !== 1) throw new StorageError('RUN_NOT_ACTIVE');
             if ((input.status === 'success' && Number(run.isolated_count) > 0) || (input.status === 'partial' && Number(run.isolated_count) === 0)) throw new StorageError('INVALID_INPUT');
-            await client.execute('UPDATE collection_runs SET status=?, finished_at=? WHERE id=?', [input.status, new Date(input.finishedAt), input.runId]);
+            await client.execute(`UPDATE collection_runs SET status=?, finished_at=?,
+              finish_authorized=IF(?='failed', true, finish_authorized) WHERE id=?`,
+            [input.status, new Date(input.finishedAt), input.status, input.runId]);
             await client.commit();
           } catch (error) { await rollback(client); throw error; }
         });

@@ -60,7 +60,7 @@ describe('PostgreSQL 어댑터', () => {
 
 describe('migration', () => {
   it('PostgreSQL 기본 migration 버전을 순서대로 발견한다', () => {
-    expect(discoverMigrations(defaultMigrationsDirectory('postgres')).map(item => item.version)).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9]);
+    expect(discoverMigrations(defaultMigrationsDirectory('postgres')).map(item => item.version)).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9, 10]);
   });
 
   it('CLI 설정·연결 실패가 0이 아닌 코드와 비밀정보 없는 오류를 반환한다', () => {
@@ -110,7 +110,7 @@ describe('migration', () => {
     const migrations = discoverMigrations(defaultMigrationsDirectory('postgres'));
     const pluginId = `migration-duplicate-${randomUUID()}`;
     try {
-      await runMigrations(connection, migrations.slice(0, -1), 5000);
+      await runMigrations(connection, migrations.slice(0, -2), 5000);
       await connection.withClient(client => client.query(`INSERT INTO collection_runs
         (plugin_id, source_id, scope_type, scope_key, config_revision, started_at, heartbeat_at, coordinated)
         VALUES ($1,'source','full','','rev-1',now(),now(),true), ($1,'source','full','','rev-2',now(),now(),true)`, [pluginId]));
@@ -532,6 +532,108 @@ describe('PostgreSQL 공통 레코드 저장 계약', () => {
       [oldScope.pluginId, oldScope.sourceId, oldScope.scopeType, oldScope.scopeKey]));
       expect(active.rows[0].count).toBe(1);
       await storage.finishRun({ runId: legacyRunId, status: 'failed', finishedAt: '2026-09-20T15:01:00.000Z' });
+    } finally { await legacyConnection.close(); }
+  });
+
+  it('legacy cleanup은 precheck 뒤 시작된 fresh lease를 해제하지 않고 stale lease만 정리한다', async () => {
+    const oldScope = testScope('legacy-cleanup-reverse-race');
+    const newScope = { ...oldScope, configRevision: 'rev-2' };
+    const legacyConnection = await postgresAdapter.connect(config());
+    let newRunId;
+    try {
+      await legacyConnection.withClient(async client => {
+        await client.query('BEGIN');
+        await client.query('SELECT pg_advisory_xact_lock(hashtextextended($1, 0))', [[
+          oldScope.pluginId, oldScope.sourceId, oldScope.scopeType, oldScope.scopeKey, oldScope.configRevision,
+        ].join('\u001f')]);
+        const precheck = await client.query(`SELECT id FROM collection_runs WHERE plugin_id=$1 AND source_id=$2
+          AND scope_type=$3 AND scope_key=$4 AND status='running' AND coordinated`,
+        [oldScope.pluginId, oldScope.sourceId, oldScope.scopeType, oldScope.scopeKey]);
+        expect(precheck.rows).toHaveLength(0);
+        newRunId = await storage.startRun({ ...newScope, startedAt: '2026-09-20T16:00:00.000Z', exclusive: true });
+        await expect(client.query(`UPDATE collection_runs SET status='failed', finished_at=now()
+          WHERE plugin_id=$1 AND source_id=$2 AND scope_type=$3 AND scope_key=$4 AND status='running' AND coordinated AND $5::boolean`,
+        [oldScope.pluginId, oldScope.sourceId, oldScope.scopeType, oldScope.scopeKey, true]))
+          .rejects.toMatchObject({ constraint: 'collection_runs_fresh_cleanup_guard' });
+        await client.query('ROLLBACK');
+      });
+
+      const active = await connection.withClient(client => client.query('SELECT id, status FROM collection_runs WHERE id=$1', [newRunId]));
+      expect(active.rows[0]).toEqual({ id: newRunId, status: 'running' });
+      await connection.withClient(client => client.query("UPDATE collection_runs SET heartbeat_at=now() - interval '3 minutes' WHERE id=$1", [newRunId]));
+
+      let legacyRunId;
+      await legacyConnection.withClient(async client => {
+        await client.query('BEGIN');
+        await client.query('SELECT pg_advisory_xact_lock(hashtextextended($1, 0))', [[
+          oldScope.pluginId, oldScope.sourceId, oldScope.scopeType, oldScope.scopeKey, oldScope.configRevision,
+        ].join('\u001f')]);
+        await client.query(`UPDATE collection_runs SET status='failed', finished_at=now()
+          WHERE plugin_id=$1 AND source_id=$2 AND scope_type=$3 AND scope_key=$4 AND status='running' AND coordinated AND $5::boolean`,
+        [oldScope.pluginId, oldScope.sourceId, oldScope.scopeType, oldScope.scopeKey, true]);
+        const inserted = await client.query(`INSERT INTO collection_runs
+          (plugin_id, source_id, scope_type, scope_key, config_revision, started_at, heartbeat_at, coordinated)
+          VALUES ($1,$2,$3,$4,$5,$6,now(),true) RETURNING id`, [
+          oldScope.pluginId, oldScope.sourceId, oldScope.scopeType, oldScope.scopeKey, oldScope.configRevision, '2026-09-20T16:04:00.000Z',
+        ]);
+        legacyRunId = inserted.rows[0].id;
+        await client.query('COMMIT');
+      });
+      const evidence = await connection.withClient(client => client.query('SELECT id, status FROM collection_runs WHERE id=ANY($1::uuid[]) ORDER BY id', [[newRunId, legacyRunId]]));
+      expect(evidence.rows).toEqual(expect.arrayContaining([{ id: newRunId, status: 'failed' }, { id: legacyRunId, status: 'running' }]));
+      await storage.finishRun({ runId: legacyRunId, status: 'failed', finishedAt: '2026-09-20T16:05:00.000Z' });
+    } finally { await legacyConnection.close(); }
+  });
+
+  it('DB conflict에 담긴 winner ID는 winner가 즉시 완료돼도 duplicate audit에 연결된다', async () => {
+    const scope = testScope('atomic-conflict-winner');
+    const scheduledAt = '2026-09-20T17:00:00.000Z';
+    const legacyConnection = await postgresAdapter.connect(config());
+    let winner;
+    let completed = false;
+    const conflictConnection = {
+      withClient: work => connection.withClient(client => work(new Proxy(client, {
+        get(target, property) {
+          if (property === 'query') return async (...args) => {
+            const text = typeof args[0] === 'string' ? args[0] : args[0]?.text;
+            const result = await target.query(...args);
+            if (!winner && typeof text === 'string' && text.includes("heartbeat_at > now() - interval '2 minutes'")) {
+              winner = await legacyConnection.withClient(async legacy => {
+                const inserted = await legacy.query(`INSERT INTO collection_runs
+                  (plugin_id, source_id, scope_type, scope_key, config_revision, started_at, heartbeat_at, coordinated, trigger, scheduled_at, schedule_timezone)
+                  VALUES ($1,$2,$3,$4,$5,$6,now(),true,'scheduled',$7,$8) RETURNING id`, [
+                  scope.pluginId, scope.sourceId, scope.scopeType, scope.scopeKey, scope.configRevision,
+                  '2026-09-20T17:00:01.000Z', scheduledAt, 'UTC',
+                ]);
+                return inserted.rows[0].id;
+              });
+            }
+            if (text === 'ROLLBACK' && !completed) {
+              completed = true;
+              await storage.finishRun({ runId: winner, status: 'failed', finishedAt: '2026-09-20T17:00:02.000Z' });
+            }
+            return result;
+          };
+          const value = Reflect.get(target, property);
+          return typeof value === 'function' ? value.bind(target) : value;
+        },
+      }))),
+    };
+    const loserStorage = createPostgresRecordStorage(conflictConnection);
+    try {
+      const error = await loserStorage.startRun({
+        ...scope, configRevision: 'rev-2', startedAt: '2026-09-20T17:00:01.500Z', exclusive: true,
+        trigger: 'scheduled', scheduledAt, scheduleTimezone: 'UTC',
+      }).catch(value => value);
+      expect(error).toMatchObject({ code: 'RUN_ALREADY_ACTIVE', activeRunId: winner });
+      expect(completed).toBe(true);
+      await loserStorage.recordScheduledDuplicate({
+        ...scope, configRevision: 'rev-2', activeRunId: error.activeRunId, scheduledAt, scheduleTimezone: 'UTC', observedAt: '2026-09-20T17:00:03.000Z',
+      });
+      const evidence = await connection.withClient(client => client.query(`SELECT r.status,
+        (SELECT count(*)::int FROM scheduled_collection_references WHERE active_run_id=r.id) AS references
+        FROM collection_runs r WHERE r.id=$1`, [winner]));
+      expect(evidence.rows[0]).toEqual({ status: 'failed', references: 1 });
     } finally { await legacyConnection.close(); }
   });
 
