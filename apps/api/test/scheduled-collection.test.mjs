@@ -110,6 +110,14 @@ describe('일일 scheduled 전체 수집', () => {
     expect(scheduledChildEnvironment({ AUTH_SOURCE_TOKEN: 'secret' }, forbiddenReference, { configRoot: '/config', expectedRevision: 'a'.repeat(64), scheduledAt: '2026-09-19T13:00:00.000Z', timezone: 'UTC' })).not.toHaveProperty('AUTH_SOURCE_TOKEN');
   });
 
+  it.each(['NODE_OPTIONS', 'NODE_PATH', 'LD_PRELOAD', 'LD_LIBRARY_PATH', 'LD_AUDIT', 'LIBPATH', 'SHLIB_PATH', 'OPENSSL_CONF', 'OPENSSL_MODULES', 'DYLD_INSERT_LIBRARIES'])('scheduled credential envRef %s는 snapshot 준비 전에 거부한다', env => {
+    const target = definition('one', { connection: { id: 'source', baseUrl: 'https://example.test', auth: { type: 'bearer', tokenRef: { env } } } });
+    const manager = new ScheduledCollectionManager('/config', { enabled: true, timezone: 'UTC', time: '00:00' }, referenceStorage(), console, '/collector.js', vi.fn());
+    expect(() => manager.prepare([target])).toThrowError('scheduled collection credential environment name is not allowed');
+    const disabled = new ScheduledCollectionManager('/config', { enabled: false, timezone: 'UTC', time: '00:00' }, referenceStorage(), console, '/collector.js', vi.fn());
+    expect(() => disabled.prepare([target])).not.toThrow();
+  });
+
   it('빈/live-only snapshot은 실행 이력 없이 다음 일정을 유지한다', async () => {
     vi.useFakeTimers(); vi.setSystemTime(new Date('2026-09-19T12:59:00.000Z'));
     const spawn = vi.fn();

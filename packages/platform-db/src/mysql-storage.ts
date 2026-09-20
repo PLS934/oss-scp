@@ -37,8 +37,11 @@ function sameLeaseScope(row: Pick<RunRow, 'plugin_id' | 'source_id' | 'scope_typ
   return row.plugin_id === scope.pluginId && row.source_id === scope.sourceId && row.scope_type === scope.scopeType && row.scope_key === scope.scopeKey;
 }
 
-function leaseScopeValues(scope: CollectionScope): string[] {
-  return [scope.pluginId, scope.sourceId, scope.scopeType, scope.scopeKey];
+function activeLeaseConflict(error: unknown): boolean {
+  if (typeof error !== 'object' || error === null) return false;
+  const value = error as { code?: unknown; errno?: unknown; sqlMessage?: unknown };
+  return (value.code === 'ER_DUP_ENTRY' || value.errno === 1062)
+    && typeof value.sqlMessage === 'string' && value.sqlMessage.includes('collection_runs_one_active_lease_index');
 }
 
 function parseJson(value: JsonValue | string): JsonValue { return typeof value === 'string' ? JSON.parse(value) as JsonValue : value; }
@@ -81,18 +84,25 @@ export function createMysqlRecordStorage(connection: MysqlPlatformDbConnection):
           const [locks] = await client.query('SELECT GET_LOCK(?, 5) AS acquired', [lockName]) as [{ acquired: number | null }[], unknown];
           if (locks[0]?.acquired !== 1) throw new StorageError('PERSIST_FAILED');
           try {
-            const [active] = await client.query<RunRow[]>(`SELECT id FROM collection_runs WHERE plugin_id=? AND source_id=? AND scope_type=? AND scope_key=?
-              AND status='running' AND coordinated=1 AND heartbeat_at > UTC_TIMESTAMP(3) - INTERVAL 2 MINUTE LIMIT 1`, leaseScopeValues(input));
+            const [active] = await client.query<RunRow[]>(`SELECT id FROM collection_runs WHERE lease_hash=?
+              AND status='running' AND coordinated=1 AND heartbeat_at > UTC_TIMESTAMP(3) - INTERVAL 2 MINUTE LIMIT 1`, [leaseHash]);
             if (input.exclusive && active[0]) throw new StorageError('RUN_ALREADY_ACTIVE', active[0].id);
             await client.execute(`UPDATE collection_runs SET status='failed', finished_at=UTC_TIMESTAMP(3)
-              WHERE plugin_id=? AND source_id=? AND scope_type=? AND scope_key=? AND status='running' AND coordinated=1 AND ?=1`,
-            [...leaseScopeValues(input), input.exclusive ? 1 : 0]);
+              WHERE lease_hash=? AND status='running' AND coordinated=1
+              AND heartbeat_at <= UTC_TIMESTAMP(3) - INTERVAL 2 MINUTE AND ?=1`, [leaseHash, input.exclusive ? 1 : 0]);
             await client.execute(`INSERT INTO collection_runs
               (id, scope_hash, plugin_id, source_id, scope_type, scope_key, config_revision, started_at, heartbeat_at, coordinated, \`trigger\`, request_id, scheduled_at, schedule_timezone)
               VALUES (?,?,?,?,?,?,?,?,UTC_TIMESTAMP(3),?,?,?,?,?)`, [
                 id, hash, ...scopeValues(input), new Date(input.startedAt), input.exclusive ? 1 : 0, input.trigger ?? 'cli', input.requestId ?? null,
                 input.scheduledAt ? new Date(input.scheduledAt) : null, input.scheduleTimezone ?? null,
               ]);
+          } catch (error) {
+            if (input.exclusive && activeLeaseConflict(error)) {
+              const [winner] = await client.query<RunRow[]>(`SELECT id FROM collection_runs WHERE lease_hash=? AND status='running' AND coordinated=1
+                ORDER BY started_at DESC, id DESC LIMIT 1`, [leaseHash]);
+              if (winner[0]) throw new StorageError('RUN_ALREADY_ACTIVE', winner[0].id);
+            }
+            throw error;
           } finally { await client.query('SELECT RELEASE_LOCK(?)', [lockName]).catch(() => undefined); }
         });
         return id;
@@ -132,17 +142,13 @@ export function createMysqlRecordStorage(connection: MysqlPlatformDbConnection):
       validateScheduledDuplicate(input);
       try {
         await connection.withClient(async client => {
-          await client.beginTransaction();
-          try {
-            const [active] = await client.query<RunRow[]>(`SELECT id, plugin_id, source_id, scope_type, scope_key, config_revision FROM collection_runs
-              WHERE id=? AND status='running' AND coordinated=1 AND heartbeat_at > UTC_TIMESTAMP(3) - INTERVAL 2 MINUTE FOR UPDATE`, [input.activeRunId]);
-            if (!active[0] || !sameLeaseScope(active[0], input)) throw new StorageError('RUN_NOT_FOUND');
-            await client.execute(`INSERT INTO scheduled_collection_references
-              (id, active_run_id, scheduled_at, schedule_timezone, observed_at) VALUES (?,?,?,?,?)
-              ON DUPLICATE KEY UPDATE active_run_id=VALUES(active_run_id)`,
-            [randomUUID(), input.activeRunId, new Date(input.scheduledAt), input.scheduleTimezone, new Date(input.observedAt)]);
-            await client.commit();
-          } catch (error) { await rollback(client); throw error; }
+          const [referenced] = await client.query<RunRow[]>(`SELECT id, plugin_id, source_id, scope_type, scope_key, config_revision
+            FROM collection_runs WHERE id=?`, [input.activeRunId]);
+          if (!referenced[0] || !sameLeaseScope(referenced[0], input)) throw new StorageError('RUN_NOT_FOUND');
+          await client.execute(`INSERT INTO scheduled_collection_references
+            (id, active_run_id, scheduled_at, schedule_timezone, observed_at) VALUES (?,?,?,?,?)
+            ON DUPLICATE KEY UPDATE active_run_id=VALUES(active_run_id)`,
+          [randomUUID(), input.activeRunId, new Date(input.scheduledAt), input.scheduleTimezone, new Date(input.observedAt)]);
         });
       } catch (error) { throw publicFailure(error); }
     },

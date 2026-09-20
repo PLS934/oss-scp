@@ -8,7 +8,7 @@ import { randomUUID } from 'node:crypto';
 import { GenericContainer, Wait } from 'testcontainers';
 import {
   createMysqlAuthSessionRepository, createMysqlRecordQuery, createMysqlRecordStorage, defaultMigrationsDirectory, discoverMigrations, mysqlAdapter, mysqlPoolConfig,
-  recordIdentity, recordQueryScopeIdentity,
+  collectionLeaseIdentity, collectionScopeIdentity, recordIdentity, recordQueryScopeIdentity,
   runMysqlMigrations,
 } from '../dist/index.js';
 import { verifyRecordContract, verifyNumberedSnapshot } from './record-contract.mjs';
@@ -83,7 +83,7 @@ describe('MySQL 어댑터', () => {
 describe('MySQL migration', () => {
   it('제품별 기본 디렉터리만 선택한다', () => {
     expect(defaultMigrationsDirectory('mysql')).toMatch(/migrations\/mysql$/);
-    expect(discoverMigrations(defaultMigrationsDirectory('mysql')).map(item => item.version)).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11]);
+    expect(discoverMigrations(defaultMigrationsDirectory('mysql')).map(item => item.version)).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]);
   });
   it('최초 적용·재실행·checksum과 실패 버전 미기록을 검증한다', async () => {
     const connection = await mysqlAdapter.connect(config());
@@ -108,6 +108,29 @@ describe('MySQL migration', () => {
         await client.query("SELECT RELEASE_LOCK('oss-scp-platform-migrations')");
       });
     } finally { await Promise.all([first.close(), second.close()]); }
+  });
+  it('기존 중복 active run이 있으면 MySQL uniqueness migration을 비파괴적으로 거부한다', async () => {
+    const connection = await mysqlAdapter.connect(config());
+    const migrations = discoverMigrations(defaultMigrationsDirectory('mysql'));
+    const oldScope = { pluginId: `mysql-migration-duplicate-${randomUUID()}`, sourceId: 'source', scopeType: 'full', scopeKey: '', configRevision: 'rev-1' };
+    const newScope = { ...oldScope, configRevision: 'rev-2' };
+    try {
+      await runMysqlMigrations(connection, migrations.slice(0, -1), 5000);
+      for (const scope of [oldScope, newScope]) await connection.withClient(client => client.execute(`INSERT INTO collection_runs
+        (id, scope_hash, plugin_id, source_id, scope_type, scope_key, config_revision, started_at, heartbeat_at, coordinated)
+        VALUES (?,?,?,?,?,?,?,UTC_TIMESTAMP(3),UTC_TIMESTAMP(3),1)`, [
+        randomUUID(), collectionScopeIdentity(scope), scope.pluginId, scope.sourceId, scope.scopeType, scope.scopeKey, scope.configRevision,
+      ]));
+      await expect(runMysqlMigrations(connection, migrations, 5000)).rejects.toMatchObject({ code: 'MIGRATION_FAILED' });
+      const [evidence] = await connection.withClient(client => client.query(`SELECT
+        (SELECT count(*) FROM collection_runs WHERE plugin_id=?) AS runs,
+        (SELECT count(*) FROM oss_scp_schema_migrations WHERE version=12) AS migration`, [oldScope.pluginId]));
+      expect(Number(evidence[0].runs)).toBe(2);
+      expect(Number(evidence[0].migration)).toBe(0);
+    } finally {
+      await connection.withClient(client => client.execute('DELETE FROM collection_runs WHERE plugin_id=?', [oldScope.pluginId]));
+      await connection.close();
+    }
   });
   it('CLI가 MySQL을 선택하고 비밀번호를 출력하지 않는다', () => {
     const marker = 'sensitive-mysql-password';
@@ -334,6 +357,46 @@ describe('MySQL 공통 레코드 저장·조회 계약', () => {
     } finally { await otherConnection.close(); }
   });
 
+  it('legacy revision lock과 새 MySQL lease lock 경합도 DB uniqueness로 한 실행만 허용한다', async () => {
+    const oldScope = scopeFor('rolling-lock-race');
+    const newScope = { ...oldScope, configRevision: 'rev-2' };
+    const legacyConnection = await mysqlAdapter.connect(config());
+    const legacyRunId = randomUUID();
+    let attempted;
+    try {
+      await legacyConnection.withClient(async client => {
+        const legacyLock = collectionScopeIdentity(oldScope).toString('hex');
+        await client.query('SELECT GET_LOCK(?, 1)', [legacyLock]);
+        await client.beginTransaction();
+        try {
+          await client.execute(`INSERT INTO collection_runs
+            (id, scope_hash, plugin_id, source_id, scope_type, scope_key, config_revision, started_at, heartbeat_at, coordinated, \`trigger\`)
+            VALUES (?,?,?,?,?,?,?,?,UTC_TIMESTAMP(3),1,'startup')`, [
+            legacyRunId, collectionScopeIdentity(oldScope), oldScope.pluginId, oldScope.sourceId, oldScope.scopeType, oldScope.scopeKey,
+            oldScope.configRevision, new Date('2026-09-20T15:00:00.000Z'),
+          ]);
+          attempted = storage.startRun({ ...newScope, startedAt: '2026-09-20T15:00:01.000Z', exclusive: true })
+            .then(value => ({ value }), error => ({ error }));
+          await new Promise(resolve => setTimeout(resolve, 50));
+          await client.commit();
+        } catch (error) { await client.rollback(); throw error; }
+        finally { await client.query('SELECT RELEASE_LOCK(?)', [legacyLock]); }
+      });
+      const outcome = await attempted;
+      expect(outcome.error).toMatchObject({ code: 'RUN_ALREADY_ACTIVE', activeRunId: legacyRunId });
+      const [evidence] = await connection.withClient(client => client.query(`SELECT lease_hash FROM collection_runs
+        WHERE plugin_id=? AND source_id=? AND scope_type=? AND scope_key=? AND status='running' AND coordinated=1`,
+      [oldScope.pluginId, oldScope.sourceId, oldScope.scopeType, oldScope.scopeKey]));
+      expect(evidence).toHaveLength(1);
+      expect(evidence[0].lease_hash).toEqual(collectionLeaseIdentity(oldScope));
+      const [plan] = await connection.withClient(client => client.query(`EXPLAIN SELECT id FROM collection_runs FORCE INDEX (collection_runs_active_lease_index)
+        WHERE lease_hash=? AND status='running' AND coordinated=1 AND heartbeat_at > UTC_TIMESTAMP(3) - INTERVAL 2 MINUTE`,
+      [collectionLeaseIdentity(oldScope)]));
+      expect(plan[0].key).toBe('collection_runs_active_lease_index');
+      await storage.finishRun({ runId: legacyRunId, status: 'failed', finishedAt: '2026-09-20T15:01:00.000Z' });
+    } finally { await legacyConnection.close(); }
+  });
+
   it('scheduled는 startup·CLI·API와 동일한 MySQL lease를 공유한다', async () => {
     for (const [trigger, extra] of [['startup', {}], ['cli', {}], ['api', { requestId: randomUUID() }]]) {
       const scope = scopeFor(`scheduled-conflict-${trigger}`);
@@ -347,21 +410,23 @@ describe('MySQL 공통 레코드 저장·조회 계약', () => {
     }
   });
 
-  it('scheduled lease loser 참조를 active MySQL run에 멱등 영속화한다', async () => {
+  it('scheduled lease loser 참조를 완료된 MySQL run에도 멱등 영속화한다', async () => {
     const scope = scopeFor('scheduled-reference');
     const scheduledAt = '2026-09-20T13:00:00.000Z';
     const activeRunId = await storage.startRun({
       ...scope, startedAt: '2026-09-20T13:00:01.000Z', exclusive: true, trigger: 'scheduled', scheduledAt, scheduleTimezone: 'Asia/Seoul',
     });
     const reference = { ...scope, activeRunId, scheduledAt, scheduleTimezone: 'Asia/Seoul', observedAt: '2026-09-20T13:00:02.000Z' };
+    await storage.finishRun({ runId: activeRunId, status: 'failed', finishedAt: '2026-09-20T13:01:00.000Z' });
     await storage.recordScheduledDuplicate(reference);
     await storage.recordScheduledDuplicate(reference);
+    await expect(storage.recordScheduledDuplicate({ ...reference, activeRunId: randomUUID() })).rejects.toMatchObject({ code: 'RUN_NOT_FOUND' });
+    await expect(storage.recordScheduledDuplicate({ ...reference, sourceId: `${scope.sourceId}-other` })).rejects.toMatchObject({ code: 'RUN_NOT_FOUND' });
     const [rows] = await connection.withClient(client => client.query(`SELECT r.active_run_id, r.scheduled_at, r.schedule_timezone, c.plugin_id
       FROM scheduled_collection_references r JOIN collection_runs c ON c.id=r.active_run_id WHERE r.active_run_id=?`, [activeRunId]));
     expect(rows).toHaveLength(1);
     expect(rows[0]).toMatchObject({ active_run_id: activeRunId, schedule_timezone: 'Asia/Seoul', plugin_id: scope.pluginId });
     expect(new Date(rows[0].scheduled_at).toISOString()).toBe(scheduledAt);
-    await storage.finishRun({ runId: activeRunId, status: 'failed', finishedAt: '2026-09-20T13:01:00.000Z' });
   });
 });
 

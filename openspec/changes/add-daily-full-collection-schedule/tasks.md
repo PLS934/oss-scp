@@ -56,3 +56,11 @@
 - [x] 9.3 PostgreSQL/MySQL의 lease·commit·duplicate active identity를 revision 비포함 plugin·source·scope로 통일하고 다중 connection·revision 경합과 stale 결과 fencing 테스트를 통과시킨다.
 - [x] 9.4 platform DB 환경 전달을 실제 지원 key의 단일 명시적 allowlist로 제한하고 unknown `PLATFORM_DB_*` 차단 테스트를 통과시킨다.
 - [x] 9.5 focused·전체·process·PostgreSQL/MySQL·외부 DB Docker 검증과 strict OpenSpec 및 diff 검증을 통과시킨다.
+
+## 10. process 환경·rolling lock 호환 리뷰 보강
+
+- [x] 10.1 schedule 활성 credential `envRef`의 Node·OS loader process-control 환경 이름을 preflight와 snapshot 준비에서 거부하고 `.env`의 `NODE_OPTIONS=--require` 회귀 테스트를 통과시킨다.
+- [x] 10.2 PostgreSQL/MySQL에 revision 비포함 coordinated active-run uniqueness migration을 추가하고 legacy/new lock 경합, unique 오류 정규화와 기존 중복 fail-closed migration 테스트를 통과시킨다.
+- [x] 10.3 duplicate 참조가 winner 완료 뒤에도 revision 비포함 FK identity로 저장되며 missing/scope mismatch를 거부하는 양 DB 테스트를 통과시킨다.
+- [x] 10.4 MySQL generated lease hash와 active 조회 index를 추가하고 digest·EXPLAIN 계약 및 migration count fixture를 갱신한다.
+- [x] 10.5 focused·전체·process·PostgreSQL/MySQL·외부 DB·bundle/release Docker 검증과 strict OpenSpec 및 diff 검증을 통과시킨다.

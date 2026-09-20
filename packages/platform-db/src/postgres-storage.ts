@@ -25,6 +25,12 @@ function scopeValues(scope: CollectionScope): readonly string[] {
 
 function scopeLockKey(scope: CollectionScope): string { return collectionLeaseIdentity(scope).toString('hex'); }
 
+function activeLeaseConflict(error: unknown): boolean {
+  return typeof error === 'object' && error !== null
+    && (error as { code?: unknown }).code === '23505'
+    && (error as { constraint?: unknown }).constraint === 'collection_runs_one_active_lease_index';
+}
+
 async function rollback(client: PoolClient): Promise<void> { await client.query('ROLLBACK').catch(() => undefined); }
 
 async function jsonbEqual(client: PoolClient, left: unknown, right: unknown): Promise<boolean> {
@@ -66,7 +72,8 @@ export function createPostgresRecordStorage(connection: PostgresPlatformDbConnec
               AND coordinated AND heartbeat_at > now() - interval '2 minutes' LIMIT 1`, scopeValues(input).slice(0, 4));
             if (input.exclusive && active.rows[0]) throw new StorageError('RUN_ALREADY_ACTIVE', active.rows[0].id);
             await client.query(`UPDATE collection_runs SET status='failed', finished_at=now()
-              WHERE plugin_id=$1 AND source_id=$2 AND scope_type=$3 AND scope_key=$4 AND status='running' AND coordinated AND $5::boolean`, [...scopeValues(input).slice(0, 4), input.exclusive === true]);
+              WHERE plugin_id=$1 AND source_id=$2 AND scope_type=$3 AND scope_key=$4 AND status='running' AND coordinated
+              AND heartbeat_at <= now() - interval '2 minutes' AND $5::boolean`, [...scopeValues(input).slice(0, 4), input.exclusive === true]);
             const result = await client.query<{ id: string }>(`INSERT INTO collection_runs
               (plugin_id, source_id, scope_type, scope_key, config_revision, started_at, heartbeat_at, coordinated, trigger, request_id, scheduled_at, schedule_timezone)
               VALUES ($1,$2,$3,$4,$5,$6,now(),$7,$8,$9,$10,$11) RETURNING id`, [
@@ -76,7 +83,16 @@ export function createPostgresRecordStorage(connection: PostgresPlatformDbConnec
             await client.query('COMMIT');
             if (!result.rows[0]) throw new StorageError('PERSIST_FAILED');
             return result.rows[0].id;
-          } catch (error) { await rollback(client); throw error; }
+          } catch (error) {
+            await rollback(client);
+            if (input.exclusive && activeLeaseConflict(error)) {
+              const winner = await client.query<{ id: string }>(`SELECT id FROM collection_runs WHERE plugin_id=$1 AND source_id=$2
+                AND scope_type=$3 AND scope_key=$4 AND status='running' AND coordinated
+                ORDER BY started_at DESC, id DESC LIMIT 1`, scopeValues(input).slice(0, 4));
+              if (winner.rows[0]) throw new StorageError('RUN_ALREADY_ACTIVE', winner.rows[0].id);
+            }
+            throw error;
+          }
         });
       } catch (error) { throw publicFailure(error); }
     },
@@ -115,18 +131,13 @@ export function createPostgresRecordStorage(connection: PostgresPlatformDbConnec
       validateScheduledDuplicate(input);
       try {
         await connection.withClient(async client => {
-          await client.query('BEGIN');
-          try {
-            const active = await client.query<{ id: string }>(`SELECT id FROM collection_runs WHERE id=$1 AND plugin_id=$2 AND source_id=$3
-              AND scope_type=$4 AND scope_key=$5 AND status='running' AND coordinated
-              AND heartbeat_at > now() - interval '2 minutes' FOR UPDATE`, [input.activeRunId, ...scopeValues(input).slice(0, 4)]);
-            if (!active.rows[0]) throw new StorageError('RUN_NOT_FOUND');
-            await client.query(`INSERT INTO scheduled_collection_references
-              (active_run_id, scheduled_at, schedule_timezone, observed_at) VALUES ($1,$2,$3,$4)
-              ON CONFLICT (active_run_id, scheduled_at, schedule_timezone) DO NOTHING`,
-            [input.activeRunId, input.scheduledAt, input.scheduleTimezone, input.observedAt]);
-            await client.query('COMMIT');
-          } catch (error) { await rollback(client); throw error; }
+          const referenced = await client.query<{ id: string }>(`SELECT id FROM collection_runs WHERE id=$1 AND plugin_id=$2 AND source_id=$3
+            AND scope_type=$4 AND scope_key=$5`, [input.activeRunId, ...scopeValues(input).slice(0, 4)]);
+          if (!referenced.rows[0]) throw new StorageError('RUN_NOT_FOUND');
+          await client.query(`INSERT INTO scheduled_collection_references
+            (active_run_id, scheduled_at, schedule_timezone, observed_at) VALUES ($1,$2,$3,$4)
+            ON CONFLICT (active_run_id, scheduled_at, schedule_timezone) DO NOTHING`,
+          [input.activeRunId, input.scheduledAt, input.scheduleTimezone, input.observedAt]);
         });
       } catch (error) { throw publicFailure(error); }
     },

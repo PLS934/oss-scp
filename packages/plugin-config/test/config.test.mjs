@@ -1,6 +1,7 @@
 import { cpSync, mkdtempSync, mkdirSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
+import { loadEnvFile } from 'node:process';
 import { afterEach, describe, expect, test } from 'vitest';
 import { assertSelfContainedTransform, loadSelfContainedTransformSnapshot, preflightConfiguration, resolveSecret, validateReadQuery, validateRepository } from '../dist/index.js';
 import { createHash } from 'node:crypto';
@@ -198,6 +199,34 @@ describe('validateRepository', () => {
     expect(globalThis.__ossScpMainExecuted).toBe(true);
     expect(globalThis.__ossScpHelperExecuted).toBe(true);
     delete globalThis.__ossScpMainExecuted; delete globalThis.__ossScpHelperExecuted;
+  });
+
+  test('scheduled credential envRef가 .env의 NODE_OPTIONS --require를 child에 주입하지 못하게 기동 전 거부한다', async () => {
+    const root = temporaryRepository();
+    const registry = readJson(root, 'plugins/registry.json');
+    registry.collection = { schedule: { enabled: true, timezone: 'UTC', time: '00:00' } };
+    writeJson(root, 'plugins/registry.json', registry);
+    const connection = readJson(root, 'connections/mock-api-sample1.json');
+    connection.config.auth = { type: 'bearer', tokenRef: { env: 'NODE_OPTIONS' } };
+    writeJson(root, 'connections/mock-api-sample1.json', connection);
+    const injected = join(root, 'injected.cjs');
+    writeFileSync(injected, 'globalThis.__ossScpNodeOptionsExecuted = true;\n');
+    writeFileSync(join(root, '.env'), `NODE_OPTIONS=--require=${injected}\n`);
+    const previous = process.env.NODE_OPTIONS;
+    delete process.env.NODE_OPTIONS;
+    try {
+      loadEnvFile(join(root, '.env'));
+      const scheduled = await preflightConfiguration(root);
+      expect(scheduled.ok).toBe(false);
+      expect(globalThis.__ossScpNodeOptionsExecuted).toBeUndefined();
+
+      registry.collection.schedule.enabled = false;
+      writeJson(root, 'plugins/registry.json', registry);
+      expect((await preflightConfiguration(root)).ok).toBe(true);
+    } finally {
+      if (previous === undefined) delete process.env.NODE_OPTIONS; else process.env.NODE_OPTIONS = previous;
+      delete globalThis.__ossScpNodeOptionsExecuted;
+    }
   });
 
   test.each([

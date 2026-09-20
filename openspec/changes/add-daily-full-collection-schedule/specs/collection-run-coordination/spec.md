@@ -21,11 +21,23 @@
 
 #### Scenario: rolling restart의 서로 다른 revision 경합
 - **WHEN** 같은 plugin·source·scope를 가진 이전 revision과 새 revision 인스턴스가 동시에 실행권을 요청한다
-- **THEN** revision 비포함 lease를 얻은 하나만 running 상태가 되고 loser는 winner의 `activeRunId`를 참조하며, 이전 revision의 stale 결과는 새 실행 뒤 데이터를 확정하지 못하고 각 실행 이력에는 해당 revision이 보존된다
+- **THEN** revision 비포함 DB unique 제약으로 하나만 coordinated running 상태가 되고 uniqueness loser는 `RUN_ALREADY_ACTIVE`와 winner의 `activeRunId`를 받으며, 이전 revision의 stale 결과는 새 실행 뒤 데이터를 확정하지 못하고 각 실행 이력에는 해당 revision이 보존된다
+
+#### Scenario: 구버전과 신버전 lock 경합
+- **WHEN** rolling 배포 중 revision 포함 legacy lock을 사용하는 인스턴스와 revision 비포함 새 lock을 사용하는 인스턴스가 같은 대상·scope에 동시에 insert한다
+- **THEN** PostgreSQL과 MySQL의 DB 제약은 lock 이름과 무관하게 active run 하나만 허용하고 새 adapter가 관측한 unique 충돌을 `RUN_ALREADY_ACTIVE(activeRunId)`로 변환한다
+
+#### Scenario: migration 전 기존 중복 active run
+- **WHEN** active-run uniqueness migration을 적용할 DB에 같은 revision 비포함 lease identity의 coordinated running row가 둘 이상 있다
+- **THEN** migration은 실행 이력을 자동 삭제하거나 상태 변경하지 않고 실패해 운영자의 명시적 확인·정리를 요구한다
 
 #### Scenario: scheduled 자식 결과 검증
 - **WHEN** scheduled 자식 stdout이 상한을 넘거나 단일 JSON exact event schema, plugin·예정 metadata 또는 exit code와 일치하지 않는다
 - **THEN** 부모 scheduler는 active run 참조를 저장하지 않고 원문을 노출하지 않는 안전한 실패로 처리한다
+
+#### Scenario: winner 완료 뒤 duplicate event 도착
+- **WHEN** lease loser의 검증된 duplicate event가 부모에 도착하기 전에 referenced winner run이 완료된다
+- **THEN** storage는 현재 heartbeat/status를 다시 요구하지 않고 FK run의 plugin·source·scope identity가 일치하면 duplicate 참조를 저장하며, 존재하지 않거나 다른 scope의 run은 거부한다
 
 #### Scenario: PostgreSQL 실행 종료 경합
 - **WHEN** 둘 이상의 호출이 같은 PostgreSQL running run을 동시에 종료하려 한다

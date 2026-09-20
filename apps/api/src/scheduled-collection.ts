@@ -3,7 +3,7 @@ import { spawn, type ChildProcess } from 'node:child_process';
 import { createRequire } from 'node:module';
 import { collectionScope, MAX_PUBLIC_EVENT_BYTES, parsePublicEvent, type PublicEvent, type SerializedScheduledCollectionSnapshot } from '@oss-scp/collector-cli';
 import { PLATFORM_DB_ENVIRONMENT_KEYS, type CollectionScope, type RecordStorage } from '@oss-scp/platform-db';
-import { assertSelfContainedTransform, isLivePostgresDefinition, transformDigest, type CollectionDefinition, type CollectionSchedule } from '@oss-scp/plugin-config';
+import { assertSelfContainedTransform, isLivePostgresDefinition, scheduledCredentialEnvironment, transformDigest, type CollectionDefinition, type CollectionSchedule } from '@oss-scp/plugin-config';
 import { nextScheduledInstant } from './collection-schedule';
 import { definitionRevision } from './plugin-runtime-registry';
 
@@ -28,20 +28,12 @@ export interface ScheduledCollectionProcessRequest {
 }
 export type SpawnScheduledCollectionProcess = (request: ScheduledCollectionProcessRequest) => ChildProcess;
 
-function credentialEnvironment(definition: CollectionDefinition): string[] {
-  if (!('connection' in definition) || !('auth' in definition.connection) || !definition.connection.auth) return [];
-  const auth = definition.connection.auth;
-  if (auth.type === 'apiKey') return [auth.valueRef.env];
-  if (auth.type === 'bearer') return [auth.tokenRef.env];
-  return [auth.usernameRef.env, auth.passwordRef.env];
-}
-
 export function scheduledChildEnvironment(
   parent: Readonly<NodeJS.ProcessEnv>,
   definition: CollectionDefinition,
   metadata: Pick<ScheduledCollectionProcessRequest, 'configRoot' | 'expectedRevision' | 'scheduledAt' | 'timezone'>,
 ): NodeJS.ProcessEnv {
-  const allowed = new Set([...RUNTIME_ENVIRONMENT, ...PLATFORM_DB_ENVIRONMENT_KEYS, ...credentialEnvironment(definition)]);
+  const allowed = new Set([...RUNTIME_ENVIRONMENT, ...PLATFORM_DB_ENVIRONMENT_KEYS, ...scheduledCredentialEnvironment(definition)]);
   const environment: NodeJS.ProcessEnv = {};
   for (const [key, value] of Object.entries(parent)) {
     if (value === undefined || FORBIDDEN_ENVIRONMENT.test(key)) continue;
@@ -138,6 +130,7 @@ export class ScheduledCollectionManager {
   prepare(definitions: readonly CollectionDefinition[]): void {
     if (this.targets || this.started || this.closing) throw new Error('정기 수집 snapshot은 기동 전에 한 번만 준비할 수 있습니다.');
     this.targets = definitions.filter(definition => !isLivePostgresDefinition(definition)).map(definition => {
+      if (this.schedule.enabled) scheduledCredentialEnvironment(definition);
       const snapshot = captureScheduledCollectionSnapshot(definition);
       return { definition: snapshot.definition, expectedRevision: definitionRevision(snapshot.definition), snapshot };
     });

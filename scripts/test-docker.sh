@@ -50,7 +50,7 @@ let value=""; process.stdin.on("data", chunk => value += chunk); process.stdin.o
 docker compose -p "$project" up --build -d --wait --wait-timeout 90 postgres
 api_image_id="$(docker image inspect oss-scp-api:local --format '{{.Id}}')"
 web_image_id="$(docker image inspect oss-scp-web:local --format '{{.Id}}')"
-docker compose -p "$project" run --rm api node node_modules/@oss-scp/platform-db/dist/migrate-cli.js | grep -q '8개 적용'
+docker compose -p "$project" run --rm api node node_modules/@oss-scp/platform-db/dist/migrate-cli.js | grep -q '9개 적용'
 docker compose -p "$project" up -d --wait --wait-timeout 90 api
 check_response "http://127.0.0.1:${API_PORT}"
 curl --fail --silent --show-error --max-time 5 "http://127.0.0.1:${API_PORT}/api/v1/plugin-menus" | grep -q 'sample1-offset-api'
@@ -66,7 +66,7 @@ docker compose -p "$project" run --rm api node node_modules/@oss-scp/collector-c
 docker compose -p "$project" stop postgres
 docker compose -p "$project" rm -f postgres
 docker compose -p "$project" up -d --wait --wait-timeout 90 postgres api
-test "$(docker compose -p "$project" exec -T postgres psql -U oss_scp_app -d oss_scp -Atc 'select count(*) from oss_scp_schema_migrations')" = 8
+test "$(docker compose -p "$project" exec -T postgres psql -U oss_scp_app -d oss_scp -Atc 'select count(*) from oss_scp_schema_migrations')" = 9
 test "$(docker inspect "${project}-postgres-1" --format '{{json .NetworkSettings.Ports}}')" = '{"5432/tcp":null}'
 docker run -d --name "$standalone" --network "${project}_default" -p 127.0.0.1::3000 \
   -v "$OSS_SCP_CONFIG_PATH:/config:ro" -e OSS_SCP_CONFIG_ROOT=/config \

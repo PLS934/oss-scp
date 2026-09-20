@@ -50,7 +50,7 @@
 - **THEN** 플랫폼은 놓친 scheduled 실행을 보충하지 않고 재시작 이후의 다음 발생만 예약하며 독립적인 기동 수집은 기존 계약대로 요청한다
 
 ### Requirement: 설정 snapshot과 안전한 종료
-실행 중인 API는 기동 시 검증한 일정, runtime definition, revision과 정확한 transform 바이트 digest/source의 불변 snapshot을 계속 사용해야 하며(SHALL), 설정·transform 파일 변경은 성공적인 재기동 뒤에만 적용해야 한다(MUST). scheduled transform은 self-contained 순수 mapping AST allowlist를 충족해야 한다(SHALL). identifier는 참조 위치의 lexical scope chain에서만 해석해야 하며(MUST), sibling·nested scope binding을 ambient 참조 허용에 사용해서는 안 된다(MUST NOT). 순수 mapping 계약 안의 `async` arrow와 `AwaitExpression`은 허용해야 한다(SHALL). allowlist 밖의 구문·ambient identifier·동적 computed access·constructor/prototype chain 및 상대·절대·package import/require/module loader를 module top-level 실행 전에 기본 거부해야 한다(MUST). 이 제한은 schedule 활성 경로에 적용하고 비-scheduled transform 로딩 계약을 바꾸지 않아야 한다(MUST). scheduled 자식은 snapshot 구조·revision·정확한 바이트 digest를 transform module top-level 실행 전에 검증하고 검증한 바이트 자체를 파일 재조회 없이 실행해야 한다(SHALL). 자식 환경에는 필수 runtime 값, platform DB loader가 명시적으로 지원하는 설정 key와 해당 대상 Connection이 참조하는 수집 credential만 전달해야 하며(MUST), unknown `PLATFORM_DB_*`, `AUTH_*`, `LDAP_*` 및 무관한 부모 환경은 전달해서는 안 된다(MUST NOT). 종료 시 pending timer를 취소하고 시작된 scheduled 자식 수집에 `SIGTERM`을 전달한 뒤 grace period 안에 종료하지 않으면 `SIGKILL`해야 한다(SHALL). process exit 상태와 별개로 실제 `close`까지 유한 상한 안에서 기다려 결과 handler를 등록하고, 등록된 결과 영속화도 별도 고정 상한 안에서 drain해야 한다(SHALL). close 상한 뒤 늦게 도착한 child callback은 새 storage 작업을 시작해서는 안 된다(MUST NOT).
+실행 중인 API는 기동 시 검증한 일정, runtime definition, revision과 정확한 transform 바이트 digest/source의 불변 snapshot을 계속 사용해야 하며(SHALL), 설정·transform 파일 변경은 성공적인 재기동 뒤에만 적용해야 한다(MUST). scheduled transform은 self-contained 순수 mapping AST allowlist를 충족해야 한다(SHALL). identifier는 참조 위치의 lexical scope chain에서만 해석해야 하며(MUST), sibling·nested scope binding을 ambient 참조 허용에 사용해서는 안 된다(MUST NOT). 순수 mapping 계약 안의 `async` arrow와 `AwaitExpression`은 허용해야 한다(SHALL). allowlist 밖의 구문·ambient identifier·동적 computed access·constructor/prototype chain 및 상대·절대·package import/require/module loader를 module top-level 실행 전에 기본 거부해야 한다(MUST). 이 제한은 schedule 활성 경로에 적용하고 비-scheduled transform 로딩 계약을 바꾸지 않아야 한다(MUST). scheduled 자식은 snapshot 구조·revision·정확한 바이트 digest를 transform module top-level 실행 전에 검증하고 검증한 바이트 자체를 파일 재조회 없이 실행해야 한다(SHALL). 자식 환경에는 필수 runtime 값, platform DB loader가 명시적으로 지원하는 설정 key와 해당 대상 Connection이 참조하는 수집 credential만 전달해야 하며(MUST), unknown `PLATFORM_DB_*`, `AUTH_*`, `LDAP_*` 및 무관한 부모 환경은 전달해서는 안 된다(MUST NOT). 대상 credential `envRef`가 Node 또는 OS dynamic loader의 process-control 환경 이름이면 schedule 활성 preflight에서 거부해야 하며(MUST), 비-scheduled 로딩 계약은 유지해야 한다(MUST). 종료 시 pending timer를 취소하고 시작된 scheduled 자식 수집에 `SIGTERM`을 전달한 뒤 grace period 안에 종료하지 않으면 `SIGKILL`해야 한다(SHALL). process exit 상태와 별개로 실제 `close`까지 유한 상한 안에서 기다려 결과 handler를 등록하고, 등록된 결과 영속화도 별도 고정 상한 안에서 drain해야 한다(SHALL). close 상한 뒤 늦게 도착한 child callback은 새 storage 작업을 시작해서는 안 된다(MUST NOT).
 
 #### Scenario: 실행 중 설정 변경
 - **WHEN** API 기동 뒤 외부 설정의 일정, registry 또는 transform 파일이 변경된다
@@ -87,6 +87,10 @@
 #### Scenario: 알 수 없는 platform DB 환경 변수
 - **WHEN** API 부모 환경에 platform DB loader가 지원하지 않는 `PLATFORM_DB_*` 변수가 있다
 - **THEN** scheduled 자식에는 명시적으로 지원하는 platform DB 설정 key만 전달되고 알 수 없는 변수는 전달되지 않는다
+
+#### Scenario: credential을 통한 process-control 환경 주입
+- **WHEN** schedule 활성 대상의 credential `envRef`가 `.env`의 `NODE_OPTIONS=--require=...`, `NODE_PATH`, `LD_PRELOAD`, `LD_LIBRARY_PATH`, `DYLD_*` 또는 동등 loader 설정을 가리킨다
+- **THEN** 플랫폼은 child를 생성하기 전 preflight를 fail closed 실패시키며 해당 제한은 비-scheduled 대상 계약을 변경하지 않는다
 
 #### Scenario: 종료 중 scheduled 수집
 - **WHEN** 예정 수집이 진행 중인 동안 API가 종료 신호를 받는다

@@ -31,7 +31,9 @@ export { isLivePostgresDefinition, validateReadQuery } from './source-loaders/db
 export { resolveSecret } from './secrets';
 export { HttpAuthenticationError, resolveHttpAuthenticationHeaders } from './http-auth';
 export { assertSelfContainedTransform, loadSelfContainedTransformSnapshot, loadTransformSnapshot, MAX_TRANSFORM_BYTES, transformDigest } from './transform-snapshot';
+export { scheduledCredentialEnvironment } from './scheduled-environment';
 import { assertSelfContainedTransform, loadTransformSnapshot, transformDigest } from './transform-snapshot';
+import { scheduledCredentialEnvironment } from './scheduled-environment';
 
 interface ConnectionRegistry {
   plugins?: string[];
@@ -671,7 +673,10 @@ export async function preflightConfiguration(rootDirectory: string): Promise<Con
     try {
       const source = readFileSync(definition.plugin.transformPath);
       const digest = transformDigest(source);
-      if (result.collection.schedule.enabled && !isLivePostgresDefinition(definition)) assertSelfContainedTransform(source);
+      if (result.collection.schedule.enabled && !isLivePostgresDefinition(definition)) {
+        scheduledCredentialEnvironment(definition);
+        assertSelfContainedTransform(source);
+      }
       loadTransformSnapshot(source, definition.plugin.transformPath);
       definitions.push({ ...definition, plugin: { ...definition.plugin, transformDigest: digest } });
     } catch {

@@ -59,6 +59,10 @@ describe('PostgreSQL 어댑터', () => {
 });
 
 describe('migration', () => {
+  it('PostgreSQL 기본 migration 버전을 순서대로 발견한다', () => {
+    expect(discoverMigrations(defaultMigrationsDirectory('postgres')).map(item => item.version)).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9]);
+  });
+
   it('CLI 설정·연결 실패가 0이 아닌 코드와 비밀정보 없는 오류를 반환한다', () => {
     const missing = spawnSync(process.execPath, ['dist/migrate-cli.js'], { cwd: join(import.meta.dirname, '..'), encoding: 'utf8', env: {} });
     expect(missing.status).not.toBe(0);
@@ -100,6 +104,25 @@ describe('migration', () => {
     try {
       expect((await Promise.all([runMigrations(first, [migration], 5000), runMigrations(second, [migration], 5000)])).sort()).toEqual([0, 1]);
     } finally { await Promise.all([first.close(), second.close()]); }
+  });
+  it('기존 중복 active run이 있으면 uniqueness migration을 비파괴적으로 거부한다', async () => {
+    const connection = await postgresAdapter.connect(config());
+    const migrations = discoverMigrations(defaultMigrationsDirectory('postgres'));
+    const pluginId = `migration-duplicate-${randomUUID()}`;
+    try {
+      await runMigrations(connection, migrations.slice(0, -1), 5000);
+      await connection.withClient(client => client.query(`INSERT INTO collection_runs
+        (plugin_id, source_id, scope_type, scope_key, config_revision, started_at, heartbeat_at, coordinated)
+        VALUES ($1,'source','full','','rev-1',now(),now(),true), ($1,'source','full','','rev-2',now(),now(),true)`, [pluginId]));
+      await expect(runMigrations(connection, migrations, 5000)).rejects.toMatchObject({ code: 'MIGRATION_FAILED' });
+      const evidence = await connection.withClient(client => client.query(`SELECT
+        (SELECT count(*)::int FROM collection_runs WHERE plugin_id=$1) AS runs,
+        (SELECT count(*)::int FROM oss_scp_schema_migrations WHERE version=9) AS migration`, [pluginId]));
+      expect(evidence.rows[0]).toEqual({ runs: 2, migration: 0 });
+    } finally {
+      await connection.withClient(client => client.query('DELETE FROM collection_runs WHERE plugin_id=$1', [pluginId]));
+      await connection.close();
+    }
   });
 });
 
@@ -480,6 +503,38 @@ describe('PostgreSQL 공통 레코드 저장 계약', () => {
     } finally { await otherConnection.close(); }
   });
 
+  it('legacy revision lock과 새 lease lock 경합도 DB uniqueness로 한 실행만 허용한다', async () => {
+    const oldScope = testScope('rolling-lock-race');
+    const newScope = { ...oldScope, configRevision: 'rev-2' };
+    const legacyConnection = await postgresAdapter.connect(config());
+    let attempted;
+    let legacyRunId;
+    try {
+      await legacyConnection.withClient(async client => {
+        await client.query('BEGIN');
+        try {
+          await client.query('SELECT pg_advisory_xact_lock(hashtextextended($1, 0))', [Object.values(oldScope).join('\u001f')]);
+          const inserted = await client.query(`INSERT INTO collection_runs
+            (plugin_id, source_id, scope_type, scope_key, config_revision, started_at, heartbeat_at, coordinated, trigger)
+            VALUES ($1,$2,$3,$4,$5,$6,now(),true,'startup') RETURNING id`,
+          [oldScope.pluginId, oldScope.sourceId, oldScope.scopeType, oldScope.scopeKey, oldScope.configRevision, '2026-09-20T15:00:00.000Z']);
+          legacyRunId = inserted.rows[0].id;
+          attempted = storage.startRun({ ...newScope, startedAt: '2026-09-20T15:00:01.000Z', exclusive: true })
+            .then(value => ({ value }), error => ({ error }));
+          await new Promise(resolve => setTimeout(resolve, 50));
+          await client.query('COMMIT');
+        } catch (error) { await client.query('ROLLBACK'); throw error; }
+      });
+      const outcome = await attempted;
+      expect(outcome.error).toMatchObject({ code: 'RUN_ALREADY_ACTIVE', activeRunId: legacyRunId });
+      const active = await connection.withClient(client => client.query(`SELECT count(*)::int AS count FROM collection_runs
+        WHERE plugin_id=$1 AND source_id=$2 AND scope_type=$3 AND scope_key=$4 AND status='running' AND coordinated`,
+      [oldScope.pluginId, oldScope.sourceId, oldScope.scopeType, oldScope.scopeKey]));
+      expect(active.rows[0].count).toBe(1);
+      await storage.finishRun({ runId: legacyRunId, status: 'failed', finishedAt: '2026-09-20T15:01:00.000Z' });
+    } finally { await legacyConnection.close(); }
+  });
+
   it('동일 PostgreSQL run의 finishRun 경합은 하나만 상태를 전이한다', async () => {
     const scope = testScope('finish-race');
     const runId = await storage.startRun({ ...scope, startedAt: new Date().toISOString() });
@@ -517,14 +572,16 @@ describe('PostgreSQL 공통 레코드 저장 계약', () => {
       const runId = results.find(result => result.status === 'fulfilled').value;
       expect(results.filter(result => result.status === 'rejected')[0].reason).toMatchObject({ code: 'RUN_ALREADY_ACTIVE', activeRunId: runId });
       const reference = { ...scope, activeRunId: runId, scheduledAt: input.scheduledAt, scheduleTimezone: input.scheduleTimezone, observedAt: '2026-09-20T13:00:02.000Z' };
+      await storage.finishRun({ runId, status: 'failed', finishedAt: '2026-09-20T13:01:00.000Z' });
       await otherStorage.recordScheduledDuplicate(reference);
       await otherStorage.recordScheduledDuplicate(reference);
+      await expect(otherStorage.recordScheduledDuplicate({ ...reference, activeRunId: randomUUID() })).rejects.toMatchObject({ code: 'RUN_NOT_FOUND' });
+      await expect(otherStorage.recordScheduledDuplicate({ ...reference, pluginId: `${scope.pluginId}-other` })).rejects.toMatchObject({ code: 'RUN_NOT_FOUND' });
       const persisted = await connection.withClient(client => client.query(`SELECT r.active_run_id, r.scheduled_at, r.schedule_timezone, c.plugin_id
         FROM scheduled_collection_references r JOIN collection_runs c ON c.id=r.active_run_id WHERE r.active_run_id=$1`, [runId]));
       expect(persisted.rows).toHaveLength(1);
       expect(persisted.rows[0]).toMatchObject({ active_run_id: runId, schedule_timezone: 'Asia/Seoul', plugin_id: scope.pluginId });
       expect(persisted.rows[0].scheduled_at.toISOString()).toBe(input.scheduledAt);
-      await storage.finishRun({ runId, status: 'failed', finishedAt: '2026-09-20T13:01:00.000Z' });
     } finally { await otherConnection.close(); }
   });
 });
