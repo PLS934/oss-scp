@@ -135,8 +135,19 @@ docker run -d --name "$scheduled_peer" --network "${project}_default" \
   -e PLATFORM_DB_NAME=oss_scp -e PLATFORM_DB_USER=oss_scp_app -e PLATFORM_DB_PASSWORD="$PLATFORM_DB_PASSWORD" \
   -e PLATFORM_DB_TLS_MODE=disable oss-scp-api:local >/dev/null
 wait_health "$scheduled_peer" healthy
+# 빠른 로컬 fixture 수집의 실행 시간이 호스트 성능에 따라 달라져도 두 scheduler가
+# 동일한 fresh lease winner를 관찰하도록 고정합니다. 이후 reference는 실제 child
+# process와 DB 경계를 통과해 저장되어야 합니다.
+docker compose -p "$project" exec -T postgres psql -U oss_scp_app -d oss_scp -v ON_ERROR_STOP=1 -c "
+  INSERT INTO collection_runs
+    (plugin_id, source_id, scope_type, scope_key, config_revision, started_at, heartbeat_at,
+     coordinated, trigger, scheduled_at, schedule_timezone)
+  VALUES
+    ('sample1-offset-api', 'mock-api-sample1', 'full', '', 'docker-smoke-active-lease', now(), now(),
+     true, 'scheduled', now(), 'UTC');
+" >/dev/null
 for ((attempt=0; attempt<150; attempt++)); do
-  scheduled_count=$(docker compose -p "$project" exec -T postgres psql -U oss_scp_app -d oss_scp -Atc "SELECT count(*) FROM collection_runs WHERE trigger='scheduled' AND schedule_timezone='UTC'")
+  scheduled_count=$(docker compose -p "$project" exec -T postgres psql -U oss_scp_app -d oss_scp -Atc "SELECT count(*) FROM collection_runs WHERE trigger='scheduled' AND schedule_timezone='UTC' AND config_revision <> 'docker-smoke-active-lease'")
   if [ "$scheduled_count" -gt 0 ]; then break; fi
   sleep 1
 done
