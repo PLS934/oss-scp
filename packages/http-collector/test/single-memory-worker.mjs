@@ -1,4 +1,5 @@
 import { fork } from 'node:child_process';
+import { once } from 'node:events';
 import { createServer } from 'node:http';
 import { setImmediate } from 'node:timers';
 import { fileURLToPath } from 'node:url';
@@ -7,6 +8,7 @@ import { collectHttpSingle } from '../dist/index.js';
 const workerPath = fileURLToPath(import.meta.url);
 
 if (process.argv[2] === 'server') {
+  let closing = false;
   const server = createServer((request, response) => {
     const requestedCount = Number(
       new URL(request.url, 'http://localhost').searchParams.get('count'),
@@ -27,10 +29,21 @@ if (process.argv[2] === 'server') {
       payloadBytes: Buffer.byteLength(body),
     });
   });
+  const closeServer = () => {
+    if (closing) return;
+    closing = true;
+    server.close((error) => {
+      if (process.connected) process.disconnect();
+      process.exit(error ? 1 : 0);
+    });
+  };
   process.on('message', (message) => {
     if (message?.type !== 'shutdown') return;
-    server.close((error) => process.exit(error ? 1 : 0));
+    closeServer();
   });
+  process.once('disconnect', closeServer);
+  process.once('SIGINT', closeServer);
+  process.once('SIGTERM', closeServer);
   await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
   process.send?.({ type: 'ready', port: server.address().port });
 } else {
@@ -68,6 +81,53 @@ if (process.argv[2] === 'server') {
     });
   }
 
+  function waitForExit(child, label, timeoutMs = 1000) {
+    if (child.exitCode !== null || child.signalCode !== null) {
+      return Promise.resolve({ code: child.exitCode, signal: child.signalCode });
+    }
+    return once(child, 'exit', { signal: AbortSignal.timeout(timeoutMs) })
+      .then(([code, signal]) => ({ code, signal }))
+      .catch((error) => {
+        throw new Error(`failed waiting for server ${label}`, { cause: error });
+      });
+  }
+
+  async function stopServer(child) {
+    if (child.exitCode !== null || child.signalCode !== null) {
+      return { code: child.exitCode, signal: child.signalCode };
+    }
+
+    const gracefulExit = waitForExit(child, 'shutdown');
+    let shutdownSent = false;
+    if (child.connected) {
+      try {
+        child.send({ type: 'shutdown' }, (error) => {
+          if (error && child.exitCode === null && child.signalCode === null) {
+            child.kill('SIGTERM');
+          }
+        });
+        shutdownSent = true;
+      } catch {
+        // The fallback below terminates and observes a child whose IPC channel closed early.
+      }
+    }
+    if (!shutdownSent) child.kill('SIGTERM');
+
+    try {
+      return await gracefulExit;
+    } catch {
+      const terminated = waitForExit(child, 'SIGTERM');
+      child.kill('SIGTERM');
+      try {
+        return await terminated;
+      } catch {
+        const killed = waitForExit(child, 'SIGKILL');
+        child.kill('SIGKILL');
+        return killed;
+      }
+    }
+  }
+
   async function stabilizeHeap() {
     const samples = [];
     for (let turn = 0; turn < 6; turn += 1) {
@@ -91,6 +151,15 @@ if (process.argv[2] === 'server') {
       (message) => message?.type === 'ready',
       'readiness',
     );
+    if (process.argv.includes('--wait-for-parent-kill')) {
+      process.stdout.write(`${JSON.stringify({
+        schemaVersion: 1,
+        serverPid: child.pid,
+        serverPort: ready.port,
+      })}\n`);
+      await once(child, 'exit');
+      throw new Error('server exited before its parent was terminated');
+    }
     const baseDefinition = {
       plugin: { id: 'memory', name: 'Memory', version: '0.1.0' },
       connection: { id: 'memory', baseUrl: `http://127.0.0.1:${ready.port}` },
@@ -119,12 +188,7 @@ if (process.argv[2] === 'server') {
     });
     const measuredHeapBytes = await stabilizeHeap();
 
-    const exit = new Promise((resolve, reject) => {
-      child.once('error', reject);
-      child.once('exit', (code, signal) => resolve({ code, signal }));
-    });
-    child.send({ type: 'shutdown' });
-    serverResult = await exit;
+    serverResult = await stopServer(child);
 
     process.stdout.write(JSON.stringify({
       schemaVersion: 1,
@@ -140,8 +204,6 @@ if (process.argv[2] === 'server') {
       },
     }));
   } finally {
-    if (serverResult === undefined && child.exitCode === null && child.signalCode === null) {
-      child.kill('SIGTERM');
-    }
+    if (serverResult === undefined) await stopServer(child);
   }
 }
