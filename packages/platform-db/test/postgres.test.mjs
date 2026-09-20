@@ -432,6 +432,18 @@ describe('PostgreSQL 공통 레코드 저장 계약', () => {
     await commit(second, scope);
   });
 
+  it('동일 PostgreSQL run의 finishRun 경합은 하나만 상태를 전이한다', async () => {
+    const scope = testScope('finish-race');
+    const runId = await storage.startRun({ ...scope, startedAt: new Date().toISOString() });
+    const results = await Promise.allSettled([
+      storage.finishRun({ runId, status: 'success', finishedAt: '2026-09-20T13:01:00.000Z' }),
+      storage.finishRun({ runId, status: 'success', finishedAt: '2026-09-20T13:01:01.000Z' }),
+    ]);
+    expect(results.filter(result => result.status === 'fulfilled')).toHaveLength(1);
+    expect(results.filter(result => result.status === 'rejected')).toHaveLength(1);
+    expect(results.find(result => result.status === 'rejected').reason).toMatchObject({ code: 'RUN_NOT_ACTIVE' });
+  });
+
   it('scheduled는 startup·CLI·API와 lease를 공유하고 다중 인스턴스 중 하나만 실행권을 얻는다', async () => {
     for (const [trigger, extra] of [['startup', {}], ['cli', {}], ['api', { requestId: randomUUID() }]]) {
       const scope = testScope(`scheduled-conflict-${trigger}`);
@@ -454,8 +466,8 @@ describe('PostgreSQL 공통 레코드 저장 계약', () => {
       };
       const results = await Promise.allSettled([storage.startRun(input), otherStorage.startRun(input)]);
       expect(results.filter(result => result.status === 'fulfilled')).toHaveLength(1);
-      expect(results.filter(result => result.status === 'rejected')[0].reason).toMatchObject({ code: 'RUN_ALREADY_ACTIVE' });
       const runId = results.find(result => result.status === 'fulfilled').value;
+      expect(results.filter(result => result.status === 'rejected')[0].reason).toMatchObject({ code: 'RUN_ALREADY_ACTIVE', activeRunId: runId });
       await storage.finishRun({ runId, status: 'failed', finishedAt: '2026-09-20T13:01:00.000Z' });
     } finally { await otherConnection.close(); }
   });

@@ -36,7 +36,7 @@ export interface DataTypeDefinition {
 }
 export interface RelationDefinition { from: { types: string[] }; to: { types: string[] }; }
 export interface PluginDataDefinition { types: Record<string, DataTypeDefinition>; relations?: Record<string, RelationDefinition>; }
-export interface PluginRuntimeDefinition { id: string; name: string; version: string; transformPath: string; data: PluginDataDefinition; menu?: PluginMenuDefinition; }
+export interface PluginRuntimeDefinition { id: string; name: string; version: string; transformPath: string; transformDigest?: string; data: PluginDataDefinition; menu?: PluginMenuDefinition; }
 
 export interface SourceConfigBase {
   apiVersion: 'oss-scp/source-v1';

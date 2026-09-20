@@ -45,13 +45,14 @@ async function bootstrap() {
   })() : { config: authConfig };
   const startup = new StartupCollectionManager(configRoot);
   const scheduled = new ScheduledCollectionManager(configRoot, configuration.collection.schedule);
+  scheduled.prepare(registry.definitions);
   const app = await NestFactory.create(AppModule.register(connection, query, registry, startup, undefined, { configRoot }, auth, scheduled), { abortOnError: false });
   if (authConfig.enabled) app.getHttpAdapter().getInstance().set('trust proxy', authConfig.trustedProxyHops);
   app.enableShutdownHooks();
   try {
     await app.listen(port, host);
     startup.start(registry.definitions);
-    scheduled.start(registry.definitions);
+    scheduled.start();
   } catch (error) {
     await app.close();
     await connection.close();

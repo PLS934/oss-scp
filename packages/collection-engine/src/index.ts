@@ -1,5 +1,5 @@
 import { pathToFileURL } from 'node:url';
-import type { FieldDefinition, PluginRuntimeDefinition } from '@oss-scp/plugin-config';
+import { loadTransformSnapshot, type FieldDefinition, type PluginRuntimeDefinition } from '@oss-scp/plugin-config';
 import type { Transform, TransformOutput, TransformRecord, TransformRelation } from '@oss-scp/plugin-sdk';
 
 export const TRANSFORM_LIMITS = {
@@ -46,6 +46,11 @@ export async function loadTransform(transformPath: string): Promise<Transform> {
     moduleCache.set(transformPath, pending);
   }
   return pending;
+}
+
+export function loadTransformBytes(source: Uint8Array, filename: string): Transform {
+  try { return loadTransformSnapshot(source, filename) as Transform; }
+  catch { throw new TransformExecutionError('MODULE_LOAD_FAILED'); }
 }
 
 export function clearTransformCache(): void { moduleCache.clear(); }

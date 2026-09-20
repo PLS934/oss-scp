@@ -50,13 +50,20 @@
 - **THEN** 플랫폼은 놓친 scheduled 실행을 보충하지 않고 재시작 이후의 다음 발생만 예약하며 독립적인 기동 수집은 기존 계약대로 요청한다
 
 ### Requirement: 설정 snapshot과 안전한 종료
-실행 중인 API는 기동 시 검증한 일정과 registry snapshot을 계속 사용해야 하며(SHALL), 파일 변경은 성공적인 재기동 뒤에만 적용해야 한다(MUST). 종료 시 pending timer를 취소하고 시작된 scheduled 자식 수집에 기존 취소 계약을 전달해야 한다(SHALL).
+실행 중인 API는 기동 시 검증한 일정, runtime definition, revision과 정확한 transform 바이트 digest/source의 불변 snapshot을 계속 사용해야 하며(SHALL), 설정·transform 파일 변경은 성공적인 재기동 뒤에만 적용해야 한다(MUST). scheduled 자식은 snapshot 구조·revision·정확한 바이트 digest를 transform module top-level 실행 전에 검증하고 검증한 바이트 자체를 실행해야 한다(SHALL). 자식 환경에는 필수 runtime 값, `PLATFORM_DB_*`와 해당 대상 Connection이 참조하는 수집 credential만 전달해야 하며(MUST), `AUTH_*`, `LDAP_*` 및 무관한 부모 환경은 전달해서는 안 된다(MUST NOT). 종료 시 pending timer를 취소하고 시작된 scheduled 자식 수집에 `SIGTERM`을 전달한 뒤 grace period 안에 종료하지 않으면 `SIGKILL`하고, close 대기를 유한 상한 안에 끝내야 한다(SHALL).
 
 #### Scenario: 실행 중 설정 변경
-- **WHEN** API 기동 뒤 외부 설정의 일정 또는 registry가 변경된다
-- **THEN** 현재 프로세스의 일정과 대상 snapshot은 바뀌지 않고 재기동 검증 뒤에만 새 설정이 적용된다
+- **WHEN** API 기동 뒤 외부 설정의 일정, registry 또는 transform 파일이 변경된다
+- **THEN** 현재 프로세스의 일정, 대상 definition과 실행할 transform 바이트는 바뀌지 않고 재기동 검증 뒤에만 새 값이 적용된다
+
+#### Scenario: transform 교체 경쟁
+- **WHEN** 기동 snapshot을 만든 뒤 자식이 실행되기 전 transform 파일이 교체되거나 전달된 snapshot의 구조·revision·digest가 일치하지 않는다
+- **THEN** 자식은 현재 파일을 import하지 않고 불일치한 snapshot의 module top-level도 실행하지 않으며, 검증한 snapshot 바이트만 실행할 수 있다
+
+#### Scenario: scheduled 자식 환경 격리
+- **WHEN** API 부모 환경에 플랫폼 DB, 대상 수집 credential, 인증·LDAP와 무관한 비밀이 함께 있다
+- **THEN** scheduled 자식에는 플랫폼 DB와 해당 대상 수집에 필요한 값만 전달되고 `AUTH_*`, `LDAP_*`와 무관한 비밀은 전달되지 않는다
 
 #### Scenario: 종료 중 scheduled 수집
 - **WHEN** 예정 수집이 진행 중인 동안 API가 종료 신호를 받는다
-- **THEN** pending timer를 제거하고 진행 중 자식 수집에 취소를 전달하며 완료되지 않은 실행을 성공으로 기록하지 않는다
-
+- **THEN** pending timer를 제거하고 진행 중 자식에 `SIGTERM`을 전달하며 grace 뒤 생존 자식은 `SIGKILL`하고, 유한한 대기 상한 안에 종료 lifecycle을 반환하며 완료되지 않은 실행을 성공으로 기록하지 않는다

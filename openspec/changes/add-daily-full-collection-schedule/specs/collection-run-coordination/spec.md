@@ -17,7 +17,11 @@
 
 #### Scenario: 여러 API 인스턴스의 scheduled 실행
 - **WHEN** 같은 설정 revision을 사용하는 API 인스턴스 둘 이상이 동일 대상의 예정 시각을 관측한다
-- **THEN** DB 실행권을 얻은 하나만 원천 수집을 수행하고 나머지 요청은 현재 실행을 참조한다
+- **THEN** DB 실행권을 얻은 하나만 원천 수집과 running 상태 전이를 수행하고 나머지 요청은 실패 이력을 만들지 않으며 현재 `activeRunId`, 예정 UTC instant와 timezone을 참조한다
+
+#### Scenario: PostgreSQL 실행 종료 경합
+- **WHEN** 둘 이상의 호출이 같은 PostgreSQL running run을 동시에 종료하려 한다
+- **THEN** 유효 lease를 가진 running row를 잠근 하나만 상태를 전이하고 나머지는 `RUN_NOT_ACTIVE`로 거부된다
 
 ### Requirement: trigger와 요청 상관관계를 비밀정보 없이 기록한다
 플랫폼은 실행 이력에서 `startup | scheduled | cli | api` trigger를 구분해야 한다(SHALL). scheduled 대상 실행에는 예정 UTC instant와 설정 IANA timezone을 기록하고, 수동 API 실행에는 요청 식별자와 대상 실행의 상관관계를 조회할 수 있어야 한다(SHALL). 이 상관관계에는 인증 자격증명, Connection 비밀, 원천 응답이나 사용자 제공 임의 문자열을 기록해서는 안 된다(MUST NOT).
@@ -33,4 +37,3 @@
 #### Scenario: 기존 trigger 호환성
 - **WHEN** 기동 수집 또는 수동 CLI 실행이 완료된다
 - **THEN** 기존 데이터·checkpoint 의미를 유지하면서 해당 trigger 종류가 실행 이력에 식별된다
-

@@ -26,3 +26,12 @@
 
 - [x] 5.1 API, collector CLI, platform DB focused 테스트와 `pnpm lint`, `pnpm typecheck`, `pnpm test`, `pnpm build`를 통과시킨다.
 - [x] 5.2 `openspec validate add-daily-full-collection-schedule --strict`와 관련 process/Docker 통합 검증을 통과시키고 모든 acceptance scenario에 자동 또는 명시적 smoke 근거가 있는지 확인한다.
+
+## 6. 리뷰 보강
+
+- [x] 6.1 기동 시 definition과 정확한 transform 바이트 digest/source를 불변 snapshot으로 고정하고, 자식이 module top-level 실행 전에 구조·revision·digest를 검증한 뒤 검증한 바이트 자체를 실행하는 회귀 테스트를 통과시킨다.
+- [x] 6.2 scheduled 자식 환경을 runtime·`PLATFORM_DB_*`·대상 Connection credential allowlist로 제한하고 `AUTH_*`·`LDAP_*`가 전달되지 않는 테스트를 통과시킨다.
+- [x] 6.3 종료 grace 뒤 생존 자식에 `SIGKILL`을 보내고 close 대기를 상한 안에 끝내는 lifecycle 테스트를 통과시킨다.
+- [x] 6.4 PostgreSQL `finishRun`을 transaction row lock으로 fencing하고 동일 run 경합에서 하나만 전이되는 실제 DB 테스트를 통과시킨다.
+- [x] 6.5 scheduled lease loser가 실패 이력을 만들지 않고 `activeRunId`·예정 instant·timezone을 보존하는 다중 인스턴스 충돌 테스트를 통과시킨다.
+- [x] 6.6 focused·전체·process·Docker 검증과 strict OpenSpec 검증을 다시 통과시킨다.

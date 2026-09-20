@@ -1,6 +1,5 @@
 import Ajv2020, { type ErrorObject, type ValidateFunction } from 'ajv/dist/2020';
 import { existsSync, readFileSync, realpathSync } from 'node:fs';
-import { createRequire } from 'node:module';
 import { basename, isAbsolute, join, relative, resolve, sep } from 'node:path';
 import { loadSourceDefinition } from './source-loader';
 import { loadLocalCsvSource } from './source-loaders/file';
@@ -31,6 +30,8 @@ export type * from './types';
 export { isLivePostgresDefinition, validateReadQuery } from './source-loaders/db';
 export { resolveSecret } from './secrets';
 export { HttpAuthenticationError, resolveHttpAuthenticationHeaders } from './http-auth';
+export { loadTransformSnapshot, MAX_TRANSFORM_BYTES, transformDigest } from './transform-snapshot';
+import { loadTransformSnapshot, transformDigest } from './transform-snapshot';
 
 interface ConnectionRegistry {
   plugins?: string[];
@@ -661,21 +662,20 @@ export function validateRepository(rootDirectory: string): ConfigurationResult {
   return errors.length > 0 ? { ok: false, errors } : { ok: true, definitions, menus, plugins, pluginDetails, collection: pluginRegistry.collection };
 }
 
-const loadModule = createRequire(__filename);
-
 export async function preflightConfiguration(rootDirectory: string): Promise<ConfigurationResult> {
   const result = validateRepository(rootDirectory);
   if (!result.ok) return result;
   const errors: ConfigurationIssue[] = [];
+  const definitions: CollectionDefinition[] = [];
   for (const definition of result.definitions) {
     try {
-      const loaded = loadModule(definition.plugin.transformPath) as { transform?: unknown };
-      if (typeof loaded.transform !== 'function') {
-        issue(errors, resolve(rootDirectory), definition.plugin.transformPath, '/transform', `plugin ${definition.plugin.id} must export transform`);
-      }
+      const source = readFileSync(definition.plugin.transformPath);
+      const digest = transformDigest(source);
+      loadTransformSnapshot(source, definition.plugin.transformPath);
+      definitions.push({ ...definition, plugin: { ...definition.plugin, transformDigest: digest } });
     } catch {
       issue(errors, resolve(rootDirectory), definition.plugin.transformPath, '/transform', `plugin ${definition.plugin.id} module cannot be loaded`);
     }
   }
-  return errors.length > 0 ? { ok: false, errors } : result;
+  return errors.length > 0 ? { ok: false, errors } : { ...result, definitions };
 }

@@ -93,14 +93,19 @@ export function createPostgresRecordStorage(connection: PostgresPlatformDbConnec
       if (!input.runId || Number.isNaN(Date.parse(input.finishedAt)) || !['success', 'partial', 'failed'].includes(input.status)) throw new StorageError('INVALID_INPUT');
       try {
         await connection.withClient(async client => {
-          const found = await client.query<{ status: string; isolated_count: string; coordinated: boolean; lease_valid: boolean }>(`SELECT status, isolated_count, coordinated,
-            heartbeat_at > now() - interval '2 minutes' AS lease_valid FROM collection_runs WHERE id=$1`, [input.runId]);
-          const run = found.rows[0];
-          if (!run) throw new StorageError('RUN_NOT_FOUND');
-          if (run.status !== 'running') throw new StorageError('RUN_NOT_ACTIVE');
-          if (run.coordinated && !run.lease_valid) throw new StorageError('RUN_NOT_ACTIVE');
-          if ((input.status === 'success' && Number(run.isolated_count) > 0) || (input.status === 'partial' && Number(run.isolated_count) === 0)) throw new StorageError('INVALID_INPUT');
-          await client.query('UPDATE collection_runs SET status=$2, finished_at=$3 WHERE id=$1', [input.runId, input.status, input.finishedAt]);
+          await client.query('BEGIN');
+          try {
+            const found = await client.query<{ status: string; isolated_count: string; coordinated: boolean; lease_valid: boolean }>(`SELECT status, isolated_count, coordinated,
+              heartbeat_at > now() - interval '2 minutes' AS lease_valid FROM collection_runs WHERE id=$1 FOR UPDATE`, [input.runId]);
+            const run = found.rows[0];
+            if (!run) throw new StorageError('RUN_NOT_FOUND');
+            if (run.status !== 'running') throw new StorageError('RUN_NOT_ACTIVE');
+            if (run.coordinated && !run.lease_valid) throw new StorageError('RUN_NOT_ACTIVE');
+            if ((input.status === 'success' && Number(run.isolated_count) > 0) || (input.status === 'partial' && Number(run.isolated_count) === 0)) throw new StorageError('INVALID_INPUT');
+            const updated = await client.query("UPDATE collection_runs SET status=$2, finished_at=$3 WHERE id=$1 AND status='running'", [input.runId, input.status, input.finishedAt]);
+            if (updated.rowCount !== 1) throw new StorageError('RUN_NOT_ACTIVE');
+            await client.query('COMMIT');
+          } catch (error) { await rollback(client); throw error; }
         });
       } catch (error) { throw publicFailure(error); }
     },

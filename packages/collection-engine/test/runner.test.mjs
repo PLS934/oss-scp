@@ -1,5 +1,6 @@
 import { join } from 'node:path';
 import { describe, expect, test, vi } from 'vitest';
+import { StorageError } from '@oss-scp/platform-db';
 import { CollectionRunnerError, runCollection } from '../dist/index.js';
 
 const fixture = (name) => join(import.meta.dirname, 'fixtures', name);
@@ -47,6 +48,15 @@ describe('runCollection', () => {
     const storage = createStorage();
     await runCollection({ plugin, scope, storage, transform, trigger: 'scheduled', scheduledAt: '2026-09-19T13:00:00.000Z', scheduleTimezone: 'Asia/Seoul', collector: async () => {} });
     expect(storage.calls.find(([name]) => name === 'startRun')[1]).toMatchObject({ trigger: 'scheduled', scheduledAt: '2026-09-19T13:00:00.000Z', scheduleTimezone: 'Asia/Seoul' });
+  });
+
+  test('lease loser는 원천 수집 없이 activeRunId가 보존된 already_running을 반환한다', async () => {
+    const collector = vi.fn();
+    const storage = createStorage(null, { async startRun() { throw new StorageError('RUN_ALREADY_ACTIVE', 'active-run-1'); } });
+    await expect(runCollection({ plugin, scope, storage, transform, collector, trigger: 'scheduled', scheduledAt: '2026-09-19T13:00:00.000Z', scheduleTimezone: 'Asia/Seoul' }))
+      .rejects.toMatchObject({ code: 'already_running', activeRunId: 'active-run-1' });
+    expect(collector).not.toHaveBeenCalled();
+    expect(storage.calls.some(([name]) => name === 'finishRun')).toBe(false);
   });
 
   test('저장된 opaque checkpoint부터 범용 collector를 실행하고 성공을 기록한다', async () => {

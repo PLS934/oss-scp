@@ -1,41 +1,106 @@
+import { readFileSync } from 'node:fs';
 import { spawn, type ChildProcess } from 'node:child_process';
 import { createRequire } from 'node:module';
-import { isLivePostgresDefinition, type CollectionDefinition, type CollectionSchedule } from '@oss-scp/plugin-config';
+import type { SerializedScheduledCollectionSnapshot } from '@oss-scp/collector-cli';
+import { isLivePostgresDefinition, transformDigest, type CollectionDefinition, type CollectionSchedule } from '@oss-scp/plugin-config';
 import { nextScheduledInstant } from './collection-schedule';
 import { definitionRevision } from './plugin-runtime-registry';
 
 const localRequire = createRequire(__filename);
 const MAX_TIMER_DELAY_MS = 12 * 60 * 60 * 1000;
+const DEFAULT_SHUTDOWN_GRACE_MS = 5_000;
+const DEFAULT_KILL_WAIT_MS = 1_000;
+const RUNTIME_ENVIRONMENT = new Set(['PATH', 'LANG', 'LC_ALL', 'TZ', 'NODE_EXTRA_CA_CERTS', 'SSL_CERT_FILE', 'SSL_CERT_DIR', 'HTTP_PROXY', 'HTTPS_PROXY', 'NO_PROXY']);
+const FORBIDDEN_ENVIRONMENT = /^(?:AUTH|LDAP)_/;
 
 export interface ScheduledCollectionLogger { error(message: string): void }
-export type SpawnScheduledCollectionProcess = (
-  pluginId: string,
-  configRoot: string,
-  processPath: string,
-  expectedRevision: string,
-  scheduledAt: string,
-  timezone: string,
-) => ChildProcess;
+export interface ScheduledCollectionProcessRequest {
+  pluginId: string;
+  configRoot: string;
+  processPath: string;
+  expectedRevision: string;
+  scheduledAt: string;
+  timezone: string;
+  snapshot: SerializedScheduledCollectionSnapshot;
+  environment: NodeJS.ProcessEnv;
+}
+export type SpawnScheduledCollectionProcess = (request: ScheduledCollectionProcessRequest) => ChildProcess;
 
-const defaultSpawn: SpawnScheduledCollectionProcess = (pluginId, configRoot, processPath, expectedRevision, scheduledAt, timezone) => spawn(
-  process.execPath,
-  [processPath, pluginId],
-  {
-    env: {
-      ...process.env,
-      OSS_SCP_CONFIG_ROOT: configRoot,
-      OSS_SCP_COLLECTION_TRIGGER: 'scheduled',
-      OSS_SCP_COLLECTION_EXPECTED_REVISION: expectedRevision,
-      OSS_SCP_COLLECTION_SCHEDULED_AT: scheduledAt,
-      OSS_SCP_COLLECTION_SCHEDULE_TIMEZONE: timezone,
-    },
-    stdio: ['ignore', 'ignore', 'pipe'],
-  },
-);
+function credentialEnvironment(definition: CollectionDefinition): string[] {
+  if (!('connection' in definition) || !('auth' in definition.connection) || !definition.connection.auth) return [];
+  const auth = definition.connection.auth;
+  if (auth.type === 'apiKey') return [auth.valueRef.env];
+  if (auth.type === 'bearer') return [auth.tokenRef.env];
+  return [auth.usernameRef.env, auth.passwordRef.env];
+}
+
+export function scheduledChildEnvironment(
+  parent: Readonly<NodeJS.ProcessEnv>,
+  definition: CollectionDefinition,
+  metadata: Pick<ScheduledCollectionProcessRequest, 'configRoot' | 'expectedRevision' | 'scheduledAt' | 'timezone'>,
+): NodeJS.ProcessEnv {
+  const allowed = new Set([...RUNTIME_ENVIRONMENT, ...credentialEnvironment(definition)]);
+  const environment: NodeJS.ProcessEnv = {};
+  for (const [key, value] of Object.entries(parent)) {
+    if (value === undefined || FORBIDDEN_ENVIRONMENT.test(key)) continue;
+    if (allowed.has(key) || /^PLATFORM_DB_[A-Z0-9_]+$/.test(key)) environment[key] = value;
+  }
+  return {
+    ...environment,
+    OSS_SCP_CONFIG_ROOT: metadata.configRoot,
+    OSS_SCP_COLLECTION_TRIGGER: 'scheduled',
+    OSS_SCP_COLLECTION_EXPECTED_REVISION: metadata.expectedRevision,
+    OSS_SCP_COLLECTION_SCHEDULED_AT: metadata.scheduledAt,
+    OSS_SCP_COLLECTION_SCHEDULE_TIMEZONE: metadata.timezone,
+  };
+}
+
+function deepFreeze<T>(value: T): T {
+  if (value !== null && typeof value === 'object' && !Object.isFrozen(value)) {
+    for (const nested of Object.values(value)) deepFreeze(nested);
+    Object.freeze(value);
+  }
+  return value;
+}
+
+export function captureScheduledCollectionSnapshot(definition: CollectionDefinition): SerializedScheduledCollectionSnapshot {
+  const source = readFileSync(definition.plugin.transformPath);
+  const digest = transformDigest(source);
+  if (!definition.plugin.transformDigest || definition.plugin.transformDigest !== digest) {
+    throw new Error(`정기 수집 transform snapshot이 변경되었습니다: ${definition.plugin.id}`);
+  }
+  return deepFreeze({ definition: structuredClone(definition), transform: { digest, sourceBase64: source.toString('base64') } });
+}
+
+const defaultSpawn: SpawnScheduledCollectionProcess = request => {
+  const child = spawn(process.execPath, [request.processPath, request.pluginId], {
+    env: request.environment,
+    stdio: ['pipe', 'ignore', 'pipe'],
+  });
+  child.stdin?.on('error', () => undefined);
+  child.stdin?.end(JSON.stringify(request.snapshot));
+  return child;
+};
+
+interface PreparedTarget {
+  definition: CollectionDefinition;
+  expectedRevision: string;
+  snapshot: SerializedScheduledCollectionSnapshot;
+}
+
+function waitForClose(child: ChildProcess, timeoutMs: number): Promise<boolean> {
+  if (child.exitCode !== null || child.signalCode !== null) return Promise.resolve(true);
+  return new Promise(resolve => {
+    const closed = () => { clearTimeout(timer); resolve(true); };
+    const timer = setTimeout(() => { child.removeListener('close', closed); resolve(false); }, timeoutMs);
+    timer.unref?.();
+    child.once('close', closed);
+  });
+}
 
 export class ScheduledCollectionManager {
   private readonly children = new Set<ChildProcess>();
-  private definitions: readonly CollectionDefinition[] = [];
+  private targets: readonly PreparedTarget[] | undefined;
   private timer: ReturnType<typeof setTimeout> | undefined;
   private dueAt: Date | undefined;
   private closing = false;
@@ -48,12 +113,24 @@ export class ScheduledCollectionManager {
     private readonly processPath = localRequire.resolve('@oss-scp/collector-cli/dist/process.js'),
     private readonly spawnProcess: SpawnScheduledCollectionProcess = defaultSpawn,
     private readonly now: () => Date = () => new Date(),
+    private readonly parentEnvironment: Readonly<NodeJS.ProcessEnv> = process.env,
+    private readonly shutdownGraceMs = DEFAULT_SHUTDOWN_GRACE_MS,
+    private readonly killWaitMs = DEFAULT_KILL_WAIT_MS,
   ) {}
 
-  start(definitions: readonly CollectionDefinition[]): void {
+  prepare(definitions: readonly CollectionDefinition[]): void {
+    if (this.targets || this.started || this.closing) throw new Error('정기 수집 snapshot은 기동 전에 한 번만 준비할 수 있습니다.');
+    this.targets = definitions.filter(definition => !isLivePostgresDefinition(definition)).map(definition => {
+      const snapshot = captureScheduledCollectionSnapshot(definition);
+      return { definition: snapshot.definition, expectedRevision: definitionRevision(snapshot.definition), snapshot };
+    });
+  }
+
+  start(definitions?: readonly CollectionDefinition[]): void {
     if (this.started || this.closing || !this.schedule.enabled) return;
+    if (definitions) this.prepare(definitions);
+    if (!this.targets) throw new Error('정기 수집 snapshot이 준비되지 않았습니다.');
     this.started = true;
-    this.definitions = definitions.filter(definition => !isLivePostgresDefinition(definition));
     this.scheduleNext();
   }
 
@@ -80,14 +157,19 @@ export class ScheduledCollectionManager {
   }
 
   private startTargets(scheduledAt: string): void {
-    for (const definition of this.definitions) {
+    for (const target of this.targets ?? []) {
+      const metadata = { configRoot: this.configRoot, expectedRevision: target.expectedRevision, scheduledAt, timezone: this.schedule.timezone };
       let child: ChildProcess;
       try {
-        child = this.spawnProcess(
-          definition.plugin.id, this.configRoot, this.processPath, definitionRevision(definition), scheduledAt, this.schedule.timezone,
-        );
+        child = this.spawnProcess({
+          pluginId: target.definition.plugin.id,
+          processPath: this.processPath,
+          snapshot: target.snapshot,
+          ...metadata,
+          environment: scheduledChildEnvironment(this.parentEnvironment, target.definition, metadata),
+        });
       } catch {
-        this.logger.error(`정기 수집 프로세스를 시작하지 못했습니다: ${definition.plugin.id}`);
+        this.logger.error(`정기 수집 프로세스를 시작하지 못했습니다: ${target.definition.plugin.id}`);
         continue;
       }
       this.children.add(child);
@@ -95,11 +177,11 @@ export class ScheduledCollectionManager {
       child.stderr?.resume();
       child.once('error', () => {
         spawnFailed = true;
-        this.logger.error(`정기 수집 프로세스를 시작하지 못했습니다: ${definition.plugin.id}`);
+        this.logger.error(`정기 수집 프로세스를 시작하지 못했습니다: ${target.definition.plugin.id}`);
       });
       child.once('close', code => {
         this.children.delete(child);
-        if (!spawnFailed && code !== 0 && code !== 2 && !this.closing) this.logger.error(`정기 수집 실패: ${definition.plugin.id}`);
+        if (!spawnFailed && code !== 0 && code !== 2 && !this.closing) this.logger.error(`정기 수집 실패: ${target.definition.plugin.id}`);
       });
     }
   }
@@ -110,9 +192,10 @@ export class ScheduledCollectionManager {
     this.timer = undefined;
     const children = [...this.children];
     for (const child of children) child.kill('SIGTERM');
-    await Promise.all(children.map(child => new Promise<void>(resolve => {
-      if (child.exitCode !== null || child.signalCode !== null) resolve();
-      else child.once('close', () => resolve());
-    })));
+    await Promise.all(children.map(async child => {
+      if (await waitForClose(child, this.shutdownGraceMs)) return;
+      if (child.exitCode === null && child.signalCode === null) child.kill('SIGKILL');
+      await waitForClose(child, this.killWaitMs);
+    }));
   }
 }

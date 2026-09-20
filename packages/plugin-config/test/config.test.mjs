@@ -3,6 +3,7 @@ import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { afterEach, describe, expect, test } from 'vitest';
 import { preflightConfiguration, resolveSecret, validateReadQuery, validateRepository } from '../dist/index.js';
+import { createHash } from 'node:crypto';
 
 const repositoryRoot = resolve(import.meta.dirname, '../../..');
 const temporaryRoots = [];
@@ -163,6 +164,17 @@ describe('validateRepository', () => {
     writeFileSync(target, 'throw new Error("DO_NOT_PRINT_SECRET");\n');
     result = await preflightConfiguration(root);
     expect(JSON.stringify(result)).not.toContain('DO_NOT_PRINT_SECRET');
+  });
+
+  test('preflight가 실행한 정확한 transform 바이트 digest를 runtime definition에 고정한다', async () => {
+    const root = temporaryRepository();
+    const target = join(root, 'plugins/sample1-offset-api/dist/transform.js');
+    const source = 'exports.transform = ({ record }) => record;\n';
+    writeFileSync(target, source);
+    const result = await preflightConfiguration(root);
+    expect(result.ok).toBe(true);
+    if (result.ok) expect(result.definitions.find(item => item.plugin.id === 'sample1-offset-api')?.plugin.transformDigest)
+      .toBe(createHash('sha256').update(source).digest('hex'));
   });
   test('sample1과 sample2 설정을 내부 수집 정의로 해석한다', () => {
     const result = validateRepository(repositoryRoot);
