@@ -1,5 +1,6 @@
 import Ajv2020, { type ErrorObject, type ValidateFunction } from 'ajv/dist/2020';
 import { existsSync, readFileSync, realpathSync } from 'node:fs';
+import { createRequire } from 'node:module';
 import { basename, isAbsolute, join, relative, resolve, sep } from 'node:path';
 import { loadSourceDefinition } from './source-loader';
 import { loadLocalCsvSource } from './source-loaders/file';
@@ -32,7 +33,7 @@ export { resolveSecret } from './secrets';
 export { HttpAuthenticationError, resolveHttpAuthenticationHeaders } from './http-auth';
 export { assertSelfContainedTransform, loadSelfContainedTransformSnapshot, loadTransformSnapshot, MAX_TRANSFORM_BYTES, transformDigest } from './transform-snapshot';
 export { scheduledCredentialEnvironment } from './scheduled-environment';
-import { assertSelfContainedTransform, loadTransformSnapshot, transformDigest } from './transform-snapshot';
+import { loadSelfContainedTransformSnapshot, transformDigest } from './transform-snapshot';
 import { scheduledCredentialEnvironment } from './scheduled-environment';
 
 interface ConnectionRegistry {
@@ -664,6 +665,8 @@ export function validateRepository(rootDirectory: string): ConfigurationResult {
   return errors.length > 0 ? { ok: false, errors } : { ok: true, definitions, menus, plugins, pluginDetails, collection: pluginRegistry.collection };
 }
 
+const loadModule = createRequire(__filename);
+
 export async function preflightConfiguration(rootDirectory: string): Promise<ConfigurationResult> {
   const result = validateRepository(rootDirectory);
   if (!result.ok) return result;
@@ -675,9 +678,11 @@ export async function preflightConfiguration(rootDirectory: string): Promise<Con
       const digest = transformDigest(source);
       if (result.collection.schedule.enabled && !isLivePostgresDefinition(definition)) {
         scheduledCredentialEnvironment(definition);
-        assertSelfContainedTransform(source);
+        loadSelfContainedTransformSnapshot(source, definition.plugin.transformPath);
+      } else {
+        const loaded = loadModule(definition.plugin.transformPath) as { transform?: unknown };
+        if (typeof loaded.transform !== 'function') throw new Error('invalid transform export');
       }
-      loadTransformSnapshot(source, definition.plugin.transformPath);
       definitions.push({ ...definition, plugin: { ...definition.plugin, transformDigest: digest } });
     } catch {
       issue(errors, resolve(rootDirectory), definition.plugin.transformPath, '/transform', `plugin ${definition.plugin.id} module cannot be loaded`);

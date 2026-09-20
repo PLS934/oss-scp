@@ -71,3 +71,8 @@
 - [x] 11.2 PostgreSQL insert guard conflict payload와 MySQL 동일 statement conflict capture로 status 전이와 무관하게 충돌 winner ID를 식별한다.
 - [x] 11.3 양 DB에서 legacy precheck→new start→legacy cleanup/insert 역순 및 conflict 직후 winner 완료·duplicate audit 회귀 테스트를 통과시킨다.
 - [x] 11.4 focused·전체·process·PostgreSQL/MySQL·외부 DB·bundle/release Docker 검증과 strict OpenSpec 및 diff 검증을 통과시킨다.
+
+## 12. plugin-init 호환 CI 보강
+
+- [x] 12.1 schedule 비활성 preflight가 기존 Node module loader로 CommonJS·ESM transform을 검증하고 scheduled byte-snapshot sandbox는 활성 경로에만 적용되도록 복구한다.
+- [x] 12.2 plugin-init local·production Docker 검증과 focused·전체 검증을 통과시킨다.

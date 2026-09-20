@@ -80,6 +80,10 @@
 - **WHEN** schedule이 비활성화된 기존 transform이 로컬 helper를 require한다
 - **THEN** 기존 preflight와 수동·기동 수집 module loading 계약은 유지된다
 
+#### Scenario: 비-scheduled ESM transform 호환성
+- **WHEN** schedule이 비활성화된 plugin이 self-contained ESM transform을 제공한다
+- **THEN** 플랫폼은 scheduled CommonJS snapshot 실행기를 적용하지 않고 기존 Node module loading 계약으로 preflight한다
+
 #### Scenario: scheduled 자식 환경 격리
 - **WHEN** API 부모 환경에 플랫폼 DB, 대상 수집 credential, 인증·LDAP와 무관한 비밀이 함께 있다
 - **THEN** scheduled 자식에는 플랫폼 DB와 해당 대상 수집에 필요한 값만 전달되고 `AUTH_*`, `LDAP_*`와 무관한 비밀은 전달되지 않는다

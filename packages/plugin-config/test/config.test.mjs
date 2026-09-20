@@ -178,6 +178,20 @@ describe('validateRepository', () => {
       .toBe(createHash('sha256').update(source).digest('hex'));
   });
 
+  test('schedule 비활성 preflight는 self-contained ESM transform의 기존 module loading 계약을 유지한다', async () => {
+    const root = temporaryRepository();
+    const directory = join(root, 'plugins/sample1-offset-api');
+    const target = join(directory, 'dist/transform.js');
+    writeJson(root, 'plugins/sample1-offset-api/package.json', { type: 'module' });
+    writeFileSync(target, 'export const transform = ({ record }) => ({ records: [{ type: "asset", values: record }] });\n');
+
+    const result = await preflightConfiguration(root);
+
+    expect(result.ok).toBe(true);
+    if (result.ok) expect(result.definitions.find(item => item.plugin.id === 'sample1-offset-api')?.plugin.transformDigest)
+      .toBe(createHash('sha256').update(readFileSync(target)).digest('hex'));
+  });
+
   test('scheduled transform의 filesystem require를 top-level 실행 전에 거부하고 비-scheduled preflight는 유지한다', async () => {
     const root = temporaryRepository();
     const registry = readJson(root, 'plugins/registry.json');
