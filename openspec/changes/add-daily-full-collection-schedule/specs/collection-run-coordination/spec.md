@@ -17,7 +17,11 @@
 
 #### Scenario: 여러 API 인스턴스의 scheduled 실행
 - **WHEN** 같은 설정 revision을 사용하는 API 인스턴스 둘 이상이 동일 대상의 예정 시각을 관측한다
-- **THEN** DB 실행권을 얻은 하나만 원천 수집과 running 상태 전이를 수행하고 나머지 요청은 실패 이력을 만들지 않으며 현재 `activeRunId`, 예정 UTC instant와 timezone을 참조한다
+- **THEN** DB 실행권을 얻은 하나만 원천 수집과 running 상태 전이를 수행하고 나머지 요청은 실패 run을 만들지 않으며 현재 `activeRunId`, 예정 UTC instant와 timezone을 기존 run FK 기반 duplicate 참조 이력으로 멱등 저장한다
+
+#### Scenario: scheduled 자식 결과 검증
+- **WHEN** scheduled 자식 stdout이 상한을 넘거나 단일 JSON exact event schema, plugin·예정 metadata 또는 exit code와 일치하지 않는다
+- **THEN** 부모 scheduler는 active run 참조를 저장하지 않고 원문을 노출하지 않는 안전한 실패로 처리한다
 
 #### Scenario: PostgreSQL 실행 종료 경합
 - **WHEN** 둘 이상의 호출이 같은 PostgreSQL running run을 동시에 종료하려 한다

@@ -35,3 +35,10 @@
 - [x] 6.4 PostgreSQL `finishRun`을 transaction row lock으로 fencing하고 동일 run 경합에서 하나만 전이되는 실제 DB 테스트를 통과시킨다.
 - [x] 6.5 scheduled lease loser가 실패 이력을 만들지 않고 `activeRunId`·예정 instant·timezone을 보존하는 다중 인스턴스 충돌 테스트를 통과시킨다.
 - [x] 6.6 focused·전체·process·Docker 검증과 strict OpenSpec 검증을 다시 통과시킨다.
+
+## 7. 추가 리뷰 보강
+
+- [x] 7.1 schedule 활성 preflight와 scheduled 자식에서 상대·절대·package import/require를 module top-level 실행 전에 거부하고, 비-scheduled transform 로딩은 유지하는 회귀 테스트를 통과시킨다.
+- [x] 7.2 scheduled 자식 stdout을 크기 상한과 exact event schema로 검증하고 오염·초과·metadata 불일치를 안전하게 실패 처리하는 테스트를 통과시킨다.
+- [x] 7.3 lease loser의 `activeRunId`·예정 instant·timezone 참조를 기존 run에 연결하는 PostgreSQL/MySQL migration과 멱등 storage 계약 테스트를 통과시킨다.
+- [x] 7.4 실제 scheduler/process 다중 인스턴스 충돌에서 duplicate 참조가 영속화되는 Docker E2E와 전체 검증을 통과시킨다.

@@ -46,6 +46,12 @@ export interface StartCollectionRun extends CollectionScope {
   scheduleTimezone?: string;
 }
 export interface FinishCollectionRun { runId: string; status: 'success' | 'partial' | 'failed'; finishedAt: string }
+export interface RecordScheduledDuplicate extends CollectionScope {
+  activeRunId: string;
+  scheduledAt: string;
+  scheduleTimezone: string;
+  observedAt: string;
+}
 
 export interface CommitStorageBatch {
   runId: string;
@@ -64,6 +70,7 @@ export interface RecordStorage {
   startRun(input: StartCollectionRun): Promise<string>;
   renewRun?(runId: string): Promise<void>;
   finishRun(input: FinishCollectionRun): Promise<void>;
+  recordScheduledDuplicate(input: RecordScheduledDuplicate): Promise<void>;
   getCheckpoint(scope: CollectionScope): Promise<JsonValue | null>;
   commitBatch(input: CommitStorageBatch): Promise<void>;
 }
@@ -178,4 +185,11 @@ export function validateStartRun(input: StartCollectionRun): void {
   const scheduled = input.trigger === 'scheduled';
   if (scheduled !== (input.scheduledAt !== undefined && input.scheduleTimezone !== undefined)) throw new StorageError('INVALID_INPUT');
   if (scheduled && (!validTimestamp(input.scheduledAt!) || new Date(input.scheduledAt!).toISOString() !== input.scheduledAt || !validTimezone(input.scheduleTimezone))) throw new StorageError('INVALID_INPUT');
+}
+
+export function validateScheduledDuplicate(input: RecordScheduledDuplicate): void {
+  validateScope(input);
+  if (!validText(input.activeRunId) || !validTimestamp(input.observedAt)
+    || !validTimestamp(input.scheduledAt) || new Date(input.scheduledAt).toISOString() !== input.scheduledAt
+    || !validTimezone(input.scheduleTimezone)) throw new StorageError('INVALID_INPUT');
 }

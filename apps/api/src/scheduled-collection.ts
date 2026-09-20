@@ -1,8 +1,9 @@
 import { readFileSync } from 'node:fs';
 import { spawn, type ChildProcess } from 'node:child_process';
 import { createRequire } from 'node:module';
-import type { SerializedScheduledCollectionSnapshot } from '@oss-scp/collector-cli';
-import { isLivePostgresDefinition, transformDigest, type CollectionDefinition, type CollectionSchedule } from '@oss-scp/plugin-config';
+import { collectionScope, MAX_PUBLIC_EVENT_BYTES, parsePublicEvent, type PublicEvent, type SerializedScheduledCollectionSnapshot } from '@oss-scp/collector-cli';
+import type { CollectionScope, RecordStorage } from '@oss-scp/platform-db';
+import { assertSelfContainedTransform, isLivePostgresDefinition, transformDigest, type CollectionDefinition, type CollectionSchedule } from '@oss-scp/plugin-config';
 import { nextScheduledInstant } from './collection-schedule';
 import { definitionRevision } from './plugin-runtime-registry';
 
@@ -65,6 +66,7 @@ function deepFreeze<T>(value: T): T {
 
 export function captureScheduledCollectionSnapshot(definition: CollectionDefinition): SerializedScheduledCollectionSnapshot {
   const source = readFileSync(definition.plugin.transformPath);
+  assertSelfContainedTransform(source);
   const digest = transformDigest(source);
   if (!definition.plugin.transformDigest || definition.plugin.transformDigest !== digest) {
     throw new Error(`정기 수집 transform snapshot이 변경되었습니다: ${definition.plugin.id}`);
@@ -75,7 +77,7 @@ export function captureScheduledCollectionSnapshot(definition: CollectionDefinit
 const defaultSpawn: SpawnScheduledCollectionProcess = request => {
   const child = spawn(process.execPath, [request.processPath, request.pluginId], {
     env: request.environment,
-    stdio: ['pipe', 'ignore', 'pipe'],
+    stdio: ['pipe', 'pipe', 'pipe'],
   });
   child.stdin?.on('error', () => undefined);
   child.stdin?.end(JSON.stringify(request.snapshot));
@@ -100,6 +102,7 @@ function waitForClose(child: ChildProcess, timeoutMs: number): Promise<boolean> 
 
 export class ScheduledCollectionManager {
   private readonly children = new Set<ChildProcess>();
+  private readonly pendingResults = new Set<Promise<void>>();
   private targets: readonly PreparedTarget[] | undefined;
   private timer: ReturnType<typeof setTimeout> | undefined;
   private dueAt: Date | undefined;
@@ -109,6 +112,7 @@ export class ScheduledCollectionManager {
   constructor(
     private readonly configRoot: string,
     private readonly schedule: Readonly<CollectionSchedule>,
+    private readonly referenceStorage: Pick<RecordStorage, 'recordScheduledDuplicate'>,
     private readonly logger: ScheduledCollectionLogger = console,
     private readonly processPath = localRequire.resolve('@oss-scp/collector-cli/dist/process.js'),
     private readonly spawnProcess: SpawnScheduledCollectionProcess = defaultSpawn,
@@ -174,6 +178,15 @@ export class ScheduledCollectionManager {
       }
       this.children.add(child);
       let spawnFailed = false;
+      let stdoutBytes = 0;
+      let stdoutInvalid = child.stdout === null;
+      const stdout: Buffer[] = [];
+      child.stdout?.on('data', (chunk: Buffer | string) => {
+        const value = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk);
+        stdoutBytes += value.byteLength;
+        if (stdoutBytes > MAX_PUBLIC_EVENT_BYTES) { stdoutInvalid = true; stdout.length = 0; return; }
+        if (!stdoutInvalid) stdout.push(value);
+      });
       child.stderr?.resume();
       child.once('error', () => {
         spawnFailed = true;
@@ -181,9 +194,42 @@ export class ScheduledCollectionManager {
       });
       child.once('close', code => {
         this.children.delete(child);
-        if (!spawnFailed && code !== 0 && code !== 2 && !this.closing) this.logger.error(`정기 수집 실패: ${target.definition.plugin.id}`);
+        if (spawnFailed) return;
+        const pending = this.handleResult(collectionScope(this.configRoot, target.definition), scheduledAt, code, stdoutInvalid, stdout);
+        this.pendingResults.add(pending);
+        void pending.finally(() => this.pendingResults.delete(pending));
       });
     }
+  }
+
+  private async handleResult(scope: CollectionScope, scheduledAt: string, code: number | null, stdoutInvalid: boolean, chunks: readonly Buffer[]): Promise<void> {
+    const { pluginId } = scope;
+    let event: PublicEvent;
+    try {
+      if (stdoutInvalid) throw new Error('invalid stdout');
+      event = parsePublicEvent(Buffer.concat(chunks).toString('utf8').trim(), pluginId);
+      const expectedCode = event.status === 'success' || event.status === 'duplicate' ? 0 : event.status === 'partial' ? 2 : undefined;
+      if (expectedCode !== undefined ? code !== expectedCode : code === 0 || code === 2) throw new Error('event/exit mismatch');
+    } catch {
+      if (!this.closing) this.logger.error(`정기 수집 결과가 올바르지 않습니다: ${pluginId}`);
+      return;
+    }
+    if (event.status === 'duplicate') {
+      if (event.scheduledAt !== scheduledAt || event.scheduleTimezone !== this.schedule.timezone) {
+        if (!this.closing) this.logger.error(`정기 수집 결과가 올바르지 않습니다: ${pluginId}`);
+        return;
+      }
+      try {
+        await this.referenceStorage.recordScheduledDuplicate({
+          ...scope, activeRunId: event.activeRunId!, scheduledAt: event.scheduledAt!,
+          scheduleTimezone: event.scheduleTimezone!, observedAt: event.timestamp,
+        });
+      } catch {
+        if (!this.closing) this.logger.error(`정기 수집 중복 참조를 저장하지 못했습니다: ${pluginId}`);
+      }
+      return;
+    }
+    if ((event.status === 'failed' || event.status === 'cancelled') && !this.closing) this.logger.error(`정기 수집 실패: ${pluginId}`);
   }
 
   async close(): Promise<void> {
@@ -197,5 +243,6 @@ export class ScheduledCollectionManager {
       if (child.exitCode === null && child.signalCode === null) child.kill('SIGKILL');
       await waitForClose(child, this.killWaitMs);
     }));
+    await Promise.allSettled([...this.pendingResults]);
   }
 }

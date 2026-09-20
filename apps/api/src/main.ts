@@ -31,7 +31,7 @@ async function bootstrap() {
   const { authConfig, connection } = await connectAfterAuthValidation(
     () => selectPlatformDbAdapter(dbConfig.type, adapters).connect(dbConfig),
   );
-  const { query } = createPlatformRecordAdapters(dbConfig.type, connection);
+  const { storage, query } = createPlatformRecordAdapters(dbConfig.type, connection);
   const auth = authConfig.enabled ? (() => {
     const sessions = dbConfig.type === 'postgres'
       ? createPostgresAuthSessionRepository(connection as PostgresPlatformDbConnection)
@@ -44,7 +44,7 @@ async function bootstrap() {
     };
   })() : { config: authConfig };
   const startup = new StartupCollectionManager(configRoot);
-  const scheduled = new ScheduledCollectionManager(configRoot, configuration.collection.schedule);
+  const scheduled = new ScheduledCollectionManager(configRoot, configuration.collection.schedule, storage);
   scheduled.prepare(registry.definitions);
   const app = await NestFactory.create(AppModule.register(connection, query, registry, startup, undefined, { configRoot }, auth, scheduled), { abortOnError: false });
   if (authConfig.enabled) app.getHttpAdapter().getInstance().set('trust proxy', authConfig.trustedProxyHops);

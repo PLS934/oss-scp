@@ -10,7 +10,9 @@ import {
   executeManualCollection,
   configRoot,
   idempotentClose,
+  MAX_PUBLIC_EVENT_BYTES,
   parsePluginId,
+  parsePublicEvent,
   publicEvent,
   selectDefinition,
   verifyScheduledCollectionSnapshot,
@@ -91,6 +93,32 @@ describe('CLI 선택과 revision', () => {
     expect(() => verifyScheduledCollectionSnapshot({ ...snapshot, unexpected: true }, 'sample-plugin', configRevision(snapshotted))).toThrowError(expect.objectContaining({ code: 'repository_config' }));
     expect(globalThis.__ossScpSnapshotExecuted).toBe(0);
     delete globalThis.__ossScpSnapshotExecuted;
+  });
+
+  it('scheduled snapshot의 local require를 main/helper top-level 실행 전에 거부한다', () => {
+    const source = 'globalThis.__ossScpSnapshotExecuted = true; exports.transform = require("./helper.js").transform;\n';
+    const digest = createHash('sha256').update(source).digest('hex');
+    const snapshotted = { ...definition, plugin: { ...plugin, transformDigest: digest } };
+    delete globalThis.__ossScpSnapshotExecuted;
+    expect(() => verifyScheduledCollectionSnapshot(
+      { definition: snapshotted, transform: { digest, sourceBase64: Buffer.from(source).toString('base64') } },
+      'sample-plugin', configRevision(snapshotted),
+    )).toThrow();
+    expect(globalThis.__ossScpSnapshotExecuted).toBeUndefined();
+  });
+
+  it('collector public event를 크기와 exact schema로 제한한다', () => {
+    const event = {
+      version: 1, timestamp: '2026-09-19T13:00:01.000Z', event: 'collection_finished', pluginId: 'sample-plugin', status: 'duplicate',
+      activeRunId: '123e4567-e89b-42d3-a456-426614174001', scheduledAt: '2026-09-19T13:00:00.000Z', scheduleTimezone: 'Asia/Seoul',
+    };
+    expect(parsePublicEvent(JSON.stringify(event), 'sample-plugin')).toEqual(event);
+    for (const invalid of [
+      `${JSON.stringify(event)}\nuntrusted`,
+      JSON.stringify({ ...event, extra: true }),
+      JSON.stringify({ ...event, scheduleTimezone: 'invalid' }),
+      'x'.repeat(MAX_PUBLIC_EVENT_BYTES + 1),
+    ]) expect(() => parsePublicEvent(invalid, 'sample-plugin')).toThrow();
   });
 });
 

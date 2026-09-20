@@ -4,7 +4,7 @@ import { basename, isAbsolute, join, relative, resolve, sep } from 'node:path';
 import { loadSourceDefinition } from './source-loader';
 import { loadLocalCsvSource } from './source-loaders/file';
 import { loadHttpCsvSource } from './source-loaders/http-csv';
-import { loadPostgresSource } from './source-loaders/db';
+import { isLivePostgresDefinition, loadPostgresSource } from './source-loaders/db';
 import type {
   CollectionDefinition,
   CollectionConfiguration,
@@ -30,8 +30,8 @@ export type * from './types';
 export { isLivePostgresDefinition, validateReadQuery } from './source-loaders/db';
 export { resolveSecret } from './secrets';
 export { HttpAuthenticationError, resolveHttpAuthenticationHeaders } from './http-auth';
-export { loadTransformSnapshot, MAX_TRANSFORM_BYTES, transformDigest } from './transform-snapshot';
-import { loadTransformSnapshot, transformDigest } from './transform-snapshot';
+export { assertSelfContainedTransform, loadSelfContainedTransformSnapshot, loadTransformSnapshot, MAX_TRANSFORM_BYTES, transformDigest } from './transform-snapshot';
+import { assertSelfContainedTransform, loadTransformSnapshot, transformDigest } from './transform-snapshot';
 
 interface ConnectionRegistry {
   plugins?: string[];
@@ -671,6 +671,7 @@ export async function preflightConfiguration(rootDirectory: string): Promise<Con
     try {
       const source = readFileSync(definition.plugin.transformPath);
       const digest = transformDigest(source);
+      if (result.collection.schedule.enabled && !isLivePostgresDefinition(definition)) assertSelfContainedTransform(source);
       loadTransformSnapshot(source, definition.plugin.transformPath);
       definitions.push({ ...definition, plugin: { ...definition.plugin, transformDigest: digest } });
     } catch {

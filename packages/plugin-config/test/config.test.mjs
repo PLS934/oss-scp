@@ -176,6 +176,29 @@ describe('validateRepository', () => {
     if (result.ok) expect(result.definitions.find(item => item.plugin.id === 'sample1-offset-api')?.plugin.transformDigest)
       .toBe(createHash('sha256').update(source).digest('hex'));
   });
+
+  test('scheduled transform의 filesystem require를 top-level 실행 전에 거부하고 비-scheduled preflight는 유지한다', async () => {
+    const root = temporaryRepository();
+    const registry = readJson(root, 'plugins/registry.json');
+    registry.collection = { schedule: { enabled: true, timezone: 'UTC', time: '00:00' } };
+    writeJson(root, 'plugins/registry.json', registry);
+    const directory = join(root, 'plugins/sample1-offset-api/dist');
+    writeFileSync(join(directory, 'helper.js'), 'globalThis.__ossScpHelperExecuted = true; exports.transform = ({ record }) => record;\n');
+    writeFileSync(join(directory, 'transform.js'), 'globalThis.__ossScpMainExecuted = true; exports.transform = require("./helper.js").transform;\n');
+    delete globalThis.__ossScpMainExecuted; delete globalThis.__ossScpHelperExecuted;
+    const scheduled = await preflightConfiguration(root);
+    expect(scheduled.ok).toBe(false);
+    expect(globalThis.__ossScpMainExecuted).toBeUndefined();
+    expect(globalThis.__ossScpHelperExecuted).toBeUndefined();
+
+    registry.collection.schedule.enabled = false;
+    writeJson(root, 'plugins/registry.json', registry);
+    const manual = await preflightConfiguration(root);
+    expect(manual.ok).toBe(true);
+    expect(globalThis.__ossScpMainExecuted).toBe(true);
+    expect(globalThis.__ossScpHelperExecuted).toBe(true);
+    delete globalThis.__ossScpMainExecuted; delete globalThis.__ossScpHelperExecuted;
+  });
   test('sample1과 sample2 설정을 내부 수집 정의로 해석한다', () => {
     const result = validateRepository(repositoryRoot);
 

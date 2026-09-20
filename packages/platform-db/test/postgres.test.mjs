@@ -468,6 +468,14 @@ describe('PostgreSQL 공통 레코드 저장 계약', () => {
       expect(results.filter(result => result.status === 'fulfilled')).toHaveLength(1);
       const runId = results.find(result => result.status === 'fulfilled').value;
       expect(results.filter(result => result.status === 'rejected')[0].reason).toMatchObject({ code: 'RUN_ALREADY_ACTIVE', activeRunId: runId });
+      const reference = { ...scope, activeRunId: runId, scheduledAt: input.scheduledAt, scheduleTimezone: input.scheduleTimezone, observedAt: '2026-09-20T13:00:02.000Z' };
+      await otherStorage.recordScheduledDuplicate(reference);
+      await otherStorage.recordScheduledDuplicate(reference);
+      const persisted = await connection.withClient(client => client.query(`SELECT r.active_run_id, r.scheduled_at, r.schedule_timezone, c.plugin_id
+        FROM scheduled_collection_references r JOIN collection_runs c ON c.id=r.active_run_id WHERE r.active_run_id=$1`, [runId]));
+      expect(persisted.rows).toHaveLength(1);
+      expect(persisted.rows[0]).toMatchObject({ active_run_id: runId, schedule_timezone: 'Asia/Seoul', plugin_id: scope.pluginId });
+      expect(persisted.rows[0].scheduled_at.toISOString()).toBe(input.scheduledAt);
       await storage.finishRun({ runId, status: 'failed', finishedAt: '2026-09-20T13:01:00.000Z' });
     } finally { await otherConnection.close(); }
   });

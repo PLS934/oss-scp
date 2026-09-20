@@ -1,7 +1,7 @@
 import type { PoolClient } from 'pg';
 import type { PostgresPlatformDbConnection } from './postgres';
 import {
-  canonicalExternalKey, StorageError, validateCommitBatch, validateScope, validateStartRun,
+  canonicalExternalKey, StorageError, validateCommitBatch, validateScheduledDuplicate, validateScope, validateStartRun,
   type CollectionScope, type CommitStorageBatch, type FinishCollectionRun, type JsonValue,
   type RecordStorage, type StartCollectionRun, type StorageRecordReference,
 } from './storage';
@@ -106,6 +106,21 @@ export function createPostgresRecordStorage(connection: PostgresPlatformDbConnec
             if (updated.rowCount !== 1) throw new StorageError('RUN_NOT_ACTIVE');
             await client.query('COMMIT');
           } catch (error) { await rollback(client); throw error; }
+        });
+      } catch (error) { throw publicFailure(error); }
+    },
+
+    async recordScheduledDuplicate(input): Promise<void> {
+      validateScheduledDuplicate(input);
+      try {
+        await connection.withClient(async client => {
+          const active = await client.query<{ id: string }>(`SELECT id FROM collection_runs WHERE id=$1 AND plugin_id=$2 AND source_id=$3
+            AND scope_type=$4 AND scope_key=$5 AND config_revision=$6`, [input.activeRunId, ...scopeValues(input)]);
+          if (!active.rows[0]) throw new StorageError('RUN_NOT_FOUND');
+          await client.query(`INSERT INTO scheduled_collection_references
+            (active_run_id, scheduled_at, schedule_timezone, observed_at) VALUES ($1,$2,$3,$4)
+            ON CONFLICT (active_run_id, scheduled_at, schedule_timezone) DO NOTHING`,
+          [input.activeRunId, input.scheduledAt, input.scheduleTimezone, input.observedAt]);
         });
       } catch (error) { throw publicFailure(error); }
     },

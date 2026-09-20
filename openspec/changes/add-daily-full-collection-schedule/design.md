@@ -31,11 +31,11 @@
 
 ### 4. scheduler는 대상별 기존 collector process 경계를 재사용한다
 
-기동 시 확정한 registry에서 `enabled`이고 저장형인 대상을 가져와 기존 process spawn helper로 각각 full 수집한다. 각 대상의 runtime definition, revision, transform digest와 정확한 transform 바이트를 기동 전에 불변 snapshot으로 고정한다. 자식은 snapshot의 구조·revision·digest를 module top-level 실행 전에 검증하고, 검증한 바이트 자체를 파일 재조회 없이 실행한다. `scheduled`, 예정 UTC instant, timezone을 제한된 내부 인자로 전달한다. 자식 환경은 필수 runtime 값, `PLATFORM_DB_*`, 해당 대상 Connection이 참조하는 수집 credential만 allowlist하며 `AUTH_*`와 `LDAP_*`는 전달하지 않는다. `Promise.allSettled`에 준하는 격리로 한 spawn 실패가 다른 대상 실행을 막지 않게 한다. runner를 API 프로세스에 중복 구현하는 대안은 CLI/API 간 저장 의미가 갈라지므로 선택하지 않는다.
+기동 시 확정한 registry에서 `enabled`이고 저장형인 대상을 가져와 기존 process spawn helper로 각각 full 수집한다. 각 대상의 runtime definition, revision, transform digest와 정확한 transform 바이트를 기동 전에 불변 snapshot으로 고정한다. scheduled transform은 self-contained여야 하며 상대·절대 경로와 filesystem-backed package를 포함한 모든 import/require를 정적 구문 검사로 module top-level 실행 전에 거부한다. 이 제한은 schedule 활성 preflight와 자식 검증에만 적용해 비-scheduled transform 계약은 유지한다. 자식은 snapshot의 구조·revision·digest를 module top-level 실행 전에 검증하고, 검증한 바이트 자체를 파일 재조회 없이 실행한다. `scheduled`, 예정 UTC instant, timezone을 제한된 내부 인자로 전달한다. 자식 환경은 필수 runtime 값, `PLATFORM_DB_*`, 해당 대상 Connection이 참조하는 수집 credential만 allowlist하며 `AUTH_*`와 `LDAP_*`는 전달하지 않는다. `Promise.allSettled`에 준하는 격리로 한 spawn 실패가 다른 대상 실행을 막지 않게 한다. runner를 API 프로세스에 중복 구현하는 대안은 CLI/API 간 저장 의미가 갈라지므로 선택하지 않는다.
 
 ### 5. DB lease가 다중 인스턴스의 유일한 실행 권한이다
 
-각 API 인스턴스는 자체 timer를 가질 수 있지만 모든 scheduled 요청은 기존 대상·revision·full 범위 lease를 획득해야 한다. 별도 scheduler leader lease는 이중 조정 계층과 장애 복구 복잡도를 늘리므로 추가하지 않는다. lease loser는 실패 이력을 새로 만들지 않고 현재 `activeRunId`와 예정 instant·timezone을 비민감 duplicate 결과로 보존한다. 실행 이력 schema는 trigger enum/check와 예정 instant·timezone nullable 필드를 확장하고, scheduled에서만 두 metadata를 요구하도록 storage 경계에서 검증한다. PostgreSQL `finishRun`은 MySQL과 같은 의미로 row lock을 건 transaction에서 running 상태와 유효 lease를 확인한 하나의 호출만 상태를 전이한다.
+각 API 인스턴스는 자체 timer를 가질 수 있지만 모든 scheduled 요청은 기존 대상·revision·full 범위 lease를 획득해야 한다. 별도 scheduler leader lease는 이중 조정 계층과 장애 복구 복잡도를 늘리므로 추가하지 않는다. lease loser는 실패 run을 새로 만들지 않고 현재 `activeRunId`와 예정 instant·timezone을 비민감 duplicate event로 반환한다. 부모 scheduler는 stdout을 16 KiB 상한과 exact event schema로 검증하며, 유효한 duplicate만 별도 `scheduled_collection_references` 이력에 기존 run FK로 멱등 저장한다. 오염·초과·metadata 또는 exit code 불일치는 저장하지 않고 일반화된 안전 오류로 처리한다. 실행 이력 schema는 trigger enum/check와 예정 instant·timezone nullable 필드를 확장하고, scheduled에서만 두 metadata를 요구하도록 storage 경계에서 검증한다. PostgreSQL `finishRun`은 MySQL과 같은 의미로 row lock을 건 transaction에서 running 상태와 유효 lease를 확인한 하나의 호출만 상태를 전이한다.
 
 ### 6. 기존 저장 보존 계약을 변경하지 않는다
 
@@ -53,11 +53,13 @@ API 종료 시 pending timer를 해제하고 scheduled 자식에 `SIGTERM`으로
 - [timezone 데이터 변경에 따라 미래 발생 instant가 달라질 수 있음] → IANA 식별자와 예정 UTC instant를 함께 기록해 실제 실행을 감사 가능하게 한다.
 - [격리된 대상 실패가 로그에 비밀을 노출할 수 있음] → 기존 일반화 오류와 자식 stderr 정제 경계를 재사용하고 일정 metadata만 허용한다.
 - [자식이 검증과 실행 사이 transform 파일 교체 또는 API 인증 비밀을 관측할 수 있음] → 기동 시 읽은 정확한 바이트를 digest와 함께 pipe로 전달해 검증한 바이트를 실행하고 자식 환경을 명시적 allowlist로 제한한다.
+- [snapshot transform이 helper/package를 다시 읽어 검증한 바이트 밖의 코드가 바뀔 수 있음] → schedule 활성 경로는 모든 import/require를 실행 전 정적 검사로 거부하고 self-contained transform만 허용한다.
+- [자식 stdout 오염이 잘못된 active run 참조나 메모리 사용을 만들 수 있음] → 작은 고정 상한, 단일 JSON exact schema, plugin·schedule metadata와 exit code 일치를 모두 확인한 뒤 FK 참조만 저장한다.
 - [종료되지 않는 자식이 API shutdown을 무기한 막을 수 있음] → SIGTERM grace와 SIGKILL 뒤 close 대기에 각각 상한을 둔다.
 
 ## Migration Plan
 
-1. PostgreSQL과 MySQL의 versioned migration으로 scheduled trigger 및 nullable schedule metadata를 추가한다.
+1. PostgreSQL과 MySQL의 versioned migration으로 scheduled trigger, nullable schedule metadata와 duplicate run 참조 이력을 추가한다.
 2. API/CLI/storage가 새 필드를 지원하는 동일 release image를 배포한다.
 3. 일정은 기본 비활성화이므로 migration 뒤 기존 동작을 먼저 확인한다.
 4. 외부 설정 revision에 일정을 추가하고 검증 명령을 통과시킨 뒤 API를 재시작한다.

@@ -9,10 +9,10 @@ export { mysqlAdapter, mysqlPoolConfig } from './mysql';
 export type { MysqlPlatformDbConnection } from './mysql';
 export { discoverMigrations, runMigrations, runPostgresMigrations, runMysqlMigrations, defaultMigrationsDirectory, MigrationError } from './migrations';
 export type { Migration } from './migrations';
-export { canonicalExternalKey, serializedBytes, STORAGE_LIMITS, StorageError, validateCommitBatch, validateScope, validateStartRun } from './storage';
+export { canonicalExternalKey, serializedBytes, STORAGE_LIMITS, StorageError, validateCommitBatch, validateScheduledDuplicate, validateScope, validateStartRun } from './storage';
 export type {
   CanonicalKey, CollectionScope, CollectionTrigger, CommitStorageBatch, ExternalKey, FinishCollectionRun,
-  JsonPrimitive, JsonValue, RecordStorage, StartCollectionRun, StorageErrorCode,
+  JsonPrimitive, JsonValue, RecordScheduledDuplicate, RecordStorage, StartCollectionRun, StorageErrorCode,
   StorageIssue, StorageRecord, StorageRecordReference, StorageRelation,
 } from './storage';
 export { createPostgresRecordStorage } from './postgres-storage';

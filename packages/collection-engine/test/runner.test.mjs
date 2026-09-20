@@ -25,6 +25,7 @@ function createStorage(initialCheckpoint = null, overrides = {}) {
     get checkpoint() { return checkpoint; },
     async getCheckpoint(input) { calls.push(['getCheckpoint', input]); return checkpoint; },
     async startRun(input) { calls.push(['startRun', input]); return 'run-1'; },
+    async recordScheduledDuplicate(input) { calls.push(['recordScheduledDuplicate', input]); },
     async commitBatch(input) { calls.push(['commitBatch', input]); checkpoint = input.nextCheckpoint; },
     async finishRun(input) { calls.push(['finishRun', input]); },
     ...overrides,

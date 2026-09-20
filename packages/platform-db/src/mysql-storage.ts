@@ -5,7 +5,7 @@ import {
   collectionScopeIdentity, recordIdentity, recordQueryScopeIdentity, relationIdentity, relationScopeIdentity,
 } from './storage-identity';
 import {
-  canonicalExternalKey, StorageError, validateCommitBatch, validateScope, validateStartRun,
+  canonicalExternalKey, StorageError, validateCommitBatch, validateScheduledDuplicate, validateScope, validateStartRun,
   type CollectionScope, type CommitStorageBatch, type FinishCollectionRun, type JsonValue,
   type RecordStorage, type StartCollectionRun, type StorageRecordReference,
 } from './storage';
@@ -114,6 +114,20 @@ export function createMysqlRecordStorage(connection: MysqlPlatformDbConnection):
             await client.execute('UPDATE collection_runs SET status=?, finished_at=? WHERE id=?', [input.status, new Date(input.finishedAt), input.runId]);
             await client.commit();
           } catch (error) { await rollback(client); throw error; }
+        });
+      } catch (error) { throw publicFailure(error); }
+    },
+
+    async recordScheduledDuplicate(input): Promise<void> {
+      validateScheduledDuplicate(input);
+      try {
+        await connection.withClient(async client => {
+          const [active] = await client.query<RunRow[]>('SELECT id, plugin_id, source_id, scope_type, scope_key, config_revision FROM collection_runs WHERE id=?', [input.activeRunId]);
+          if (!active[0] || !sameScope(active[0], input)) throw new StorageError('RUN_NOT_FOUND');
+          await client.execute(`INSERT INTO scheduled_collection_references
+            (id, active_run_id, scheduled_at, schedule_timezone, observed_at) VALUES (?,?,?,?,?)
+            ON DUPLICATE KEY UPDATE active_run_id=VALUES(active_run_id)`,
+          [randomUUID(), input.activeRunId, new Date(input.scheduledAt), input.scheduleTimezone, new Date(input.observedAt)]);
         });
       } catch (error) { throw publicFailure(error); }
     },

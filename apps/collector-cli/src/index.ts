@@ -386,6 +386,48 @@ export interface PublicEvent {
   scheduleTimezone?: string;
 }
 
+export const MAX_PUBLIC_EVENT_BYTES = 16 * 1024;
+
+function canonicalTimestamp(value: unknown): value is string {
+  if (typeof value !== 'string') return false;
+  try { return new Date(value).toISOString() === value; } catch { return false; }
+}
+
+function identifier(value: unknown): value is string {
+  return typeof value === 'string' && /^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$/.test(value);
+}
+
+function runIdentifier(value: unknown): value is string {
+  return typeof value === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value);
+}
+
+function count(value: unknown): value is number { return typeof value === 'number' && Number.isSafeInteger(value) && value >= 0; }
+
+/** scheduled parent가 신뢰할 수 있는 단일 collector event만 엄격하게 해석한다. */
+export function parsePublicEvent(serialized: string, expectedPluginId: string): PublicEvent {
+  if (Buffer.byteLength(serialized) === 0 || Buffer.byteLength(serialized) > MAX_PUBLIC_EVENT_BYTES) throw new Error('invalid public event');
+  let parsed: unknown;
+  try { parsed = JSON.parse(serialized); } catch { throw new Error('invalid public event'); }
+  if (parsed === null || typeof parsed !== 'object' || Array.isArray(parsed)) throw new Error('invalid public event');
+  const event = parsed as Record<string, unknown>;
+  if (event.version !== 1 || event.event !== 'collection_finished' || event.pluginId !== expectedPluginId
+    || !identifier(event.pluginId) || !canonicalTimestamp(event.timestamp)) throw new Error('invalid public event');
+  const common = ['event', 'pluginId', 'status', 'timestamp', 'version'];
+  if (event.status === 'success' || event.status === 'partial') {
+    if (!exactKeys(event, [...common, 'accepted', 'batches', 'processed', 'rejected', 'runId']) || !runIdentifier(event.runId)
+      || !count(event.batches) || !count(event.processed) || !count(event.accepted) || !count(event.rejected)
+      || (event.accepted as number) + (event.rejected as number) !== event.processed) throw new Error('invalid public event');
+  } else if (event.status === 'duplicate') {
+    if (!exactKeys(event, [...common, 'activeRunId', 'scheduledAt', 'scheduleTimezone']) || !runIdentifier(event.activeRunId)
+      || !canonicalTimestamp(event.scheduledAt) || typeof event.scheduleTimezone !== 'string') throw new Error('invalid public event');
+    try { new Intl.DateTimeFormat('en-US', { timeZone: event.scheduleTimezone }).format(0); } catch { throw new Error('invalid public event'); }
+  } else if (event.status === 'failed' || event.status === 'cancelled') {
+    if (!exactKeys(event, [...common, 'errorCode']) || typeof event.errorCode !== 'string'
+      || !(new Set<CliErrorCode>(['usage', 'repository_config', 'plugin_not_found', 'unsupported_collector', 'platform_db_config', 'unsupported_db_storage', 'platform_db_connection', 'collection_failed', 'cancelled'])).has(event.errorCode as CliErrorCode)) throw new Error('invalid public event');
+  } else throw new Error('invalid public event');
+  return event as unknown as PublicEvent;
+}
+
 export function publicEvent(outcome: CliOutcome, timestamp: string): PublicEvent {
   const base = { version: 1 as const, timestamp, event: 'collection_finished' as const, ...(outcome.pluginId ? { pluginId: outcome.pluginId } : {}), status: outcome.status };
   if ('result' in outcome) return { ...base, runId: outcome.result.runId, batches: outcome.result.batches, processed: outcome.result.processed, accepted: outcome.result.accepted, rejected: outcome.result.rejected };

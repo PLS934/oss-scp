@@ -83,7 +83,7 @@ describe('MySQL 어댑터', () => {
 describe('MySQL migration', () => {
   it('제품별 기본 디렉터리만 선택한다', () => {
     expect(defaultMigrationsDirectory('mysql')).toMatch(/migrations\/mysql$/);
-    expect(discoverMigrations(defaultMigrationsDirectory('mysql')).map(item => item.version)).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9, 10]);
+    expect(discoverMigrations(defaultMigrationsDirectory('mysql')).map(item => item.version)).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11]);
   });
   it('최초 적용·재실행·checksum과 실패 버전 미기록을 검증한다', async () => {
     const connection = await mysqlAdapter.connect(config());
@@ -291,6 +291,23 @@ describe('MySQL 공통 레코드 저장·조회 계약', () => {
         .rejects.toMatchObject({ code: 'RUN_ALREADY_ACTIVE', activeRunId: scheduled });
       await storage.finishRun({ runId: scheduled, status: 'failed', finishedAt: '2026-09-19T13:01:00.000Z' });
     }
+  });
+
+  it('scheduled lease loser 참조를 active MySQL run에 멱등 영속화한다', async () => {
+    const scope = scopeFor('scheduled-reference');
+    const scheduledAt = '2026-09-20T13:00:00.000Z';
+    const activeRunId = await storage.startRun({
+      ...scope, startedAt: '2026-09-20T13:00:01.000Z', exclusive: true, trigger: 'scheduled', scheduledAt, scheduleTimezone: 'Asia/Seoul',
+    });
+    const reference = { ...scope, activeRunId, scheduledAt, scheduleTimezone: 'Asia/Seoul', observedAt: '2026-09-20T13:00:02.000Z' };
+    await storage.recordScheduledDuplicate(reference);
+    await storage.recordScheduledDuplicate(reference);
+    const [rows] = await connection.withClient(client => client.query(`SELECT r.active_run_id, r.scheduled_at, r.schedule_timezone, c.plugin_id
+      FROM scheduled_collection_references r JOIN collection_runs c ON c.id=r.active_run_id WHERE r.active_run_id=?`, [activeRunId]));
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toMatchObject({ active_run_id: activeRunId, schedule_timezone: 'Asia/Seoul', plugin_id: scope.pluginId });
+    expect(new Date(rows[0].scheduled_at).toISOString()).toBe(scheduledAt);
+    await storage.finishRun({ runId: activeRunId, status: 'failed', finishedAt: '2026-09-20T13:01:00.000Z' });
   });
 });
 
