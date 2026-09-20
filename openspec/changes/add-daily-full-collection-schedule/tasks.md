@@ -42,3 +42,9 @@
 - [x] 7.2 scheduled 자식 stdout을 크기 상한과 exact event schema로 검증하고 오염·초과·metadata 불일치를 안전하게 실패 처리하는 테스트를 통과시킨다.
 - [x] 7.3 lease loser의 `activeRunId`·예정 instant·timezone 참조를 기존 run에 연결하는 PostgreSQL/MySQL migration과 멱등 storage 계약 테스트를 통과시킨다.
 - [x] 7.4 실제 scheduler/process 다중 인스턴스 충돌에서 duplicate 참조가 영속화되는 Docker E2E와 전체 검증을 통과시킨다.
+
+## 8. sandbox와 종료 drain 리뷰 보강
+
+- [x] 8.1 scheduled transform을 순수 mapping AST allowlist로 제한하고 ambient global·alias·computed property·`Reflect`·module loader·constructor chain 우회를 top-level 실행 전에 거부하는 회귀 테스트를 통과시킨다.
+- [x] 8.2 process exit와 실제 stdio `close`를 구분해 결과 handler 등록까지 bounded wait하고, duplicate 영속화에 고정 drain 상한을 적용하는 lifecycle 테스트를 통과시킨다.
+- [x] 8.3 focused·전체·process·Docker 검증과 strict OpenSpec 및 diff 검증을 통과시킨다.

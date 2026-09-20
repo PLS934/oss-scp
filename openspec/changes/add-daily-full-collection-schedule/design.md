@@ -31,7 +31,7 @@
 
 ### 4. scheduler는 대상별 기존 collector process 경계를 재사용한다
 
-기동 시 확정한 registry에서 `enabled`이고 저장형인 대상을 가져와 기존 process spawn helper로 각각 full 수집한다. 각 대상의 runtime definition, revision, transform digest와 정확한 transform 바이트를 기동 전에 불변 snapshot으로 고정한다. scheduled transform은 self-contained여야 하며 상대·절대 경로와 filesystem-backed package를 포함한 모든 import/require를 정적 구문 검사로 module top-level 실행 전에 거부한다. 이 제한은 schedule 활성 preflight와 자식 검증에만 적용해 비-scheduled transform 계약은 유지한다. 자식은 snapshot의 구조·revision·digest를 module top-level 실행 전에 검증하고, 검증한 바이트 자체를 파일 재조회 없이 실행한다. `scheduled`, 예정 UTC instant, timezone을 제한된 내부 인자로 전달한다. 자식 환경은 필수 runtime 값, `PLATFORM_DB_*`, 해당 대상 Connection이 참조하는 수집 credential만 allowlist하며 `AUTH_*`와 `LDAP_*`는 전달하지 않는다. `Promise.allSettled`에 준하는 격리로 한 spawn 실패가 다른 대상 실행을 막지 않게 한다. runner를 API 프로세스에 중복 구현하는 대안은 CLI/API 간 저장 의미가 갈라지므로 선택하지 않는다.
+기동 시 확정한 registry에서 `enabled`이고 저장형인 대상을 가져와 기존 process spawn helper로 각각 full 수집한다. 각 대상의 runtime definition, revision, transform digest와 정확한 transform 바이트를 기동 전에 불변 snapshot으로 고정한다. scheduled transform은 self-contained 순수 mapping이어야 한다. AST allowlist는 `const`, arrow function, 객체·배열·고정 property mapping, 산술·비교·논리 연산과 제한된 `String`·`Number`·`Boolean`·`Date` 변환 및 TypeScript CommonJS export scaffolding만 허용한다. `process`, `globalThis`, ambient `this`, `eval`, `Function`, `Reflect`, constructor/prototype chain, 동적 computed access와 모든 import/require/module loader는 기본 거부하며 module top-level 실행 전에 전체 AST를 검증한다. 이 제한은 schedule 활성 preflight와 자식 검증에만 적용해 비-scheduled transform 계약은 유지한다. 자식은 snapshot의 구조·revision·digest를 module top-level 실행 전에 검증하고, 검증한 바이트 자체를 파일 재조회 없이 실행한다. `scheduled`, 예정 UTC instant, timezone을 제한된 내부 인자로 전달한다. 자식 환경은 필수 runtime 값, `PLATFORM_DB_*`, 해당 대상 Connection이 참조하는 수집 credential만 allowlist하며 `AUTH_*`와 `LDAP_*`는 전달하지 않는다. `Promise.allSettled`에 준하는 격리로 한 spawn 실패가 다른 대상 실행을 막지 않게 한다. runner를 API 프로세스에 중복 구현하는 대안은 CLI/API 간 저장 의미가 갈라지므로 선택하지 않는다.
 
 ### 5. DB lease가 다중 인스턴스의 유일한 실행 권한이다
 
@@ -43,7 +43,7 @@ scheduled run도 공통 runner의 batch transaction과 checkpoint/lease fencing�
 
 ### 7. lifecycle은 timer와 자식 프로세스를 함께 관리한다
 
-API 종료 시 pending timer를 해제하고 scheduled 자식에 `SIGTERM`으로 종료를 요청한다. grace period 뒤에도 생존한 자식에는 `SIGKILL`을 보내고 close 대기도 유한 상한 뒤 끝낸다. 종료 뒤 callback이 새 작업을 만들지 않도록 세대/closed 상태를 검사한다. 설정·transform 변경은 hot reload하지 않고 재시작 때 새 snapshot과 timer를 만든다.
+API 종료 시 pending timer를 해제하고 실행 중인 scheduled 자식에 `SIGTERM`으로 종료를 요청한다. process exit 상태만으로 stdio drain을 완료했다고 간주하지 않고 실제 `close` event까지 grace 안에서 기다려 결과 handler를 등록한다. grace period 뒤에도 생존한 자식에는 `SIGKILL`을 보내고 close 대기도 유한 상한 뒤 끝낸다. 등록된 duplicate 영속화 작업은 가능한 만큼 drain하되 별도 고정 상한 뒤 DB 응답을 더 기다리지 않고 종료한다. 종료 뒤 callback이 새 작업을 만들지 않도록 세대/closed 상태를 검사한다. 설정·transform 변경은 hot reload하지 않고 재시작 때 새 snapshot과 timer를 만든다.
 
 ## Risks / Trade-offs
 
@@ -53,9 +53,9 @@ API 종료 시 pending timer를 해제하고 scheduled 자식에 `SIGTERM`으로
 - [timezone 데이터 변경에 따라 미래 발생 instant가 달라질 수 있음] → IANA 식별자와 예정 UTC instant를 함께 기록해 실제 실행을 감사 가능하게 한다.
 - [격리된 대상 실패가 로그에 비밀을 노출할 수 있음] → 기존 일반화 오류와 자식 stderr 정제 경계를 재사용하고 일정 metadata만 허용한다.
 - [자식이 검증과 실행 사이 transform 파일 교체 또는 API 인증 비밀을 관측할 수 있음] → 기동 시 읽은 정확한 바이트를 digest와 함께 pipe로 전달해 검증한 바이트를 실행하고 자식 환경을 명시적 allowlist로 제한한다.
-- [snapshot transform이 helper/package를 다시 읽어 검증한 바이트 밖의 코드가 바뀔 수 있음] → schedule 활성 경로는 모든 import/require를 실행 전 정적 검사로 거부하고 self-contained transform만 허용한다.
+- [snapshot transform이 ambient Node capability나 helper/package를 통해 검증한 바이트 밖의 코드에 접근할 수 있음] → schedule 활성 경로는 좁은 순수 mapping AST allowlist만 허용하고 ambient global, 동적 property, constructor/prototype와 모든 module loader를 실행 전 거부한다.
 - [자식 stdout 오염이 잘못된 active run 참조나 메모리 사용을 만들 수 있음] → 작은 고정 상한, 단일 JSON exact schema, plugin·schedule metadata와 exit code 일치를 모두 확인한 뒤 FK 참조만 저장한다.
-- [종료되지 않는 자식이 API shutdown을 무기한 막을 수 있음] → SIGTERM grace와 SIGKILL 뒤 close 대기에 각각 상한을 둔다.
+- [exit 뒤 stdio close 또는 duplicate DB 저장이 끝나지 않아 API shutdown을 무기한 막을 수 있음] → 실제 close까지 bounded wait해 가능한 결과를 등록하고, SIGTERM grace·SIGKILL 뒤 close·결과 drain에 각각 상한을 둔다.
 
 ## Migration Plan
 

@@ -2,7 +2,7 @@ import { cpSync, mkdtempSync, mkdirSync, readFileSync, rmSync, symlinkSync, writ
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { afterEach, describe, expect, test } from 'vitest';
-import { preflightConfiguration, resolveSecret, validateReadQuery, validateRepository } from '../dist/index.js';
+import { assertSelfContainedTransform, loadSelfContainedTransformSnapshot, preflightConfiguration, resolveSecret, validateReadQuery, validateRepository } from '../dist/index.js';
 import { createHash } from 'node:crypto';
 
 const repositoryRoot = resolve(import.meta.dirname, '../../..');
@@ -198,6 +198,32 @@ describe('validateRepository', () => {
     expect(globalThis.__ossScpMainExecuted).toBe(true);
     expect(globalThis.__ossScpHelperExecuted).toBe(true);
     delete globalThis.__ossScpMainExecuted; delete globalThis.__ossScpHelperExecuted;
+  });
+
+  test.each([
+    ['globalThis.process', 'globalThis.process.getBuiltinModule("node:fs")'],
+    ['process alias', 'const p = process; p.getBuiltinModule("node:fs")'],
+    ['computed ambient property', 'const key = "getBuiltinModule"; globalThis.process[key]("node:fs")'],
+    ['Reflect.get', 'Reflect.get(globalThis, "process")'],
+    ['node:module createRequire', 'const create = require("node:module").createRequire; create(__filename)("node:fs")'],
+    ['constructor chain', '({}).constructor.constructor("return process")()'],
+    ['destructured constructor chain', 'const { constructor: { constructor: F } } = record; F("return process")()'],
+    ['eval', 'eval("process")'],
+    ['Function', 'Function("return process")()'],
+    ['ambient this', 'this.process'],
+    ['module loader', 'module.require("node:fs")'],
+    ['dynamic import', 'import("node:fs")'],
+  ])('scheduled transform allowlist가 %s 우회를 실행 전에 거부한다', (_name, escape) => {
+    const runtimeTrap = 'const executed = Number({ valueOf: () => ({ value: true }).missing() });';
+    const source = `${runtimeTrap}\nexports.transform = ({ record }) => { ${escape}; return record; };\n`;
+    expect(() => loadSelfContainedTransformSnapshot(Buffer.from(source), '/snapshot/transform.js'))
+      .toThrowError(/^scheduled transform/);
+  });
+
+  test('repository의 배포 transform은 scheduled 순수 mapping allowlist를 충족한다', () => {
+    for (const directory of ['dependency-track-db', 'sample1-offset-api', 'sample2-single-api', 'vulnerabilities-http-csv', 'vulnerabilities-local-csv']) {
+      expect(() => assertSelfContainedTransform(readFileSync(join(repositoryRoot, 'plugins', directory, 'dist/transform.js')))).not.toThrow();
+    }
   });
   test('sample1과 sample2 설정을 내부 수집 정의로 해석한다', () => {
     const result = validateRepository(repositoryRoot);

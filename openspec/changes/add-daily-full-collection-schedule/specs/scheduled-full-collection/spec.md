@@ -50,7 +50,7 @@
 - **THEN** 플랫폼은 놓친 scheduled 실행을 보충하지 않고 재시작 이후의 다음 발생만 예약하며 독립적인 기동 수집은 기존 계약대로 요청한다
 
 ### Requirement: 설정 snapshot과 안전한 종료
-실행 중인 API는 기동 시 검증한 일정, runtime definition, revision과 정확한 transform 바이트 digest/source의 불변 snapshot을 계속 사용해야 하며(SHALL), 설정·transform 파일 변경은 성공적인 재기동 뒤에만 적용해야 한다(MUST). scheduled transform은 self-contained여야 하고 상대·절대 경로 및 filesystem-backed package import/require를 포함한 외부 module access를 module top-level 실행 전에 거부해야 한다(SHALL). 이 제한은 schedule 활성 경로에 적용하고 비-scheduled transform 로딩 계약을 바꾸지 않아야 한다(MUST). scheduled 자식은 snapshot 구조·revision·정확한 바이트 digest를 transform module top-level 실행 전에 검증하고 검증한 바이트 자체를 파일 재조회 없이 실행해야 한다(SHALL). 자식 환경에는 필수 runtime 값, `PLATFORM_DB_*`와 해당 대상 Connection이 참조하는 수집 credential만 전달해야 하며(MUST), `AUTH_*`, `LDAP_*` 및 무관한 부모 환경은 전달해서는 안 된다(MUST NOT). 종료 시 pending timer를 취소하고 시작된 scheduled 자식 수집에 `SIGTERM`을 전달한 뒤 grace period 안에 종료하지 않으면 `SIGKILL`하고, close 대기를 유한 상한 안에 끝내야 한다(SHALL).
+실행 중인 API는 기동 시 검증한 일정, runtime definition, revision과 정확한 transform 바이트 digest/source의 불변 snapshot을 계속 사용해야 하며(SHALL), 설정·transform 파일 변경은 성공적인 재기동 뒤에만 적용해야 한다(MUST). scheduled transform은 self-contained 순수 mapping AST allowlist를 충족해야 한다(SHALL). allowlist 밖의 구문·ambient identifier·동적 computed access·constructor/prototype chain 및 상대·절대·package import/require/module loader를 module top-level 실행 전에 기본 거부해야 한다(MUST). 이 제한은 schedule 활성 경로에 적용하고 비-scheduled transform 로딩 계약을 바꾸지 않아야 한다(MUST). scheduled 자식은 snapshot 구조·revision·정확한 바이트 digest를 transform module top-level 실행 전에 검증하고 검증한 바이트 자체를 파일 재조회 없이 실행해야 한다(SHALL). 자식 환경에는 필수 runtime 값, `PLATFORM_DB_*`와 해당 대상 Connection이 참조하는 수집 credential만 전달해야 하며(MUST), `AUTH_*`, `LDAP_*` 및 무관한 부모 환경은 전달해서는 안 된다(MUST NOT). 종료 시 pending timer를 취소하고 시작된 scheduled 자식 수집에 `SIGTERM`을 전달한 뒤 grace period 안에 종료하지 않으면 `SIGKILL`해야 한다(SHALL). process exit 상태와 별개로 실제 `close`까지 유한 상한 안에서 기다려 결과 handler를 등록하고, 등록된 결과 영속화도 별도 고정 상한 안에서 drain해야 한다(SHALL).
 
 #### Scenario: 실행 중 설정 변경
 - **WHEN** API 기동 뒤 외부 설정의 일정, registry 또는 transform 파일이 변경된다
@@ -64,6 +64,10 @@
 - **WHEN** schedule 활성 transform이 상대·절대 경로나 package를 import/require하거나 해당 helper가 기동 뒤 교체된다
 - **THEN** 플랫폼은 transform과 helper의 top-level을 실행하기 전에 기동을 거부하고 helper 파일을 scheduled 실행에서 다시 읽지 않는다
 
+#### Scenario: ambient capability 우회
+- **WHEN** scheduled transform이 `process`, `globalThis`, ambient `this`, `eval`, `Function`, `Reflect`, computed/aliased module access 또는 constructor/prototype chain을 사용한다
+- **THEN** 플랫폼은 전체 AST allowlist 검증에서 해당 transform을 거부하고 앞선 module top-level 코드도 실행하지 않는다
+
 #### Scenario: 비-scheduled transform 호환성
 - **WHEN** schedule이 비활성화된 기존 transform이 로컬 helper를 require한다
 - **THEN** 기존 preflight와 수동·기동 수집 module loading 계약은 유지된다
@@ -74,4 +78,8 @@
 
 #### Scenario: 종료 중 scheduled 수집
 - **WHEN** 예정 수집이 진행 중인 동안 API가 종료 신호를 받는다
-- **THEN** pending timer를 제거하고 진행 중 자식에 `SIGTERM`을 전달하며 grace 뒤 생존 자식은 `SIGKILL`하고, 유한한 대기 상한 안에 종료 lifecycle을 반환하며 완료되지 않은 실행을 성공으로 기록하지 않는다
+- **THEN** pending timer를 제거하고 진행 중 자식에 `SIGTERM`을 전달하며 grace 뒤 생존 자식은 `SIGKILL`하고, process exit 뒤 실제 stdio `close`까지 bounded wait해 가능한 결과를 drain하며 완료되지 않은 실행을 성공으로 기록하지 않는다
+
+#### Scenario: 종료 중 영속화 지연
+- **WHEN** 실제 child `close`에서 등록된 duplicate 참조 저장이 응답하지 않는다
+- **THEN** 플랫폼은 고정된 결과 drain 상한까지만 기다리고 DB close를 무기한 막지 않은 채 종료 lifecycle을 반환한다

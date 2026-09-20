@@ -172,6 +172,36 @@ describe('일일 scheduled 전체 수집', () => {
     ]);
   });
 
+  it('exit 상태 뒤 실제 close까지 기다려 duplicate 결과를 drain한다', async () => {
+    vi.useFakeTimers(); vi.setSystemTime(new Date('2026-09-19T12:59:00.000Z'));
+    const exited = child(true); const spawn = vi.fn(() => exited); const references = referenceStorage();
+    const manager = new ScheduledCollectionManager('/config', { enabled: true, timezone: 'Asia/Seoul', time: '22:00' }, references, console, '/collector.js', spawn, () => new Date(), {}, 100, 50, 75);
+    manager.start([definition('one')]); await vi.advanceTimersByTimeAsync(60_000);
+    exited.stdout.end(`${JSON.stringify(resultEvent('one', 'duplicate'))}\n`);
+    exited.exitCode = 0; exited.emit('exit', 0);
+    let closed = false; const closing = manager.close().then(() => { closed = true; });
+    await Promise.resolve();
+    expect(exited.kill).not.toHaveBeenCalled();
+    expect(closed).toBe(false);
+    exited.emit('close', 0);
+    await closing;
+    expect(references.recordScheduledDuplicate).toHaveBeenCalledOnce();
+  });
+
+  it('종료 중 duplicate 저장이 끝나지 않아도 고정 drain 상한 뒤 반환한다', async () => {
+    vi.useFakeTimers(); vi.setSystemTime(new Date('2026-09-19T12:59:00.000Z'));
+    const duplicate = child(); const spawn = vi.fn(() => duplicate);
+    const references = { recordScheduledDuplicate: vi.fn(() => new Promise(() => undefined)) };
+    const manager = new ScheduledCollectionManager('/config', { enabled: true, timezone: 'Asia/Seoul', time: '22:00' }, references, console, '/collector.js', spawn, () => new Date(), {}, 100, 50, 75);
+    manager.start([definition('one')]); await vi.advanceTimersByTimeAsync(60_000);
+    finish(duplicate, 'one', 'duplicate');
+    let closed = false; const closing = manager.close().then(() => { closed = true; });
+    await vi.advanceTimersByTimeAsync(74); expect(closed).toBe(false);
+    await vi.advanceTimersByTimeAsync(1); await closing;
+    expect(closed).toBe(true);
+    expect(references.recordScheduledDuplicate).toHaveBeenCalledOnce();
+  });
+
   it('종료 시 SIGTERM grace 뒤 SIGKILL하고 close 대기 상한을 보장한다', async () => {
     vi.useFakeTimers(); vi.setSystemTime(new Date('2026-09-19T12:59:00.000Z'));
     const running = child(true); const spawn = vi.fn(() => running);

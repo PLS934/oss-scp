@@ -75,36 +75,28 @@ describe('CLI 선택과 revision', () => {
   });
 
   it('snapshot digest와 revision을 module top-level 실행 전에 검증하고 정확한 바이트만 실행한다', () => {
-    const source = 'globalThis.__ossScpSnapshotExecuted = (globalThis.__ossScpSnapshotExecuted ?? 0) + 1; exports.transform = ({ record }) => record;\n';
+    const source = 'const snapshotKind = "scheduled"; exports.transform = ({ record }) => ({ ...record, snapshotKind });\n';
     const digest = createHash('sha256').update(source).digest('hex');
     const snapshotted = { ...definition, plugin: { ...plugin, transformDigest: digest } };
     const snapshot = { definition: snapshotted, transform: { digest, sourceBase64: Buffer.from(source).toString('base64') } };
-    globalThis.__ossScpSnapshotExecuted = 0;
     const verified = verifyScheduledCollectionSnapshot(snapshot, 'sample-plugin', configRevision(snapshotted));
-    expect(globalThis.__ossScpSnapshotExecuted).toBe(1);
-    expect(verified.transform({ record: { exact: true } })).toEqual({ exact: true });
+    expect(verified.transform({ record: { exact: true } })).toEqual({ exact: true, snapshotKind: 'scheduled' });
 
-    globalThis.__ossScpSnapshotExecuted = 0;
     const changed = { ...snapshot, transform: { ...snapshot.transform, digest: '0'.repeat(64) } };
     expect(() => verifyScheduledCollectionSnapshot(changed, 'sample-plugin', configRevision(snapshotted))).toThrowError(expect.objectContaining({ code: 'repository_config' }));
-    expect(globalThis.__ossScpSnapshotExecuted).toBe(0);
 
     expect(() => verifyScheduledCollectionSnapshot(snapshot, 'sample-plugin', '0'.repeat(64))).toThrowError(expect.objectContaining({ code: 'repository_config' }));
     expect(() => verifyScheduledCollectionSnapshot({ ...snapshot, unexpected: true }, 'sample-plugin', configRevision(snapshotted))).toThrowError(expect.objectContaining({ code: 'repository_config' }));
-    expect(globalThis.__ossScpSnapshotExecuted).toBe(0);
-    delete globalThis.__ossScpSnapshotExecuted;
   });
 
   it('scheduled snapshot의 local require를 main/helper top-level 실행 전에 거부한다', () => {
-    const source = 'globalThis.__ossScpSnapshotExecuted = true; exports.transform = require("./helper.js").transform;\n';
+    const source = 'const executed = Number({ valueOf: () => ({ value: true }).missing() }); exports.transform = require("./helper.js").transform;\n';
     const digest = createHash('sha256').update(source).digest('hex');
     const snapshotted = { ...definition, plugin: { ...plugin, transformDigest: digest } };
-    delete globalThis.__ossScpSnapshotExecuted;
     expect(() => verifyScheduledCollectionSnapshot(
       { definition: snapshotted, transform: { digest, sourceBase64: Buffer.from(source).toString('base64') } },
       'sample-plugin', configRevision(snapshotted),
     )).toThrow();
-    expect(globalThis.__ossScpSnapshotExecuted).toBeUndefined();
   });
 
   it('collector public event를 크기와 exact schema로 제한한다', () => {

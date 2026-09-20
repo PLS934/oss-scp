@@ -11,6 +11,7 @@ const localRequire = createRequire(__filename);
 const MAX_TIMER_DELAY_MS = 12 * 60 * 60 * 1000;
 const DEFAULT_SHUTDOWN_GRACE_MS = 5_000;
 const DEFAULT_KILL_WAIT_MS = 1_000;
+const DEFAULT_RESULT_DRAIN_MS = 1_000;
 const RUNTIME_ENVIRONMENT = new Set(['PATH', 'LANG', 'LC_ALL', 'TZ', 'NODE_EXTRA_CA_CERTS', 'SSL_CERT_FILE', 'SSL_CERT_DIR', 'HTTP_PROXY', 'HTTPS_PROXY', 'NO_PROXY']);
 const FORBIDDEN_ENVIRONMENT = /^(?:AUTH|LDAP)_/;
 
@@ -90,8 +91,8 @@ interface PreparedTarget {
   snapshot: SerializedScheduledCollectionSnapshot;
 }
 
-function waitForClose(child: ChildProcess, timeoutMs: number): Promise<boolean> {
-  if (child.exitCode !== null || child.signalCode !== null) return Promise.resolve(true);
+function waitForClose(child: ChildProcess, timeoutMs: number, alreadyClosed: () => boolean): Promise<boolean> {
+  if (alreadyClosed()) return Promise.resolve(true);
   return new Promise(resolve => {
     const closed = () => { clearTimeout(timer); resolve(true); };
     const timer = setTimeout(() => { child.removeListener('close', closed); resolve(false); }, timeoutMs);
@@ -100,8 +101,17 @@ function waitForClose(child: ChildProcess, timeoutMs: number): Promise<boolean> 
   });
 }
 
+function drainResults(results: readonly Promise<void>[], timeoutMs: number): Promise<void> {
+  if (results.length === 0) return Promise.resolve();
+  return new Promise(resolve => {
+    const timer = setTimeout(resolve, timeoutMs);
+    void Promise.allSettled(results).then(() => { clearTimeout(timer); resolve(); });
+  });
+}
+
 export class ScheduledCollectionManager {
   private readonly children = new Set<ChildProcess>();
+  private readonly closedChildren = new WeakSet<ChildProcess>();
   private readonly pendingResults = new Set<Promise<void>>();
   private targets: readonly PreparedTarget[] | undefined;
   private timer: ReturnType<typeof setTimeout> | undefined;
@@ -120,6 +130,7 @@ export class ScheduledCollectionManager {
     private readonly parentEnvironment: Readonly<NodeJS.ProcessEnv> = process.env,
     private readonly shutdownGraceMs = DEFAULT_SHUTDOWN_GRACE_MS,
     private readonly killWaitMs = DEFAULT_KILL_WAIT_MS,
+    private readonly resultDrainMs = DEFAULT_RESULT_DRAIN_MS,
   ) {}
 
   prepare(definitions: readonly CollectionDefinition[]): void {
@@ -193,6 +204,7 @@ export class ScheduledCollectionManager {
         this.logger.error(`정기 수집 프로세스를 시작하지 못했습니다: ${target.definition.plugin.id}`);
       });
       child.once('close', code => {
+        this.closedChildren.add(child);
         this.children.delete(child);
         if (spawnFailed) return;
         const pending = this.handleResult(collectionScope(this.configRoot, target.definition), scheduledAt, code, stdoutInvalid, stdout);
@@ -237,12 +249,12 @@ export class ScheduledCollectionManager {
     if (this.timer) clearTimeout(this.timer);
     this.timer = undefined;
     const children = [...this.children];
-    for (const child of children) child.kill('SIGTERM');
+    for (const child of children) if (child.exitCode === null && child.signalCode === null) child.kill('SIGTERM');
     await Promise.all(children.map(async child => {
-      if (await waitForClose(child, this.shutdownGraceMs)) return;
+      if (await waitForClose(child, this.shutdownGraceMs, () => this.closedChildren.has(child))) return;
       if (child.exitCode === null && child.signalCode === null) child.kill('SIGKILL');
-      await waitForClose(child, this.killWaitMs);
+      await waitForClose(child, this.killWaitMs, () => this.closedChildren.has(child));
     }));
-    await Promise.allSettled([...this.pendingResults]);
+    await drainResults([...this.pendingResults], this.resultDrainMs);
   }
 }
