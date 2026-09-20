@@ -1,7 +1,9 @@
-import { spawnSync } from 'node:child_process';
+import { spawn, spawnSync } from 'node:child_process';
+import { once } from 'node:events';
 import { readFileSync } from 'node:fs';
 import { createServer } from 'node:http';
 import { resolve } from 'node:path';
+import { createInterface } from 'node:readline';
 import { gzipSync } from 'node:zlib';
 import { afterEach, beforeEach, describe, expect, test } from 'vitest';
 import { collectHttpSingle, HttpCollectorError } from '../dist/index.js';
@@ -273,14 +275,105 @@ describe('collectHttpSingle', () => {
   });
 });
 
-test('큰 single 응답은 완료 후 결과에 원천 데이터를 보관하지 않는다', () => {
+function measureSingleMemory(count, options = {}) {
   const worker = resolve(import.meta.dirname, 'single-memory-worker.mjs');
-  const result = spawnSync(process.execPath, ['--expose-gc', worker, '2000'], {
-    encoding: 'utf8',
-    timeout: 10_000,
-  });
+  const result = spawnSync(
+    process.execPath,
+    ['--expose-gc', worker, String(count), ...(options.retainItems ? ['--retain-items'] : [])],
+    {
+      encoding: 'utf8',
+      timeout: 10_000,
+    },
+  );
   expect(result.status, result.stderr).toBe(0);
+  expect(result.signal).toBeNull();
   const measurement = JSON.parse(result.stdout);
-  expect(measurement.summary).toEqual({ requests: 1, records: 2000 });
-  expect(measurement.retainedBytes).toBeLessThan(4 * 1024 * 1024);
+  expect(measurement).toEqual(expect.objectContaining({
+    schemaVersion: 1,
+    count,
+    summary: { requests: 1, records: count },
+    retainedItemCount: options.retainItems ? count : 0,
+    server: { exitCode: 0, signal: null, stderr: '' },
+  }));
+  expect(measurement.payloadBytes).toBeGreaterThan(0);
+  expect(measurement.retainedBytes).toBeGreaterThanOrEqual(0);
+  return measurement;
+}
+
+function processExists(pid) {
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch (error) {
+    if (error.code === 'ESRCH') return false;
+    throw error;
+  }
+}
+
+async function waitForProcessExit(pid, timeoutMs = 2000) {
+  const deadline = Date.now() + timeoutMs;
+  while (processExists(pid)) {
+    if (Date.now() >= deadline) throw new Error(`process ${pid} did not exit`);
+    await new Promise((resolvePromise) => setTimeout(resolvePromise, 25));
+  }
+}
+
+function expectSourceResponseReleased(small, large) {
+  const payloadGrowth = large.payloadBytes - small.payloadBytes;
+  const retainedGrowth = large.retainedBytes - small.retainedBytes;
+  expect(payloadGrowth).toBeGreaterThan(7 * 1024 * 1024);
+  expect(
+    retainedGrowth,
+    JSON.stringify({ small, large, payloadGrowth, retainedGrowth }),
+  ).toBeLessThan(payloadGrowth / 4);
+}
+
+test('큰 single 응답은 완료 후 원천 크기에 비례한 메모리를 보관하지 않는다', () => {
+  // 기존 같은 프로세스 fixture가 생성한 약 8.34 MiB 응답이 간헐적으로 남았으며,
+  // server heap을 분리하면 collector 제품 참조에 의한 비례 보관은 재현되지 않는다.
+  const small = measureSingleMemory(20);
+  const large = measureSingleMemory(2000);
+  expectSourceResponseReleased(small, large);
+
+  const retainedSmall = measureSingleMemory(20, { retainItems: true });
+  const retainedLarge = measureSingleMemory(2000, { retainItems: true });
+  expect(() => expectSourceResponseReleased(retainedSmall, retainedLarge)).toThrow();
 });
+
+test('메모리 worker 강제 종료 시 server child도 종료한다', async () => {
+  const worker = resolve(import.meta.dirname, 'single-memory-worker.mjs');
+  const running = spawn(
+    process.execPath,
+    ['--expose-gc', worker, '1', '--wait-for-parent-kill'],
+    { stdio: ['ignore', 'pipe', 'pipe'] },
+  );
+  const lines = createInterface({ input: running.stdout });
+  let serverPid;
+  try {
+    const [line] = await once(lines, 'line', { signal: AbortSignal.timeout(2000) });
+    const ready = JSON.parse(line);
+    expect(ready).toEqual(expect.objectContaining({
+      schemaVersion: 1,
+      serverPid: expect.any(Number),
+      serverPort: expect.any(Number),
+    }));
+    serverPid = ready.serverPid;
+    expect(processExists(serverPid)).toBe(true);
+
+    const workerExit = once(running, 'exit', { signal: AbortSignal.timeout(2000) });
+    expect(running.kill('SIGKILL')).toBe(true);
+    expect(await workerExit).toEqual([null, 'SIGKILL']);
+    await waitForProcessExit(serverPid);
+    expect(processExists(serverPid)).toBe(false);
+  } finally {
+    lines.close();
+    if (running.exitCode === null && running.signalCode === null) {
+      const workerExit = once(running, 'exit', { signal: AbortSignal.timeout(2000) });
+      running.kill('SIGKILL');
+      await workerExit.catch(() => {});
+    }
+    if (serverPid !== undefined && processExists(serverPid)) {
+      process.kill(serverPid, 'SIGKILL');
+    }
+  }
+}, 10_000);
