@@ -138,14 +138,19 @@ wait_health "$scheduled_peer" healthy
 # 빠른 로컬 fixture 수집의 실행 시간이 호스트 성능에 따라 달라져도 두 scheduler가
 # 동일한 fresh lease winner를 관찰하도록 고정합니다. 이후 reference는 실제 child
 # process와 DB 경계를 통과해 저장되어야 합니다.
-docker compose -p "$project" exec -T postgres psql -U oss_scp_app -d oss_scp -v ON_ERROR_STOP=1 -c "
+seed_run_id="$(docker compose -p "$project" exec -T postgres psql -U oss_scp_app -d oss_scp -v ON_ERROR_STOP=1 -qAtc "
   INSERT INTO collection_runs
     (plugin_id, source_id, scope_type, scope_key, config_revision, started_at, heartbeat_at,
      coordinated, trigger, scheduled_at, schedule_timezone)
   VALUES
     ('sample1-offset-api', 'mock-api-sample1', 'full', '', 'docker-smoke-active-lease', now(), now(),
-     true, 'scheduled', now(), 'UTC');
-" >/dev/null
+     true, 'scheduled', now(), 'UTC')
+  RETURNING id;
+")"
+if [[ ! "$seed_run_id" =~ ^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$ ]]; then
+  echo '정기 수집 smoke lease run ID를 확보하지 못했습니다' >&2
+  exit 1
+fi
 for ((attempt=0; attempt<150; attempt++)); do
   scheduled_count=$(docker compose -p "$project" exec -T postgres psql -U oss_scp_app -d oss_scp -Atc "SELECT count(*) FROM collection_runs WHERE trigger='scheduled' AND schedule_timezone='UTC' AND config_revision <> 'docker-smoke-active-lease'")
   if [ "$scheduled_count" -gt 0 ]; then break; fi
@@ -153,7 +158,7 @@ for ((attempt=0; attempt<150; attempt++)); do
 done
 test "$scheduled_count" -gt 0
 for ((attempt=0; attempt<30; attempt++)); do
-  reference_count=$(docker compose -p "$project" exec -T postgres psql -U oss_scp_app -d oss_scp -Atc "SELECT count(*) FROM scheduled_collection_references r JOIN collection_runs c ON c.id=r.active_run_id WHERE r.schedule_timezone='UTC' AND c.trigger='scheduled'")
+  reference_count=$(docker compose -p "$project" exec -T postgres psql -U oss_scp_app -d oss_scp -Atc "SELECT count(*) FROM scheduled_collection_references r JOIN collection_runs c ON c.id=r.active_run_id WHERE r.active_run_id='$seed_run_id'::uuid AND r.schedule_timezone='UTC' AND c.plugin_id='sample1-offset-api' AND c.source_id='mock-api-sample1' AND c.scope_type='full' AND c.scope_key='' AND c.trigger='scheduled' AND c.schedule_timezone='UTC'")
   if [ "$reference_count" -gt 0 ]; then break; fi
   sleep 1
 done
