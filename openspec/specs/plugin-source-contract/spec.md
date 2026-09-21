@@ -4,6 +4,8 @@
 
 플러그인이 원천 API의 호출·응답·반복 수집 정보를 선언하고 플랫폼이 이를 배포 전에 검증하여, 수집 코어 수정 없이 새로운 원천 설정을 추가할 수 있게 한다.
 
+이 문서는 플러그인·source·Connection의 선언과 교차 참조 검증을 다룬다. 실행 동작은 각 수집 명세와 [라이브 조회](../live-db-plugin-source/spec.md), 화면 선언은 [목록 정의](../plugin-list-definition/spec.md)·[상세 정의](../plugin-detail-definition/spec.md), 검색·필터 선언은 [검색 명세](../record-search-filters/spec.md)를 함께 참조한다.
+
 ## Requirements
 
 ### Requirement: 최소 플러그인 선언

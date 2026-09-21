@@ -4,6 +4,8 @@
 
 React 화면이 플랫폼 DB의 저장 레코드 목록과 상세를 동일한 타입·검증·오류 계약으로 안전하게 조회하도록 공통 클라이언트 경계를 제공한다.
 
+아래 저장 레코드·UUID·수집 상태 계약은 저장형 조회에 적용한다. 라이브 목록의 `mode: live`·`queriedAt` 응답과 `/api/v1/live-records/detail`의 범위·외부 키 기반 상세는 [조회 API 명세](../record-query-api/spec.md)의 라이브 계약을 따른다. 두 모드 모두 동일 출처의 플랫폼 API를 사용하고 브라우저에서 원천 Connection에 직접 접근하지 않는다.
+
 ## Requirements
 
 ### Requirement: 저장 레코드 목록을 타입 안전하게 조회한다
@@ -78,7 +80,7 @@ React 화면이 플랫폼 DB의 저장 레코드 목록과 상세를 동일한 �
 클라이언트는 서버가 반환한 선언된 필드만 사용하고 브라우저에서 원천 API·DB·Connection에 접근하거나 응답에 없는 값을 추정하지 않아야 한다(MUST).
 
 #### Scenario: 동일 출처 API 사용
-- **WHEN** 목록 또는 상세 요청을 생성한다
+- **WHEN** 저장형 목록 또는 상세 요청을 생성한다
 - **THEN** URL은 `/api/v1/records` 아래의 상대 경로이며 원천 주소나 Connection 정보가 포함되지 않는다
 
 #### Scenario: 서버 계약 준수

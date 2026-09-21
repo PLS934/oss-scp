@@ -6,7 +6,7 @@ oss-scp는 외부 자산·취약점 데이터를 수집·가공해 플랫폼 DB�
 
 현재 합의한 제품 요구사항과 구현 순서를 관리한다. 파일명·JSON·SDK는 명세 작성용 초안이며 구현 완료를 뜻하지 않는다. 세부 계약은 단계별 OpenSpec change에서 확정한다.
 
-현재 구현된 범위는 React·NestJS와 로컬·Docker 실행 환경, HTTP JSON offset·single 및 로컬·HTTP CSV 수집, 공통 가공·저장·수동 수집 CLI, PostgreSQL·MySQL 연결과 저장·조회, 외부 플러그인 설정 검증, registry 기반 메뉴·기본 목록·상세와 cursor 기반 첫·이전·다음 묶음 이동이다. 기동·재시작 시 전체 수집, 배포 설정 기반 IANA 시간대 일일 전체 수집, 대상별 실행 조정·상태 조회 API, HTTP CSV의 공통 CLI 연결과 GitHub Release 번들 자산 자동화도 구현되어 있다. 인증·권한, 담당자 관리, 검색·필터·정렬·개인별 목록 설정과 운영 상태 화면 등은 남아 있다. 구현된 계약은 [OpenSpec 본 명세](../../openspec/specs/)를 기준으로 하고, 아래 단계별 계획과 구분한다. 실행 방법은 [클라이언트 가이드](../client-development.md), [서버 가이드](../server-development.md), 브랜치·배포 절차는 [개발 워크플로](../development-workflow.md)를 따른다.
+현재 구현 현황은 2026-09-21에 확인한 main `bbb493f0` 기준이다. React·NestJS 실행 기반, HTTP JSON·CSV 수집·가공·저장, PostgreSQL·MySQL 저장 조회, 번호형 페이지·검색·필터·정렬, 수동 동기화, HTTP 연결 인증, PostgreSQL 라이브 조회, LDAP/AD 로그인·서버 세션, IANA 시간대 일일 수집과 독립 플러그인 생성·검증 CLI가 구현되어 있다. 사용자 정의 React 화면은 플랫폼 웹 이미지와 함께 빌드한다. React UI 독립 배포는 설계 완료·구현 대기 상태다. 역할별·자산별 권한, 담당자 관리, 개인별 목록 설정과 운영 상태 화면 등은 후속 범위다. 관련 계약은 [OpenSpec 명세 안내](../../openspec/README.md), 실행 방법은 [클라이언트 가이드](../client-development.md)와 [서버 가이드](../server-development.md), 배포 절차는 [개발 워크플로](../development-workflow.md)를 따른다.
 
 ### 계정관리 옵션
 
@@ -547,9 +547,18 @@ Vitest·Playwright와 실제 PostgreSQL/MySQL 통합 검증을 사용한다. 규
 | 원천 mock·CSV 샘플, HTTP JSON offset·single 및 로컬·HTTP CSV 수집 | [원천 mock](../../openspec/specs/source-mock-api/spec.md), [source 계약](../../openspec/specs/plugin-source-contract/spec.md) |
 | 가공·검증·묶음 저장·checkpoint·수동 CLI | [공통 실행기](../../openspec/specs/common-collection-runner/spec.md), [수동 CLI](../../openspec/specs/manual-collection-cli/spec.md) |
 | PostgreSQL·MySQL 연결·migration·공통 저장·조회 | [저장](../../openspec/specs/platform-record-storage/spec.md), [조회](../../openspec/specs/platform-record-query/spec.md) |
-| 외부 플러그인 검증·독립 배포, 메뉴·기본 목록·상세, cursor 첫·이전·다음 이동 | [배포](../../openspec/specs/server-plugin-deployment/spec.md), [목록](../../openspec/specs/plugin-record-list/spec.md), [상세](../../openspec/specs/plugin-detail-view/spec.md) |
+| 외부 플러그인 검증·독립 배포, 메뉴·기본 목록·상세와 번호형 페이지 이동 | [배포](../../openspec/specs/server-plugin-deployment/spec.md), [목록](../../openspec/specs/plugin-record-list/spec.md), [상세](../../openspec/specs/plugin-detail-view/spec.md) |
 | 기동·재시작 전체 수집, 실행 충돌 조정과 상태 조회 API | [기동 수집](../../openspec/specs/startup-full-collection/spec.md), [실행 조정](../../openspec/specs/collection-run-coordination/spec.md) |
 | 기술 프리뷰 범위 정의와 번들 Release 자산 자동화 | [0.1.0 계약](../../openspec/specs/technical-preview-release/spec.md), [Release 자산](../../openspec/specs/github-release-artifacts/spec.md) |
+| 검색·필터·단일 정렬과 번호형 조회 | [검색·필터](../../openspec/specs/record-search-filters/spec.md), [정렬](../../openspec/specs/record-sorting/spec.md) |
+| 플러그인별 수동 동기화와 HTTP 연결 인증 | [수동 동기화](../../openspec/specs/plugin-manual-sync/spec.md), [HTTP 인증](../../openspec/specs/http-connection-authentication/spec.md) |
+| 무저장 PostgreSQL 라이브 조회 | [라이브 조회](../../openspec/specs/live-db-plugin-source/spec.md) |
+| 정적 사용자 정의 화면과 테마 선택 | [사용자 정의 화면](../../openspec/specs/custom-plugin-views/spec.md)의 화면 선택·오류 격리, [테마](../../openspec/specs/web-theme-preference/spec.md) |
+| LDAP/AD 로그인·서버 세션 | [인증 계약](../../openspec/specs/ldap-session-auth/spec.md) — 역할별·자산별 권한은 제외 |
+| 일일 전체 수집 | [일정 계약](../../openspec/specs/scheduled-full-collection/spec.md) — 기본 비활성, 활성화 시 기본 Asia/Seoul 22:00 |
+| 독립 플러그인 생성·검증 스킬/CLI | [제작 도구 계약](../../openspec/specs/plugin-authoring-bootstrap/spec.md) — React UI 빌드·배포는 제외 |
+
+독립 React UI 배포는 [설계 change](../../openspec/changes/archive/2026-09-18-design-independent-plugin-ui/proposal.md)에서 구현을 제외했다. [UI 배포 명세](../../openspec/specs/plugin-ui-distribution/spec.md)는 목표 계약이며, 공개 UI API·빌드 도구·서버 검증 및 제공·웹 로더·통합 검증은 남아 있다.
 
 각 후속 작업에 필요한 최소 OpenSpec 계약을 먼저 작성한다. 아래 Phase의 작업 목록은 남은 범위이며, 완료 기준에는 기존 동작을 유지하기 위한 회귀 검증도 포함한다.
 
@@ -599,18 +608,18 @@ LDAP·Active Directory 인증, 역할 권한, 담당자·감사, 보관·삭제,
 
 확정된 역할 권한을 바탕으로 사용자 식별·자산 연결과 동기화 실행 계약을 정한 뒤 화면·인증·스케줄을 연결한다. 필드·키 변경의 호환성 검사와 미지원 변경 차단은 이 단계에 포함한다.
 
-- 계정관리는 기본 비활성화로 제공한다. 설정으로 활성화한 LDAP·AD 인증과 로그인 없는 기본 실행을 각각 검증한다.
-- 구현된 [기동·재시작 전체 수집](../../openspec/specs/startup-full-collection/spec.md)과 [대상별 실행 조정](../../openspec/specs/collection-run-coordination/spec.md)을 기반으로 매일 22:00 전체 동기화를 추가한다. 우선 Asia/Seoul을 사용하며 정기 실행과 기존 실행 간 충돌·부분 실패·수동 업무 데이터 보존을 검증한다.
+- 구현된 선택적 LDAP·AD 로그인과 서버 세션을 기반으로 역할·자산 접근 제어를 추가하고, 인증 비활성화 경로를 회귀 검증한다.
+- 구현된 일일 전체 수집과 기존 기동·수동 실행을 기반으로 업무 데이터 보존과 운영 알림을 연결한다. 일정은 설정한 IANA 시간대·현지 시각을 따르며, 활성화 시 기본값은 Asia/Seoul 22:00이다.
 - 원천 필드 기본 담당자와 수동 복수 지정 우선 규칙, 원천 기본값 복귀·감사·접근 범위 변경을 구현한다.
 - 권한에 따른 자산 수동 삭제와 감사 기록을 구현한다. 확정된 영구 삭제·동일 키 재수집 시 신규 등록 정책을 적용한다.
 - 같은 DB에서 활성·보관 목록을 제공하고 검증된 전체 수집의 미확인 자산 보관과 동일 키 재등장 시 복원을 구현한다.
 - 자산별 동기화 버튼·실행 상태와 전체 동기화 실패 시 상단 알림을 제공하고 동기화 중 기존 데이터 조회를 검증한다.
 - Employee 조회 전용·담당 자산 제한과 Security·Audit·Admin 전체 권한을 적용하고 사용자 식별·담당 자산 연결에 대한 공통 서버 권한 검사를 구현한다. Employee의 타인 자산 접근은 목록·상세·검색·집계·다운로드 및 직접 API 호출에서 차단한다.
-- 기존 기본 목록·상세에 서버 권한 경계를 연결하고 화면 교체 시에도 같은 조회·권한 계약을 유지하도록 설계·검증한다. 사용자 정의 화면 파일의 등록·빌드·배포 지원은 Phase 2로 미룬다.
+- 기존 기본 목록·상세에 서버 권한 경계를 연결하고 화면 교체 시에도 같은 조회·권한 계약을 유지하도록 설계·검증한다. 현재 사용자 정의 화면은 정적 빌드 방식이며, 독립 배포는 설계된 UI 배포 계약에 따라 Phase 2에서 구현한다.
 - 기존 최상위 object·array의 재귀 JSON 표시를 바탕으로 업무용 중첩 필드 경로·요소 타입 검증과 표시 규칙을 확장한다.
 - 첫 실제 수집처를 연결하고 식별·상태 변환·중복·갱신·부분 실패 정책을 검증한다.
 - fixture·JSON-file·REST·PostgreSQL connector를 한 개씩 확장한다. 기존 조회 화면·API에 수집처별 원천 코드를 추가하지 않는다.
-- 플랫폼 DB의 검색·정렬·필터를 구현하고 기존 cursor 묶음 이동에 결합한다. 자산·취약점 상세에 업무 데이터와 권한을 연결한다.
+- 기존 플랫폼 DB 검색·필터·정렬과 번호형 목록에 업무 데이터와 권한을 연결한다. cursor API의 고정 정렬 호환성도 유지한다.
 - 담당자 지정 API·화면·감사와 재수집 시 보존을 검증한다. 계정관리 비활성화 상태의 담당자 표현·감사 주체를 먼저 설계한다.
 - 기존 상태 조회 API를 사용하는 수집 결과·오류·설정 revision의 읽기 전용 운영 화면을 제공하고 변경된 운영 절차를 수동 CLI 가이드에 반영한다.
 - 기존 JSON 구조·참조 검증에 신규 계약을 반영하고 개발 전용 설정 hot reload와 화면 상태 복원을 구성한다.
@@ -620,7 +629,7 @@ LDAP·Active Directory 인증, 역할 권한, 담당자·감사, 보관·삭제,
 완료 기준(기존 구현의 회귀 검증 포함):
 
 - 사용자가 계정관리를 비활성화하고 샘플로 설치하고 실제 수집처 설정으로 전환할 수 있다.
-- 수집 후 조회 API는 플랫폼 DB만 사용하며 UI 조회가 원천 읽기를 유발하지 않는다.
+- 저장형 조회 API는 플랫폼 DB만 사용하며 UI 조회가 원천 읽기를 유발하지 않는다. 명시적으로 등록한 라이브 소스는 기존 라이브 조회 계약을 따른다.
 - 담당자 변경이 재수집으로 덮어써지지 않고 누락·실패를 해결로 오판하지 않는다.
 - 실패·부분 성공은 자산 보관을 유발하지 않는다. 검증된 전체 수집 후 미확인 자산을 보관하고 동일 키 재등장 시 내부 ID·수동 담당자·이력을 유지해 복원한다.
 - 공식 예제와 양쪽 DB 테스트가 CI를 통과한다.
@@ -633,14 +642,14 @@ LDAP·Active Directory 인증, 역할 권한, 담당자·감사, 보관·삭제,
 - 지정 시간대 매일 22:00 전체 범위 실행, 재시작 전체 동기화·동시 실행 중복 방지, 실패·부분 실패 상단 알림, 동기화 중 기존 조회와 수동 지정 보존을 검증한다.
 - 자산별 버튼·비동기 실행 상태·권한 검사·전체 실행과의 충돌 방지·다른 자산 보존을 검증한다.
 - 실패 대상·범위의 다음 정상 동기화 후 알림이 해제되고 실패 이력은 남는다. 다른 대상·부분 범위의 성공으로 미해결 알림이 해제되지 않는다.
-- cursor 기반 20·50·100·200건 묶음 이동과 검색·필터·정렬, 권한을 적용한 `hasNextPage`가 실제 DB에서 동작한다. 목록 설정은 계정관리 활성화 시 계정별 DB에, 비활성화 시 브라우저에 저장·복원하며 다른 계정의 설정이 섞이지 않는다.
+- 번호형 20·50·100·200건 페이지 이동과 검색·필터·정렬, 권한을 적용한 전체 건수와 `hasNextPage`가 실제 DB에서 동작한다. cursor API는 검색·필터와 기존 고정 정렬을 유지한다. 목록 설정은 계정관리 활성화 시 계정별 DB에, 비활성화 시 브라우저에 저장·복원하며 다른 계정의 설정이 섞이지 않는다.
 - 기본 목록·상세가 공통 조회·필드 계약과 서버 권한 검사를 사용하며 추후 화면 교체가 저장·조회·권한 코드 변경을 요구하지 않는 구조인지 검증한다.
 - 객체 배열의 login 태그와 중첩 날짜 표시가 필수 가공·검증·저장을 거쳐 기본 화면에서 동작한다.
 - 필드·유일키 변경의 호환성 검사, 미지원 변경 차단과 코드/DB 롤백 절차를 검증한다.
 
 ### Phase 2: 운영 편의와 선택 연동
 
-- MVP에서 설계한 화면 교체 계약에 따라 List.tsx·Detail.tsx 등 사용자 정의 화면의 등록·플랫폼 빌드·배포와 공통 권한 적용을 구현한다. 외부 프론트엔드 번들 로딩은 별도 계약으로 다시 설계한다.
+- 설계된 독립 UI 배포 계약에 따라 공개 UI API, 제작 CLI의 UI 빌드, 서버 manifest 검증·파일 제공, 웹 런타임 로더와 통합 검증을 구현한다. 기존 정적 사용자 정의 화면과 서버 인증 경계를 유지한다.
 
 핵심 수집·저장·조회가 검증된 후 필요에 따라 각 작업을 독립적으로 착수한다.
 
@@ -695,17 +704,17 @@ AI·IAM·규제 대응·분산 처리 및 자동 확장은 실제 필요성과 �
 
 0.1.0 공개 준비는 [기술 프리뷰의 출시 차단 게이트](../../openspec/specs/technical-preview-release/spec.md)를 기준으로 추적한다. [Release 자산 자동화](../../openspec/specs/github-release-artifacts/spec.md)는 API·웹 내부 산출물로 기본 번들과 PostgreSQL 포함 번들을 만들고, GitHub Release에는 두 번들과 외부 `SHA256SUMS`만 게시한다. 공개 전 최종 번들 검증과 태그 후보 CI 등 각 게이트의 증거를 확인한다.
 
-기능 확장 후보는 서버 검색·필터·정렬과 개인별 목록 설정, 기존 상태 조회 API를 사용하는 운영 화면, 매일 22시 정기 수집 및 Phase 0의 나머지 완료 기준이다. 각 후보는 기존 계약을 기반으로 별도 change에서 구체화하며 후보 간 착수 순서는 아직 확정하지 않았다.
+기능 확장 후보는 개인별 목록 설정, 기존 상태 조회 API를 사용하는 운영 화면, 독립 React UI 배포 구현 및 Phase 0의 나머지 완료 기준이다. 검색·필터·단일 정렬과 일일 수집은 기존 구현을 재사용한다. 각 후보는 기존 계약을 기반으로 별도 change에서 구체화하며 후보 간 착수 순서는 아직 확정하지 않았다.
 
 ## 16. 남은 결정
 
 - **수동 삭제**: 원천 부재 확인 방법, 영구 삭제 시 공유 관계·본문 등 관련 데이터 정리 경계
 
-- **플러그인 확장**: 기존 [선언·source 계약](../../openspec/specs/plugin-source-contract/spec.md), [가공 실행](../../openspec/specs/plugin-transform-runtime/spec.md), [묶음·checkpoint·오류 처리](../../openspec/specs/common-collection-runner/spec.md), [서버 배포 계약](../../openspec/specs/server-plugin-deployment/spec.md)은 확정되어 있다. 남은 결정은 page·custom 등 추가 수집 방식, 필드·키 변경의 호환성 정책과 Phase 2의 외부 UI 빌드·SDK·번들 계약이다.
+- **플러그인 확장**: 기존 [선언·source 계약](../../openspec/specs/plugin-source-contract/spec.md), [가공 실행](../../openspec/specs/plugin-transform-runtime/spec.md), [묶음·checkpoint·오류 처리](../../openspec/specs/common-collection-runner/spec.md), [서버 배포 계약](../../openspec/specs/server-plugin-deployment/spec.md)은 확정되어 있다. [독립 UI 배포 계약](../../openspec/specs/plugin-ui-distribution/spec.md)도 확정되어 있다. 독립 UI 배포의 구현은 아직 남아 있다. 남은 설계 결정은 page·custom 등 추가 수집 방식, 필드·키 변경의 호환성 정책과 제작 도구·SDK의 후속 고도화 범위다.
 - **DB 확장**: 기존 [공통 저장 모델·관계·유일키 범위](../../openspec/specs/platform-record-storage/spec.md)와 [PostgreSQL](../../openspec/specs/postgresql-platform-db/spec.md)·[MySQL](../../openspec/specs/mysql-platform-db/spec.md) 연결·migration 계약은 확정되어 있다. 남은 결정은 업무 관계·검색 인덱스 확장, 필드·유일키 변경 시 데이터 이관과 릴리스별 DB 지원·호환성 정책이다.
-- **인증·권한**: LDAP 사용자 매핑·세션, 복수 역할·복수 자산 규칙과 권한 변경 시 반영 방식
+- **인증·권한**: LDAP/AD 로그인·서버 세션은 구현되어 있다. 남은 결정은 LDAP 그룹 역할 매핑, 복수 역할·복수 자산 규칙과 권한 변경 시 반영 방식
 - **담당자**: 플러그인별 담당자 필드↔계정 속성 매핑 설정 형식과 미일치·다중 일치 상태 표시, 계정관리 비활성화 상태 표현·감사 주체
-- **동기화·알림**: 기동 수집과 [대상별 실행 충돌 조정](../../openspec/specs/collection-run-coordination/spec.md)은 확정되어 있다. 남은 결정은 Asia/Seoul 기준 매일 22시 스케줄러, 정기 실행과 기존 실행의 결합, 운영 화면·알림 및 실패 이력 보존 기간이다.
+- **동기화·알림**: 기동 수집과 [대상별 실행 충돌 조정](../../openspec/specs/collection-run-coordination/spec.md)은 확정되어 있다. 일일 스케줄러와 기존 실행 간 조정도 구현되어 있다. 남은 결정은 운영 화면·알림 및 실패 이력 보존 기간이다.
 - **목록**: 플러그인 지정 필터의 지원 종류·연산자·옵션 공급 방식, 다중 정렬, 검색의 대소문자·여러 단어·배열/비문자 타입 처리, 필드 변경·계정관리 설정 전환 시 목록 설정 처리
 - **운영 규모**: 첫 실제 수집처와 대표 샘플, 건수·바이트·응답 한도, 큰 본문 저장 위치와 원본·이력 보존 기간
 - **릴리스**: [0.1.0 기술 프리뷰](../../openspec/specs/technical-preview-release/spec.md)의 Ubuntu 24.04 linux/amd64·Docker Compose·PostgreSQL 17.6/MySQL 8.4.6 검증 대상과 [태그·번들 자산 게시 규칙](../../openspec/specs/github-release-artifacts/spec.md)은 확정되어 있다. GitHub Release는 기본 번들, PostgreSQL 포함 번들과 외부 `SHA256SUMS`만 공개한다. 남은 항목은 라이선스와 후속 지원 환경 확대다.

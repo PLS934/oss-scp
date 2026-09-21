@@ -4,6 +4,10 @@
 
 등록·검증된 플러그인 메뉴를 React 클라이언트에 일관되게 표시하고 URL에서 정확한 저장 레코드 조회 범위를 복원하는 공통 탐색 계약을 제공한다.
 
+## Implementation status
+
+2026-09-21 main `bbb493f0` 기준: 현재 메뉴와 공통·사용자 정의 화면 라우팅은 구현되어 있다. 아래 UI descriptor를 통한 비동기 화면 선택은 설계 완료·구현 대기 상태이며, 현재 사용자 정의 화면은 정적 registry에서 선택한다. 근거: [독립 UI 설계 change](../../changes/archive/2026-09-18-design-independent-plugin-ui/proposal.md). 요구사항은 후속 구현의 목표로 유지한다.
+
 ## Requirements
 
 ### Requirement: 메뉴 상세 경로를 같은 조회 범위로 해석한다

@@ -4,6 +4,10 @@
 
 플랫폼 이미지와 운영자 서버 플러그인 revision을 분리하면서도 검증된 조합만 기동·수집·화면 구성에 사용하도록 안전한 배포 계약을 제공한다.
 
+## Implementation status
+
+2026-09-21 main `bbb493f0` 기준: 서버 설정·transform의 외부 배포는 구현되어 있다. 아래 UI manifest·descriptor와 사용자 정의 React UI의 독립 배포 요구사항은 설계 완료·구현 대기 상태다. 현재 사용자 정의 화면 변경에는 플랫폼 웹 이미지 재빌드가 필요하다. 근거: [독립 UI 설계 change](../../changes/archive/2026-09-18-design-independent-plugin-ui/proposal.md). 요구사항은 후속 구현의 목표로 유지한다.
+
 ## Requirements
 
 ### Requirement: 외부 배포 설정의 수집 일정

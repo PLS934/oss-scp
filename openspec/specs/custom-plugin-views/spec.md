@@ -4,6 +4,12 @@
 
 플랫폼이 기동 시 검증한 플러그인 전용 React 화면을 검증된 메뉴 route에 선택적으로 연결하면서, 미등록 화면과 로딩·렌더링 실패를 안전하게 처리한다.
 
+이 문서는 화면 선택·route 입력·오류 격리를 다룬다. 사전 빌드 산출물, manifest, 호환성·무결성 검증과 전달은 [UI 배포 명세](../plugin-ui-distribution/spec.md)를 따른다.
+
+## Implementation status
+
+2026-09-21 main `bbb493f0` 기준: 현재 화면 선택·route context 전달·오류 격리는 정적 컴포넌트 registry로 구현되어 있다. 아래의 서버 검증 UI descriptor와 외부 사전 빌드 UI 로딩은 설계 완료·구현 대기 상태의 목표 계약이다. 근거: [독립 UI 설계 change](../../changes/archive/2026-09-18-design-independent-plugin-ui/proposal.md). 요구사항은 후속 구현의 목표로 유지한다.
+
 ## Requirements
 
 ### Requirement: 플러그인별 사용자 정의 화면을 선택적으로 사용한다

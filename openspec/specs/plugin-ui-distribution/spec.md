@@ -4,6 +4,10 @@
 
 플랫폼 이미지와 독립적으로 사용자 정의 React 화면을 제작·검증·배포하면서, 기존 플러그인 설치 흐름과 서버 API 권한 경계를 유지하는 공통 계약을 제공한다.
 
+## Implementation status
+
+2026-09-21 main `bbb493f0` 기준: 이 문서는 설계 완료·구현 대기 상태의 목표 계약이다. 현재 사용자 정의 React 화면은 플랫폼 웹 이미지에 정적으로 포함된다. UI manifest 기반 빌드·기동 검증·same-origin 제공·런타임 로딩은 아직 구현되지 않았다. 근거: [독립 UI 설계 change](../../changes/archive/2026-09-18-design-independent-plugin-ui/proposal.md). 요구사항은 후속 구현의 목표로 유지한다.
+
 ## Requirements
 
 ### Requirement: 사용자 정의 UI는 선택적 사전 빌드 입력이다

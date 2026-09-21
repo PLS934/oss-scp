@@ -2,7 +2,9 @@
 
 ## Purpose
 
-[기본 상세 정의 명세](../plugin-detail-definition/spec.md)에 따른 검증된 필드 정의로 저장 레코드의 기본 상세 화면과 실패 상태를 안전하고 일관되게 제공한다.
+[기본 상세 정의 명세](../plugin-detail-definition/spec.md)에 따른 검증된 필드 정의로 저장형·라이브 레코드의 기본 상세 화면과 실패 상태를 안전하고 일관되게 제공한다.
+
+필드 표시와 응답 범위 검증은 저장형·라이브형에서 공통으로 적용한다. 아래 내부 UUID와 잘못된 UUID 시나리오는 저장형 상세에 적용한다. 라이브 상세는 [조회 API의 라이브 상세 계약](../record-query-api/spec.md)에 따라 메뉴의 조회 범위와 외부 키를 사용하며, 직접 URL 접근·새로고침에서도 같은 외부 키를 조회한다. 라이브 실행·무저장 경계는 [라이브 조회 명세](../live-db-plugin-source/spec.md)를 따른다.
 
 ## Requirements
 
@@ -26,10 +28,10 @@
 - **THEN** 화면은 값을 추측하지 않고 표시 불가 상태를 표시한다
 
 ### Requirement: 상세 URL과 조회 범위를 검증한다
-클라이언트는 등록 메뉴 아래의 내부 UUID를 상세 route로 해석하고 응답의 `pluginId`, `sourceId`, `dataType`이 메뉴 context와 모두 일치할 때만 SHALL 표시해야 한다.
+저장형 상세에서 클라이언트는 등록 메뉴 아래의 내부 UUID를 상세 route로 해석하고 응답의 `pluginId`, `sourceId`, `dataType`이 메뉴 context와 모두 일치할 때만 SHALL 표시해야 한다.
 
 #### Scenario: 직접 URL과 새로고침
-- **WHEN** 사용자가 유효한 상세 URL을 직접 열거나 새로고침한다
+- **WHEN** 사용자가 유효한 저장형 상세 URL을 직접 열거나 새로고침한다
 - **THEN** 클라이언트는 같은 조회 context로 동일 내부 UUID 레코드를 표시한다
 
 #### Scenario: 범위 불일치
@@ -40,7 +42,7 @@
 클라이언트는 잘못된 UUID, 존재하지 않는 레코드, 범위 불일치와 그 밖의 API 실패를 구분되는 안전한 상태로 SHALL 표시해야 한다.
 
 #### Scenario: 잘못된 UUID
-- **WHEN** `recordId`가 내부 UUID 형식이 아니다
+- **WHEN** 저장형 상세의 `recordId`가 내부 UUID 형식이 아니다
 - **THEN** 클라이언트는 네트워크 요청 없이 잘못된 ID 상태를 표시한다
 
 #### Scenario: 존재하지 않는 레코드
