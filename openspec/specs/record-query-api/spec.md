@@ -4,6 +4,8 @@
 
 계정관리 비활성화 상태에서 저장된 공통 레코드 목록·상세와 수집 상태를 일관된 JSON 및 HTTP 오류 계약으로 조회할 최소 NestJS API를 제공한다.
 
+저장형 조회와 라이브 조회는 등록된 소스의 모드로 구분한다. 저장형 목록·상세는 [플랫폼 저장 조회](../platform-record-query/spec.md)를, 라이브 목록·상세는 [라이브 실행 계약](../live-db-plugin-source/spec.md)을 따른다. 검색·필터 입력은 [검색 명세](../record-search-filters/spec.md), 정렬 입력은 [정렬 명세](../record-sorting/spec.md)를 함께 참조한다.
+
 ## Requirements
 
 ### Requirement: API exposes stored record lists

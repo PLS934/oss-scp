@@ -4,6 +4,8 @@
 
 원천 시스템의 가용성과 무관하게 플랫폼 DB에 저장된 공통 레코드의 제한된 목록·상세와 관련 수집 상태를 DB 제품에 종속되지 않은 계약으로 조회하게 한다.
 
+이 문서는 플랫폼 DB에 영속화한 저장형 레코드만 다룬다. 무저장 PostgreSQL 원천 조회는 [라이브 조회 명세](../live-db-plugin-source/spec.md), HTTP 노출은 [조회 API](../record-query-api/spec.md)를 따른다.
+
 ## Requirements
 
 ### Requirement: Stored record lists are bounded and stably ordered
@@ -112,7 +114,7 @@ MySQL 조회 구현은 PostgreSQL과 동일한 공통 목록·상세·수집 상
 - **THEN** 두 구현은 원천 값의 DB별 비교나 표현에 cursor 순서를 의존하지 않고 같은 저장 값을 반환한다
 
 ### Requirement: Numbered pages provide exact scoped totals
-플랫폼은 `page`를 지정하면 1부터 시작하는 번호형 조회를 SHALL 제공하고, `limit`은 기존 20·50·100·200 및 기본값 20을 사용해야 한다. 번호형 `pageInfo`는 `page`, `pageSize`, `totalItems`, `totalPages`, `hasNextPage`를 포함해야 하며 cursor 모드와 구분되도록 `nextCursor`를 포함하지 않아야 한다. 전체 건수와 items는 하나의 읽기 snapshot에서 동일 범위를 기준으로 조회해야 한다. 두 DB의 정렬은 기존 `lastSeenAt DESC, id ASC`를 유지해야 한다. page와 offset은 안전한 정수 범위여야 하며 cursor와 page의 동시 지정은 입력 오류여야 한다.
+플랫폼은 `page`를 지정하면 1부터 시작하는 번호형 조회를 SHALL 제공하고, `limit`은 기존 20·50·100·200 및 기본값 20을 사용해야 한다. 번호형 `pageInfo`는 `page`, `pageSize`, `totalItems`, `totalPages`, `hasNextPage`를 포함해야 하며 cursor 모드와 구분되도록 `nextCursor`를 포함하지 않아야 한다. 전체 건수와 items는 하나의 읽기 snapshot에서 동일 범위를 기준으로 조회해야 한다. 사용자 정렬이 없으면 두 DB의 정렬은 기존 `lastSeenAt DESC, id ASC`를 유지해야 한다. 사용자 정렬은 아래 scalar 정렬 요구사항을 따른다. page와 offset은 안전한 정수 범위여야 하며 cursor와 page의 동시 지정은 입력 오류여야 한다.
 
 #### Scenario: Direct numbered query
 - **WHEN** 45건 범위에서 page=2, limit=20을 조회한다
