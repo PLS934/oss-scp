@@ -4,6 +4,8 @@
 
 플랫폼 이미지와 독립적으로 사용자 정의 React 화면을 제작·검증·배포하면서, 기존 플러그인 설치 흐름과 서버 API 권한 경계를 유지하는 공통 계약을 제공한다.
 
+화면 선택·route context와 다운로드·import·export·렌더링 실패 처리는 [사용자 정의 화면 계약](../custom-plugin-views/spec.md)을 따른다. 설정·transform·UI의 revision 고정, 재기동 적용과 롤백은 [서버 플러그인 배포 계약](../server-plugin-deployment/spec.md)을 따른다.
+
 ## Requirements
 
 ### Requirement: 사용자 정의 UI는 선택적 사전 빌드 입력이다
@@ -18,7 +20,7 @@
 - **THEN** UI 원본이나 UI 빌드를 요구하지 않고 기존 선언형 화면용 배포물을 생성할 수 있다
 
 ### Requirement: 운영 배포물은 실행 준비가 끝난 파일만 포함한다
-운영 플러그인 배포물은 plugin·source 선언, 사전 빌드 transform과 선택적 사전 빌드 UI 산출물을 SHALL 포함해야 한다. 플랫폼은 운영 중 TypeScript·React 원본을 변환하거나 플러그인 의존성을 설치해서는 안 된다(MUST NOT).
+운영 플러그인 배포물은 plugin·source 선언, 사전 빌드 transform과 선택적 사전 빌드 UI 산출물을 SHALL 포함해야 한다. 운영 중 원본 변환·의존성 설치 금지는 [서버 플러그인 배포 계약](../server-plugin-deployment/spec.md)의 공통 규칙을 따른다.
 
 #### Scenario: 소스와 개발 의존성 제외
 - **WHEN** 공통 빌드가 운영 배포 디렉터리를 생성한다
@@ -42,6 +44,10 @@ UI manifest는 플러그인 ID, UI revision, UI 계약 major, 지원 React 범�
 #### Scenario: 파일 변조
 - **WHEN** UI manifest에 기록된 SHA-256과 실제 번들 또는 CSS 파일의 내용이 다르다
 - **THEN** 플랫폼은 해당 플러그인을 부분 활성화하지 않고 전체 기동을 거부한다
+
+#### Scenario: 미지원 React 화면 참조
+- **WHEN** 외부 플러그인이 React 원본, 원격 URL 또는 UI manifest에 고정되지 않은 프론트엔드 번들을 참조한다
+- **THEN** 플랫폼은 해당 파일을 브라우저에 전달하거나 실행하지 않고 기동 전 검증을 실패한다
 
 ### Requirement: 최소 UI 공개 API와 공유 React 계약을 사용한다
 사용자 정의 UI는 플랫폼이 제공하는 React runtime과 UI 계약 major에 대응하는 공개 타입·레코드 조회 API를 SHALL 사용해야 한다. UI 공개 API는 검증된 메뉴 context, 상세 record ID, 목록·단건 조회 경계만 제공하고 Connection·비밀정보·서버 내부 객체 또는 플랫폼 라우터 구현을 제공해서는 안 된다(MUST NOT).
@@ -73,16 +79,8 @@ UI manifest는 플러그인 ID, UI revision, UI 계약 major, 지원 React 범�
 - **WHEN** 클라이언트가 검증 완료 descriptor에 없는 플러그인 UI 경로를 요청한다
 - **THEN** 서버는 해당 파일을 제공하지 않는다
 
-### Requirement: UI 코드·스타일 실패를 플러그인 route에 격리한다
-클라이언트는 UI 번들의 다운로드·import·export·렌더링 실패를 해당 플러그인의 활성 route 영역에 SHALL 격리해야 한다. 오류가 발생해도 애플리케이션 shell, 다른 플러그인 메뉴와 이후 탐색을 계속 사용할 수 있어야 하며(MUST), 원본 예외·내부 경로·번들 소스를 사용자 메시지에 포함하지 않아야 한다(MUST NOT).
-
-#### Scenario: UI 번들 로드 실패
-- **WHEN** 검증된 사용자 정의 UI 번들을 다운로드하거나 import할 수 없다
-- **THEN** 활성 route에 안전한 실패 안내를 표시하고 다른 메뉴 탐색을 유지한다
-
-#### Scenario: 다른 플러그인으로 이동
-- **WHEN** 실패한 사용자 정의 화면에서 사용자가 다른 플러그인 메뉴로 이동한다
-- **THEN** 새 route의 사용자 정의 화면 또는 공통 화면을 정상적으로 표시한다
+### Requirement: UI 스타일의 전역 영향을 빌드에서 차단한다
+공통 UI 빌드는 전역 문서 selector 또는 외부 CSS import를 사용하는 스타일을 배포 번들에 포함하지 않고 검증 가능한 오류로 실패해야 한다(MUST).
 
 #### Scenario: 전역 CSS 사용
 - **WHEN** 사용자 정의 UI 원본이 전역 문서 selector 또는 외부 CSS import를 사용한다
@@ -98,14 +96,3 @@ UI manifest는 플러그인 ID, UI revision, UI 계약 major, 지원 React 범�
 #### Scenario: 신뢰되지 않은 제3자 UI
 - **WHEN** 운영자가 검토·고정하지 않은 제3자 UI 코드를 실행하려 한다
 - **THEN** 이 계약은 보안 sandbox를 제공하지 않으며 해당 코드를 설치 가능한 것으로 취급하지 않는다
-
-### Requirement: 플러그인 revision 단위로 배포하고 롤백한다
-서버 설정·transform과 선택적 UI 산출물은 하나의 플러그인 revision으로 SHALL 검증·배포·롤백해야 한다. 플랫폼 이미지와 플러그인 revision은 독립적으로 고정할 수 있어야 하며(SHALL), 실행 중 파일 교체는 서버 재기동과 전체 검증 성공 전까지 반영해서는 안 된다(MUST NOT).
-
-#### Scenario: 플랫폼 이미지 재빌드 없는 UI 교체
-- **WHEN** 운영자가 현재 플랫폼과 호환되는 새 플러그인 revision을 검증하고 재기동한다
-- **THEN** 플랫폼 웹 이미지를 다시 빌드하지 않고 새 사용자 정의 화면을 사용한다
-
-#### Scenario: 이전 플러그인 revision으로 롤백
-- **WHEN** 새 사용자 정의 UI 배포를 되돌린다
-- **THEN** 운영자는 이전에 검증한 플러그인 전체 revision으로 재기동하며 DB migration을 역행하지 않는다
